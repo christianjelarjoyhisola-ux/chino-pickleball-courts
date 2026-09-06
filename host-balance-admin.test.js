@@ -102,7 +102,7 @@ test('reveals a successfully loaded host balance receipt', () => {
   assert.match(hostBalanceAdmin, /link\.style\.display = 'inline-flex'/);
   assert.doesNotMatch(hostBalanceAdmin, /image\.style\.display = ''/);
   assert.match(hostBalanceAdmin, /onLoad\(\) \{\s*state\.receiptLoaded = true;\s*state\.receiptLoadState = 'ready';\s*syncActions\(\);/);
-  assert.match(admin, /host-balance-admin\.js\?v=20260831-[a-z0-9-]+/);
+  assert.match(admin, /host-balance-admin\.js\?v=\d{8}-[a-z0-9-]+/);
 });
 
 test('shows a premium two-payment history without merging financial evidence', () => {

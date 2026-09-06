@@ -81,6 +81,20 @@
     return state.loadState === 'ready' ? 'clear' : 'unknown';
   }
 
+  function pendingSummary() {
+    if (!canDecide()) return { status: 'forbidden', count: null };
+    if (state.loadState !== 'ready') return { status: state.loadState, count: null };
+    const ids = new Set(state.payments
+      .filter(payment => paymentStatus(payment) === 'pending_review')
+      .map(paymentId)
+      .filter(Boolean));
+    return { status: 'ready', count: ids.size };
+  }
+
+  function syncPendingSummary() {
+    global.syncPaymentReviewPendingCount?.();
+  }
+
   function matchedAttemptsForBooking(booking) {
     if (state.attemptsLoadState !== 'ready' || !global.HostBalancePayment?.attemptMatchesBooking) return [];
     return state.attempts.filter(attempt => global.HostBalancePayment.attemptMatchesBooking(booking, attempt));
@@ -1066,6 +1080,7 @@
       notify(decision === 'approve' ? 'Payment 2 confirmed received. The booking is fully paid.' : 'Payment 2 marked not received.', decision === 'approve' ? 'ok' : 'inf');
       state.busy = false;
       closeModal();
+      invalidate();
       await render(true);
       if (state.originalRenderPaymentReview) await state.originalRenderPaymentReview();
       if (byId('sec-bookings')?.classList.contains('on') && typeof global.renderBookings === 'function') {
@@ -1120,6 +1135,7 @@
       state.loadedAt = 0;
       state.loadState = 'forbidden';
       state.attemptsLoadState = 'forbidden';
+      syncPendingSummary();
       return Promise.resolve(state.payments);
     }
     if (global.PB_USE_LOCAL_DATA) {
@@ -1128,12 +1144,14 @@
       state.loadedAt = Date.now();
       state.loadState = 'ready';
       state.attemptsLoadState = 'ready';
+      syncPendingSummary();
       return Promise.resolve(state.payments);
     }
     if (!force && state.loadedAt && Date.now() - state.loadedAt < 15000) return Promise.resolve(state.payments);
     if (state.loading) return state.loading;
     state.loadState = 'loading';
     state.attemptsLoadState = 'loading';
+    syncPendingSummary();
     state.loading = (async () => {
       try {
         for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -1160,8 +1178,9 @@
             pendingRequest,
             listPaymentEvidence(),
           ]);
-          if (pendingResult.status === 'rejected') throw pendingResult.reason;
+          if (!canDecide() || global.PB_USE_LOCAL_DATA) return load(force);
           if (generation !== state.generation) continue;
+          if (pendingResult.status === 'rejected') throw pendingResult.reason;
           state.payments = pendingResult.value;
           state.loadedAt = Date.now();
           state.loadState = 'ready';
@@ -1173,6 +1192,7 @@
             state.attemptsLoadState = 'error';
             console.warn('Host payment history evidence unavailable:', attemptsResult.reason);
           }
+          syncPendingSummary();
           return state.payments;
         }
         throw new Error('Pending balances changed while loading. Refresh and try again.');
@@ -1182,6 +1202,7 @@
         state.loadedAt = 0;
         state.loadState = 'error';
         state.attemptsLoadState = 'error';
+        syncPendingSummary();
         throw error;
       }
     })().finally(() => { state.loading = null; });
@@ -1193,7 +1214,7 @@
     const list = byId('hostBalanceAdminList');
     if (!canDecide()) {
       list?.replaceChildren(make('div', 'hba-empty', 'Only the System Owner or Court Owner can review host balance payments.'));
-      return Promise.resolve([]);
+      return load(force);
     }
     if (list) list.replaceChildren(make('div', 'hba-empty', 'Loading host balance payments…'));
     return load(force).then(payments => {
@@ -1295,6 +1316,7 @@
     state.attempts = [];
     if (state.loadState === 'ready') state.loadState = 'idle';
     if (state.attemptsLoadState === 'ready') state.attemptsLoadState = 'idle';
+    syncPendingSummary();
   }
 
   function install() {
@@ -1316,6 +1338,7 @@
     load,
     render,
     invalidate,
+    pendingSummary,
     pendingForBooking,
     statusForBooking,
     paymentEvidenceForBooking,

@@ -714,6 +714,9 @@ tr:hover td { background: var(--bg2); }
   line-height: 1; font-weight: 900; font-family: 'Bebas Neue', sans-serif;
 }
 .pr-stat-icon { position: absolute; right: 12px; bottom: 10px; font-size: 1.05rem; opacity: .32; }
+.pr-stat-note { margin-top: 5px; color: var(--muted); font-size: .72rem; line-height: 1.4; }
+.pr-stat-link { position: relative; margin-top: 7px; padding: 5px 0; border: 0; background: none; color: var(--green); font: inherit; font-size: .74rem; font-weight: 800; text-align: left; text-decoration: underline; cursor: pointer; }
+.pr-stat-link:focus-visible { outline: 2px solid var(--green); outline-offset: 3px; border-radius: 3px; }
 .pr-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; margin-bottom: 14px; }
 .pr-panel-head {
   display: flex; justify-content: space-between; align-items: center;
@@ -5390,7 +5393,7 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
           <div class="pr-subtitle">Digital receipts that need attention</div>
         </div>
         <div class="pr-actions">
-          <button class="btn btn-g btn-sm" onclick="renderPaymentReview()">Refresh</button>
+          <button class="btn btn-g btn-sm" onclick="refreshPaymentReview()">Refresh</button>
           <button class="btn btn-g btn-sm" onclick="goto('gamemgr')">Play Manager</button>
           <button class="btn btn-p btn-sm" onclick="goto('payments')">QR</button>
         </div>
@@ -5398,7 +5401,7 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
 
       <div class="pr-stat-grid">
         <div class="pr-stat"><div class="pr-stat-label">Needs Review</div><div class="pr-stat-value" id="prNeedsReview">0</div><div class="pr-stat-icon">&#128269;</div></div>
-        <div class="pr-stat"><div class="pr-stat-label">Pending</div><div class="pr-stat-value" id="prPending">0</div><div class="pr-stat-icon">&#9203;</div></div>
+        <div class="pr-stat"><div class="pr-stat-label">Pending</div><div class="pr-stat-value" id="prPending" aria-live="polite" aria-describedby="prPendingMeta">0</div><div class="pr-stat-note" id="prPendingMeta" hidden></div><button type="button" class="pr-stat-link" id="prPendingHostLink" onclick="reviewPendingHostBalances()" hidden>Review host balances</button><div class="pr-stat-icon" aria-hidden="true">&#9203;</div></div>
         <div class="pr-stat"><div class="pr-stat-label">Resolved</div><div class="pr-stat-value" id="prAuto">0</div><div class="pr-stat-icon">&#10003;</div></div>
         <div class="pr-stat"><div class="pr-stat-label">Rejected</div><div class="pr-stat-value" id="prRejected">0</div><div class="pr-stat-icon">&#9888;</div></div>
       </div>
@@ -10095,13 +10098,63 @@ function paymentReviewRow(item) {
   </article>`;
 }
 
+let _paymentReviewRenderSeq = 0;
+let _paymentReviewBasePending = null;
+
+function syncPaymentReviewPendingCount() {
+  const counter = $('prPending');
+  if (!counter) return;
+  const note = $('prPendingMeta');
+  const link = $('prPendingHostLink');
+  const summary = canViewHostPaymentHistory()
+    ? (window.HostBalanceAdmin?.pendingSummary?.() || { status: 'idle', count: null })
+    : { status: 'forbidden', count: null };
+  const baseReady = Number.isSafeInteger(_paymentReviewBasePending);
+  const balanceReady = summary.status === 'ready' && Number.isSafeInteger(summary.count) && summary.count >= 0;
+  const balancesExcluded = summary.status === 'forbidden';
+  let message = '';
+  if (!baseReady) {
+    counter.textContent = '…';
+    message = 'Loading pending payments…';
+  } else if (balanceReady || balancesExcluded) {
+    counter.textContent = _paymentReviewBasePending + (balanceReady ? summary.count : 0);
+    if (balanceReady && summary.count > 0) {
+      message = `Includes ${summary.count} host balance ${summary.count === 1 ? 'payment' : 'payments'}`;
+    }
+  } else {
+    counter.textContent = summary.status === 'error' ? '—' : '…';
+    message = summary.status === 'error'
+      ? 'Host balances unavailable. Refresh to retry.'
+      : 'Loading host balances…';
+  }
+  if (note) { note.textContent = message; note.hidden = !message; }
+  if (link) link.hidden = !(baseReady && balanceReady && summary.count > 0);
+}
+
+function refreshPaymentReview() {
+  window.HostBalanceAdmin?.invalidate?.();
+  return renderPaymentReview();
+}
+
+function reviewPendingHostBalances() {
+  const panel = $('hostBalanceAdminPanel');
+  if (!panel) return;
+  panel.setAttribute('tabindex', '-1');
+  panel.focus({ preventScroll: true });
+  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 async function renderPaymentReview() {
+  const seq = ++_paymentReviewRenderSeq;
+  _paymentReviewBasePending = null;
+  syncPaymentReviewPendingCount();
   const [bookings, regs, hostRegs, hostSessions] = await Promise.all([
     DB.getBookings(),
     DB.getOpenPlayRegistrations(),
     DB.getOpenPlayHostSessionRegistrations(),
     DB.getOpenPlayHostSessions(),
   ]);
+  if (seq !== _paymentReviewRenderSeq) return;
   const bookingItems = groupBookings(bookings.filter(b => b.email !== 'reserve@hold.internal' && isDigitalPayment(b.paymentMethod)))
     .filter(b => !!b.receiptImageUrl)
     .map(b => ({
@@ -10165,7 +10218,8 @@ async function renderPaymentReview() {
     rejected: items.filter(i => i.status === 'rejected').length,
   };
   if ($('prNeedsReview')) $('prNeedsReview').textContent = counts.needsReview;
-  if ($('prPending')) $('prPending').textContent = counts.pending;
+  _paymentReviewBasePending = counts.pending;
+  syncPaymentReviewPendingCount();
   if ($('prAuto')) $('prAuto').textContent = counts.auto;
   if ($('prRejected')) $('prRejected').textContent = counts.rejected;
 
@@ -18405,6 +18459,6 @@ async function checkAgreementGate(session) {
 <script src="qrcode.min.js?v=1.5.4"></script>
 <script src="availability-graphic.js?v=20260905-mobile-fit-v6"></script>
 <script src="play-manager.js?v=20260729-result-footer-v1&amp;rollback=deb2d66"></script>
-<script src="host-balance-admin.js?v=20260831-multi-provider-v1"></script>
+<script src="host-balance-admin.js?v=20260907-pending-count"></script>
 </body>
 </html>
