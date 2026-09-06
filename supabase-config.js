@@ -1176,8 +1176,11 @@ window.DB = {
   },
 
   async deleteCourt(id) {
-    const { error } = await _sb.from('courts').delete().eq('id', id);
-    if (error) console.error('deleteCourt:', error);
+    const { data, error } = await _sb.from('courts').delete().eq('id', id).select('id');
+    if (error) { console.error('deleteCourt:', error); throw error; }
+    if (!data?.some(court => String(court.id) === String(id))) {
+      throw new Error('Court deletion was not confirmed. Refresh the page and check that you are signed in as an owner.');
+    }
     _pbClearFastCache(['courts']);
   },
 
@@ -2918,15 +2921,10 @@ window.DB = {
     return data.url;
   },
 
-  // ---- SEED DEFAULT DATA (runs once on first load) ----
+  // Compatibility for older pages: production courts are created only by an
+  // explicit admin action. Empty results (including failed reads) must not seed.
   async seedDefaultData() {
-    const courts = await this.getCourts();
-    if (courts.length === 0) {
-      await _sb.from('courts').insert([
-        { id: 'c1', name: 'Court Alpha', description: 'Outdoor · Air passing through · Standard Flooring', rate: 350, blocked: false, feats: ['Outdoor','Open Air','Standard Floor'], photo: null },
-        { id: 'c2', name: 'Court Beta',  description: 'Outdoor · Air passing through · Standard Flooring', rate: 280, blocked: false, feats: ['Outdoor','Open Air','Standard Floor'], photo: null },
-      ]);
-    }
+    return;
   },
 
   // Check if user has accepted the current agreement version
@@ -3530,7 +3528,7 @@ window.DB = {
       ...freshDb(),
       ...parsed,
       settings: { ...defaultSettings(), ...(parsed.settings || {}) },
-      courts: Array.isArray(parsed.courts) && parsed.courts.length ? parsed.courts : defaultCourts(),
+      courts: Array.isArray(parsed.courts) ? parsed.courts : defaultCourts(),
       bookings,
       bookingRescheduleRequests: Array.isArray(parsed.bookingRescheduleRequests) ? parsed.bookingRescheduleRequests : [],
       openPlayRegistrations: Array.isArray(parsed.openPlayRegistrations) ? parsed.openPlayRegistrations : [],

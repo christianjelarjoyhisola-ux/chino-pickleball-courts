@@ -1,5 +1,6 @@
 // Run: node setup-db.js
 // Sets up the full Paddle Rage Pickleball schema in the new Supabase project
+// For existing databases, apply supabase/migrations instead of rerunning setup.
 
 const fs = require('fs');
 
@@ -255,12 +256,8 @@ async function run() {
   ];
   for (const p of policies) await runSQL(p, 'RLS policy');
 
-  // ── 6. SEED DATA ──────────────────────────────────────────────────────────
-  const { error: courtErr } = await sb.from('courts').upsert([
-    { id: 'c1', name: 'Court Alpha', description: 'Outdoor · Open Air · Standard Flooring', rate: 350, blocked: false, feats: ['Outdoor','Open Air','Standard Floor'] },
-    { id: 'c2', name: 'Court Beta',  description: 'Outdoor · Open Air · Standard Flooring', rate: 280, blocked: false, feats: ['Outdoor','Open Air','Standard Floor'] },
-  ], { onConflict: 'id' });
-  console.log(courtErr ? `  ✗ seed courts: ${courtErr.message}` : '  ✓ seed courts');
+  // ── 6. DEFAULT SETTINGS ───────────────────────────────────────────────────
+  // Courts are managed by admins. Never restore sample courts during setup.
 
   const { error: settErr } = await sb.from('settings').upsert([
     { key: 'venue_name',    value: 'Paddle Rage Pickleball' },

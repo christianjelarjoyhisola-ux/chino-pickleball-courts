@@ -4,8 +4,8 @@
 --   Supabase Dashboard -> SQL Editor -> New query -> Run
 --
 -- This file is a consolidated baseline of the migration history.
--- Do not run it as a replacement for migrations on an existing
--- production database unless you have reviewed the seed/upsert data.
+-- For existing production databases, apply supabase/migrations instead
+-- of rerunning this baseline; setup includes default settings and policies.
 --
 -- REQUIRED FRESH-INSTALL FOLLOW-UP:
 -- After this baseline succeeds, apply every migration from
@@ -2172,14 +2172,11 @@ drop policy if exists host_ids_no_update on storage.objects;
 drop policy if exists host_ids_no_delete on storage.objects;
 
 -- ============================================================
--- 6. SEED DATA
+-- 6. DEFAULT SETTINGS
 -- ============================================================
 
-insert into public.courts (id, name, description, rate, blocked, feats)
-values
-  ('c1', 'Court Alpha', 'Outdoor - Open Air - Standard Flooring', 350, false, array['Outdoor','Open Air','Standard Floor']),
-  ('c2', 'Court Beta', 'Outdoor - Open Air - Standard Flooring', 280, false, array['Outdoor','Open Air','Standard Floor'])
-on conflict (id) do nothing;
+-- Courts are managed by admins. A new project starts without courts;
+-- setup must never restore deleted courts or insert sample courts.
 
 insert into public.settings (key, value)
 values
@@ -2208,4 +2205,5 @@ notify pgrst, 'reload schema';
 -- 4. Update .env.local / supabase-config.js for the cloned app.
 -- 5. Run create-accounts.js with a service-role key to create dashboard users.
 -- 6. Deploy edge functions and configure their required secrets.
+-- 7. Add the venue's real courts in the admin dashboard.
 -- ============================================================

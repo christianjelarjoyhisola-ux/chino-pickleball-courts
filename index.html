@@ -11004,7 +11004,6 @@ document.body.style.overflow = 'hidden';
 document.addEventListener('DOMContentLoaded', async () => {
   initDark();
   if (!(await refreshHostBookingSession())) return;
-  await DB.seedDefaultData();
   applyHostChrome();
   await loadOperatingHours();
   await expireStaleVerifyingBookings();
