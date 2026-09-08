@@ -12550,7 +12550,7 @@ async function saveNewBooking() {
   btn.textContent = 'Saving...';
 
   try {
-    for (const booking of bookings) await DB.addBooking(booking);
+    await DB.addBookings(bookings);
     const aggregate = nbAggregateBooking(baseRef, groupRef, bookings, groups, total, downpayment);
     closeModal('newBookingModal');
     toast(`Booking created! Ref: ${baseRef}`);
@@ -14309,16 +14309,7 @@ let adminTiers = [];
 async function loadPricingTiers() {
   const settings = await DB.getSettings();
   courtPromoFallbackTiers = parsePricingTiers(settings.pricing_tiers);
-  if (settings.pricing_tiers) {
-    try { adminTiers = JSON.parse(settings.pricing_tiers); } catch(e) {}
-  }
-  if (!adminTiers.length) {
-    adminTiers = [
-      { from: 6,  to: 16, rate: 150 },
-      { from: 16, to: 24, rate: 250 },
-      { from: 0,  to: 4,  rate: 300 },
-    ];
-  }
+  adminTiers = courtPromoFallbackTiers.map(tier => ({ ...tier }));
   renderTiersUI();
 }
 

@@ -113,6 +113,7 @@ test('court list compares promos with effective regular tiers and clears stale g
   await context.renderCourts();
   assert.match(body.innerHTML, /data-label="Rate">₱365\/hr/);
   assert.match(body.innerHTML, /Promo active[\s\S]*₱100\/hr/);
+  assert.deepEqual(JSON.parse(JSON.stringify(context.adminTiers)), [{ from:0, to:24, rate:365 }]);
   courts[0].rateSchedule = [{ from:0, to:12, rate:280 }, { from:12, to:24, rate:340 }];
   await context.renderCourts();
   assert.match(body.innerHTML, /data-label="Rate">₱280–₱340\/hr/);
@@ -121,6 +122,10 @@ test('court list compares promos with effective regular tiers and clears stale g
   await context.renderCourts();
   assert.match(body.innerHTML, /data-label="Rate">₱300\/hr/);
   assert.doesNotMatch(body.innerHTML, /₱365/);
+  assert.equal(context.adminTiers.length, 0, 'Empty settings must display no saved pricing tiers');
+  settings = { pricing_tiers:'invalid JSON' };
+  await context.loadPricingTiers();
+  assert.equal(context.adminTiers.length, 0, 'Malformed settings must not restore stale or sample rates');
 });
 
 test('non-owner roles cannot change saved promo settings by manipulating editor fields', async () => {

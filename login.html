@@ -120,10 +120,26 @@ button,input,select,textarea,label,a,[role="button"],.btn{touch-action:manipulat
 </div>
 
 <script>
+// Capture recovery intent before the auth client consumes and clears the URL hash.
+const loginRecoveryRequested = new URLSearchParams(window.location.hash.slice(1)).get('type') === 'recovery';
 // Dark mode sync
 const dark = localStorage.getItem('pb_template_theme') !== 'light';
 document.body.classList.toggle('dark', dark);
 document.body.classList.toggle('light', !dark);
+
+function loginReturnDestination(next) {
+  const fallback = 'admin.html';
+  if (typeof next !== 'string' || !next.trim() || /[\u0000-\u001f\u007f]/.test(next)) return fallback;
+  try {
+    const destination = new URL(next, window.location.href);
+    if (!['http:', 'https:'].includes(destination.protocol)
+      || destination.origin !== window.location.origin
+      || destination.username || destination.password) return fallback;
+    return destination.href;
+  } catch (_) {
+    return fallback;
+  }
+}
 
 async function doLogin(e) {
   e.preventDefault();
@@ -136,7 +152,7 @@ async function doLogin(e) {
   const r = await Auth.login(u, p, remember);
   if (r.ok) {
     const params = new URLSearchParams(window.location.search);
-    window.location.href = params.get('next') || 'admin.html';
+    window.location.href = loginReturnDestination(params.get('next'));
   } else {
     document.getElementById('errBox').textContent = r.msg || 'Invalid email or password.';
     document.getElementById('errBox').classList.add('show');
@@ -145,18 +161,19 @@ async function doLogin(e) {
   }
 }
 
-// Redirect if already logged in (skip if we were sent here from admin — avoids redirect loop)
-document.addEventListener('DOMContentLoaded', () => {
+function handleLoginEntry() {
+  if (loginRecoveryRequested) {
+    document.getElementById('loginPanel').style.display = 'none';
+    document.getElementById('newPassPanel').classList.add('show');
+    return;
+  }
+  // Skip the cached-session redirect when admin requested a fresh login.
   const params = new URLSearchParams(window.location.search);
   const comingFromAdmin = !!params.get('next');
   if (!comingFromAdmin && Auth.getSession()) window.location.href = 'admin.html';
-  // Check if redirected here from a password reset email
-  const hash = window.location.hash;
-  if (hash.includes('type=recovery')) {
-    document.getElementById('loginPanel').style.display = 'none';
-    document.getElementById('newPassPanel').classList.add('show');
-  }
-});
+}
+
+document.addEventListener('DOMContentLoaded', handleLoginEntry);
 
 function showForgot() {
   document.getElementById('loginPanel').style.display = 'none';

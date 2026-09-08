@@ -1,8 +1,89 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const test = require('node:test');
+const vm = require('node:vm');
 
 const read = path => fs.readFileSync(path, 'utf8');
+
+function paymentFunction(name) {
+  const match = read('index.html').match(new RegExp('^function ' + name + '\\([^\\n]*\\)\\s*\\{[\\s\\S]*?^\\}', 'm'));
+  assert.ok(match, `Missing ${name}`);
+  return match[0];
+}
+
+test('all public payment choices expose focus, selection and keyboard activation', () => {
+  const page = read('index.html');
+  const choices = [...page.matchAll(/<div class="pay-opt(?:"| op-pay-opt)[^>]*>/g)].map(match => match[0]);
+  assert.equal(choices.length, 16);
+  for (const choice of choices) {
+    assert.match(choice, /role="button"/);
+    assert.match(choice, /tabindex="0"/);
+    assert.match(choice, /aria-pressed="/);
+    assert.match(choice, /onkeydown="paymentOptionKeydown\(event\)"/);
+  }
+  assert.match(page, /\.pay-opt:focus-visible\s*\{[^}]*outline:/);
+  const context = vm.createContext({});
+  vm.runInContext(paymentFunction('paymentOptionKeydown'), context);
+  for (const key of ['Enter', ' ']) {
+    let clicks = 0, prevented = 0;
+    const option = { getAttribute:() => null, click:() => clicks++ };
+    const event = { key, currentTarget:option, preventDefault:() => prevented++ };
+    context.paymentOptionKeydown(event);
+    assert.equal(clicks, 1);
+    assert.equal(prevented, 1);
+    option.getAttribute = () => 'true';
+    context.paymentOptionKeydown(event);
+    assert.equal(clicks, 1, 'Locked choices must not activate from the keyboard');
+    option.getAttribute = () => null;
+    context.paymentOptionKeydown({ ...event, repeat:true });
+    assert.equal(clicks, 1, 'Holding a key must not repeatedly change payment state');
+    context.paymentOptionKeydown({ ...event, key:'Tab' });
+    assert.equal(clicks, 1);
+  }
+});
+
+test('regular and Open Play payment selection announce only their own active choice', () => {
+  const makeNode = (method = '') => {
+    const attrs = {}, classes = new Set();
+    return { value:'', dataset:{ m:method }, style:{}, attrs, classes,
+      setAttribute:(key, value) => attrs[key] = value,
+      removeAttribute:key => delete attrs[key],
+      classList:{ toggle:(key, selected) => selected ? classes.add(key) : classes.delete(key) },
+    };
+  };
+  const regular = ['gcash', 'cash'].map(makeNode);
+  const openPlay = ['gcash', 'cash'].map(makeNode);
+  const nodes = new Map();
+  const get = id => {
+    if (['payMethodNote', 'opPayInfo', 'refMethodLabel'].includes(id)) return null;
+    if (!nodes.has(id)) nodes.set(id, makeNode());
+    return nodes.get(id);
+  };
+  const context = vm.createContext({
+    $:get, document:{ querySelectorAll:selector => selector === '.bpay-methods .pay-opt' ? regular : selector === '#opPayOpts .pay-opt' ? openPlay : [...regular, ...openPlay] },
+    paymentMethods:{ cash:true, gcash:true, pnb:false }, _opSignupData:{},
+    _bookingSubmissionInFlight:false, _receiptFile:null, _receiptUploadState:{ status:'idle' }, gcashSettings:{},
+    toast:() => {}, isDigitalPayMethod:method => method !== 'cash', clearBookingInvalid:() => {},
+    isVerifiedHostBooking:() => false, hostBookingDepositEligible:() => false,
+    syncGcashSharedPanel:() => {}, syncBookingRefUi:() => {}, updatePaymentAmountUI:() => {},
+    setBookingReceiptContinueState:() => {}, saveGuestBookingResume:() => {},
+  });
+  vm.runInContext(paymentFunction('pickPay') + '\n' + paymentFunction('opPickPay'), context);
+  context.pickPay('cash');
+  assert.equal(get('bPay').value, 'cash');
+  assert.deepEqual(regular.map(node => node.attrs['aria-pressed']), ['false', 'true']);
+  context.opPickPay('gcash');
+  assert.equal(context._opSignupData.payMethod, 'gcash');
+  assert.deepEqual(openPlay.map(node => node.attrs['aria-pressed']), ['true', 'false']);
+  assert.deepEqual(regular.map(node => node.attrs['aria-pressed']), ['false', 'true']);
+  context.pickPay('gcash');
+  assert.deepEqual(regular.map(node => node.attrs['aria-pressed']), ['true', 'false']);
+  context._bookingSubmissionInFlight = true;
+  context.pickPay('cash');
+  assert.equal(get('bPay').value, 'gcash');
+  context.opPickPay('pnb');
+  assert.equal(context._opSignupData.payMethod, 'gcash');
+});
 
 test('official payment marks are vendored locally with stable dimensions', () => {
   const expectedDimensions = {

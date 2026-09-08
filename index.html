@@ -1039,6 +1039,7 @@ select.fi option { background:var(--card); }
 .pay-opts { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
 .pay-opt { border:2px solid var(--border); border-radius:var(--r); padding:16px; text-align:center; cursor:pointer; background:var(--input); transition:all .2s; }
 .pay-opt:hover { border-color:var(--accent); }
+.pay-opt:focus-visible { outline:3px solid var(--accent); outline-offset:3px; }
 .pay-opt.on { border-color:var(--accent); background:rgba(var(--ac),.07); }
 .pay-ic { font-size:1.7rem; margin-bottom:6px; }
 .pay-lb { font-weight:700; font-size:.88rem; }
@@ -3868,43 +3869,43 @@ try {
             <span class="bpay-title-amount"><span>Amount to pay</span><strong id="bStepPayAmtMethod">--</strong></span>
           </div>
           <div class="fg bpay-method-block" id="payMethodBlock">
-            <div class="pay-opts pay-opts-4 bpay-methods">
-              <div class="pay-opt" id="payOptGcash" data-m="gcash" onclick="pickPay('gcash')">
+            <div class="pay-opts pay-opts-4 bpay-methods" role="group" aria-label="Payment method">
+              <div class="pay-opt" id="payOptGcash" data-m="gcash" role="button" tabindex="0" aria-pressed="false" onkeydown="paymentOptionKeydown(event)" onclick="pickPay('gcash')">
                 <div class="pay-ic pm-brand-mark pm-brand-mark--picker pm-brand-mark--gcash" data-payment-method="gcash" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/gcash.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></div>
                 <div class="pay-lb">GCash</div>
                 <div class="pay-sub">Scan QR · enter ref #</div>
               </div>
-              <div class="pay-opt" id="payOptBdopay" data-m="bdopay" onclick="pickPay('bdopay')">
+              <div class="pay-opt" id="payOptBdopay" data-m="bdopay" role="button" tabindex="0" aria-pressed="false" onkeydown="paymentOptionKeydown(event)" onclick="pickPay('bdopay')">
                 <div class="pay-ic pm-brand-mark pm-brand-mark--picker pm-brand-mark--bdopay" data-payment-method="bdopay" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/bdo-pay.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></div>
                 <div class="pay-lb">BDO Pay</div>
                 <div class="pay-sub">InstaPay to GCash QR</div>
               </div>
-              <div class="pay-opt" id="payOptMaya" data-m="maya" onclick="pickPay('maya')">
+              <div class="pay-opt" id="payOptMaya" data-m="maya" role="button" tabindex="0" aria-pressed="false" onkeydown="paymentOptionKeydown(event)" onclick="pickPay('maya')">
                 <div class="pay-ic pm-brand-mark pm-brand-mark--picker pm-brand-mark--maya" data-payment-method="maya" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/maya.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></div>
                 <div class="pay-lb">Maya</div>
                 <div class="pay-sub">QRPh to GCash</div>
               </div>
-              <div class="pay-opt" id="payOptBpi" data-m="bpi" onclick="pickPay('bpi')">
+              <div class="pay-opt" id="payOptBpi" data-m="bpi" role="button" tabindex="0" aria-pressed="false" onkeydown="paymentOptionKeydown(event)" onclick="pickPay('bpi')">
                 <div class="pay-ic pm-brand-mark pm-brand-mark--picker pm-brand-mark--bpi" data-payment-method="bpi" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/bpi.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></div>
                 <div class="pay-lb">BPI</div>
                 <div class="pay-sub">InstaPay to GCash QR</div>
               </div>
-              <div class="pay-opt" id="payOptGotyme" data-m="gotyme" onclick="pickPay('gotyme')">
+              <div class="pay-opt" id="payOptGotyme" data-m="gotyme" role="button" tabindex="0" aria-pressed="false" onkeydown="paymentOptionKeydown(event)" onclick="pickPay('gotyme')">
                 <div class="pay-ic pm-brand-mark pm-brand-mark--picker pm-brand-mark--gotyme" data-payment-method="gotyme" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/gotyme.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></div>
                 <div class="pay-lb">GoTyme → GCash</div>
                 <div class="pay-sub">Pay from GoTyme</div>
               </div>
-              <div class="pay-opt" id="payOptMaribank" data-m="maribank" onclick="pickPay('maribank')">
+              <div class="pay-opt" id="payOptMaribank" data-m="maribank" role="button" tabindex="0" aria-pressed="false" onkeydown="paymentOptionKeydown(event)" onclick="pickPay('maribank')">
                 <div class="pay-ic pm-brand-mark pm-brand-mark--picker pm-brand-mark--maribank" data-payment-method="maribank" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/maribank.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></div>
                 <div class="pay-lb">MariBank → GCash</div>
                 <div class="pay-sub">Pay from MariBank</div>
               </div>
-              <div class="pay-opt" id="payOptPnb" data-m="pnb" onclick="pickPay('pnb')">
+              <div class="pay-opt" id="payOptPnb" data-m="pnb" role="button" tabindex="0" aria-pressed="false" onkeydown="paymentOptionKeydown(event)" onclick="pickPay('pnb')">
                 <div class="pay-ic pm-brand-mark pm-brand-mark--picker pm-brand-mark--pnb" data-payment-method="pnb" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/pnb.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></div>
                 <div class="pay-lb">PNB</div>
                 <div class="pay-sub">Scan QR · enter ref #</div>
               </div>
-              <div class="pay-opt" id="payOptCash" data-m="cash" onclick="pickPay('cash')">
+              <div class="pay-opt" id="payOptCash" data-m="cash" role="button" tabindex="0" aria-pressed="false" onkeydown="paymentOptionKeydown(event)" onclick="pickPay('cash')">
                 <div class="pay-ic pm-brand-mark pm-brand-mark--picker pm-brand-mark--cash" data-payment-method="cash" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/cash.svg" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></div>
                 <div class="pay-lb">Cash</div>
                 <div class="pay-sub">Pay at front desk</div>
@@ -6062,7 +6063,7 @@ function applyPaymentMethodVisibility() {
   const selected = $('bPay')?.value || '';
   if (selected && !paymentMethods[selected]) {
     $('bPay').value = '';
-    document.querySelectorAll('.pay-opt').forEach(el => el.classList.remove('on'));
+    document.querySelectorAll('.bpay-methods .pay-opt').forEach(el => { el.classList.remove('on'); el.setAttribute('aria-pressed', 'false'); });
     $('gcashBox').classList.remove('show');
     $('pnbBox').classList.remove('show');
     const refWrap = $('gcashRefWrap');
@@ -8138,6 +8139,14 @@ function updatePrice() {
 /* =============================================
    PAYMENT
    ============================================= */
+function paymentOptionKeydown(event) {
+  if (event.key !== 'Enter' && event.key !== ' ') return;
+  event.preventDefault();
+  const option = event.currentTarget;
+  if (event.repeat || option?.disabled || option?.getAttribute('aria-disabled') === 'true') return;
+  option?.click();
+}
+
 function pickPay(m) {
   if (_bookingSubmissionInFlight) {
     toast('Please wait while your receipt and booking are being finalized.', 'inf');
@@ -8155,7 +8164,11 @@ function pickPay(m) {
     // before any replacement upload so an identical hash path stays intact.
     invalidateBookingReceiptUpload({ discard: true });
   }
-  document.querySelectorAll('.pay-opt').forEach(el => el.classList.toggle('on', el.dataset.m === m));
+  document.querySelectorAll('.bpay-methods .pay-opt').forEach(el => {
+    const selected = el.dataset.m === m;
+    el.classList.toggle('on', selected);
+    el.setAttribute('aria-pressed', selected ? 'true' : 'false');
+  });
   $('bPay').value = m;
   clearBookingInvalid('payMethodBlock');
   const methodNote = $('payMethodNote');
@@ -9495,7 +9508,7 @@ function resetForm(options = {}) {
   if ($('bGcashRef')) $('bGcashRef').value = '';
   if ($('bookingPolicyAgree')) $('bookingPolicyAgree').checked = false;
   gcashSettings.checkoutVisited = false;
-  document.querySelectorAll('.pay-opt').forEach(el => el.classList.remove('on'));
+  document.querySelectorAll('.bpay-methods .pay-opt').forEach(el => { el.classList.remove('on'); el.setAttribute('aria-pressed', 'false'); });
   closeBookModal({ force: true, skipReceiptClear: true });
   updatePrice();
   wizGoTo(1);
@@ -11156,22 +11169,22 @@ async function openPlaySignup(courtId, date, h, courtName) {
     return;
   }
   const payOptList = [
-    paymentMethods.gcash   ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'gcash' ? 'on' : ''}" data-m="gcash"   onclick="opPickPay('gcash')">${paymentMethodBrandMarkHtml('gcash', 'po-ico pm-brand-mark--compact') || '<span class="po-ico">📱</span>'}<span class="po-lbl">GCash</span><span class="po-sub">Scan QR · send ref #</span></div>` : '',
-    paymentMethods.bdopay  ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'bdopay' ? 'on' : ''}" data-m="bdopay"  onclick="opPickPay('bdopay')">${paymentMethodBrandMarkHtml('bdopay', 'po-ico pm-brand-mark--compact')}<span class="po-lbl">BDO Pay</span><span class="po-sub">InstaPay to GCash QR</span></div>` : '',
-    paymentMethods.maya    ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'maya' ? 'on' : ''}" data-m="maya"    onclick="opPickPay('maya')">${paymentMethodBrandMarkHtml('maya', 'po-ico pm-brand-mark--compact')}<span class="po-lbl">Maya</span><span class="po-sub">QRPh to GCash</span></div>` : '',
-    paymentMethods.gotyme  ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'gotyme' ? 'on' : ''}" data-m="gotyme"  onclick="opPickPay('gotyme')">${paymentMethodBrandMarkHtml('gotyme', 'po-ico pm-brand-mark--compact') || '<span class="po-ico">GT</span>'}<span class="po-lbl">GoTyme → GCash</span><span class="po-sub">Pay from GoTyme</span></div>` : '',
-    paymentMethods.maribank ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'maribank' ? 'on' : ''}" data-m="maribank" onclick="opPickPay('maribank')">${paymentMethodBrandMarkHtml('maribank', 'po-ico pm-brand-mark--compact') || '<span class="po-ico">MB</span>'}<span class="po-lbl">MariBank → GCash</span><span class="po-sub">Pay from MariBank</span></div>` : '',
-    paymentMethods.pnb     ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'pnb' ? 'on' : ''}" data-m="pnb"     onclick="opPickPay('pnb')">${paymentMethodBrandMarkHtml('pnb', 'po-ico pm-brand-mark--compact')}<span class="po-lbl">PNB</span><span class="po-sub">Scan QR · enter ref #</span></div>` : '',
-    paymentMethods.cash    ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'cash' ? 'on' : ''}" data-m="cash"    onclick="opPickPay('cash')">${paymentMethodBrandMarkHtml('cash', 'po-ico pm-brand-mark--compact')}<span class="po-lbl">Cash</span><span class="po-sub">Pay at front desk</span></div>` : '',
+    paymentMethods.gcash   ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'gcash' ? 'on' : ''}" data-m="gcash" role="button" tabindex="0" aria-pressed="${defaultPayMethod === 'gcash' ? 'true' : 'false'}" onkeydown="paymentOptionKeydown(event)"   onclick="opPickPay('gcash')">${paymentMethodBrandMarkHtml('gcash', 'po-ico pm-brand-mark--compact') || '<span class="po-ico">📱</span>'}<span class="po-lbl">GCash</span><span class="po-sub">Scan QR · send ref #</span></div>` : '',
+    paymentMethods.bdopay  ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'bdopay' ? 'on' : ''}" data-m="bdopay" role="button" tabindex="0" aria-pressed="${defaultPayMethod === 'bdopay' ? 'true' : 'false'}" onkeydown="paymentOptionKeydown(event)"  onclick="opPickPay('bdopay')">${paymentMethodBrandMarkHtml('bdopay', 'po-ico pm-brand-mark--compact')}<span class="po-lbl">BDO Pay</span><span class="po-sub">InstaPay to GCash QR</span></div>` : '',
+    paymentMethods.maya    ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'maya' ? 'on' : ''}" data-m="maya" role="button" tabindex="0" aria-pressed="${defaultPayMethod === 'maya' ? 'true' : 'false'}" onkeydown="paymentOptionKeydown(event)"    onclick="opPickPay('maya')">${paymentMethodBrandMarkHtml('maya', 'po-ico pm-brand-mark--compact')}<span class="po-lbl">Maya</span><span class="po-sub">QRPh to GCash</span></div>` : '',
+    paymentMethods.gotyme  ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'gotyme' ? 'on' : ''}" data-m="gotyme" role="button" tabindex="0" aria-pressed="${defaultPayMethod === 'gotyme' ? 'true' : 'false'}" onkeydown="paymentOptionKeydown(event)"  onclick="opPickPay('gotyme')">${paymentMethodBrandMarkHtml('gotyme', 'po-ico pm-brand-mark--compact') || '<span class="po-ico">GT</span>'}<span class="po-lbl">GoTyme → GCash</span><span class="po-sub">Pay from GoTyme</span></div>` : '',
+    paymentMethods.maribank ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'maribank' ? 'on' : ''}" data-m="maribank" role="button" tabindex="0" aria-pressed="${defaultPayMethod === 'maribank' ? 'true' : 'false'}" onkeydown="paymentOptionKeydown(event)" onclick="opPickPay('maribank')">${paymentMethodBrandMarkHtml('maribank', 'po-ico pm-brand-mark--compact') || '<span class="po-ico">MB</span>'}<span class="po-lbl">MariBank → GCash</span><span class="po-sub">Pay from MariBank</span></div>` : '',
+    paymentMethods.pnb     ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'pnb' ? 'on' : ''}" data-m="pnb" role="button" tabindex="0" aria-pressed="${defaultPayMethod === 'pnb' ? 'true' : 'false'}" onkeydown="paymentOptionKeydown(event)"     onclick="opPickPay('pnb')">${paymentMethodBrandMarkHtml('pnb', 'po-ico pm-brand-mark--compact')}<span class="po-lbl">PNB</span><span class="po-sub">Scan QR · enter ref #</span></div>` : '',
+    paymentMethods.cash    ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'cash' ? 'on' : ''}" data-m="cash" role="button" tabindex="0" aria-pressed="${defaultPayMethod === 'cash' ? 'true' : 'false'}" onkeydown="paymentOptionKeydown(event)"    onclick="opPickPay('cash')">${paymentMethodBrandMarkHtml('cash', 'po-ico pm-brand-mark--compact')}<span class="po-lbl">Cash</span><span class="po-sub">Pay at front desk</span></div>` : '',
   ].filter(Boolean);
   if (paymentMethods.bpi) {
-    payOptList.splice(Math.min(3, payOptList.length), 0, `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'bpi' ? 'on' : ''}" data-m="bpi" onclick="opPickPay('bpi')">${paymentMethodBrandMarkHtml('bpi', 'po-ico pm-brand-mark--compact')}<span class="po-lbl">BPI</span><span class="po-sub">Confirmation No.</span></div>`);
+    payOptList.splice(Math.min(3, payOptList.length), 0, `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'bpi' ? 'on' : ''}" data-m="bpi" role="button" tabindex="0" aria-pressed="${defaultPayMethod === 'bpi' ? 'true' : 'false'}" onkeydown="paymentOptionKeydown(event)" onclick="opPickPay('bpi')">${paymentMethodBrandMarkHtml('bpi', 'po-ico pm-brand-mark--compact')}<span class="po-lbl">BPI</span><span class="po-sub">Confirmation No.</span></div>`);
   }
   const payOpts = payOptList.join('');
   const paymentPicker = payOptList.length > 1 ? `
     <div>
       <div class="op-section-label">Payment Method</div>
-      <div class="pay-opts op-pay-opts" id="opPayOpts">${payOpts}</div>
+      <div class="pay-opts op-pay-opts" id="opPayOpts" role="group" aria-label="Payment method">${payOpts}</div>
     </div>` : `<div id="opPayOpts" style="display:none">${payOpts}</div>`;
 
   // Auto-set downpayment based on mode
@@ -11243,7 +11256,11 @@ function openPlayDpControlsHtml(opTotal) {
 function opPickPay(method) {
   if (!paymentMethods[method]) return;
   _opSignupData.payMethod = method;
-  document.querySelectorAll('#opPayOpts .pay-opt').forEach(el => el.classList.toggle('on', el.dataset.m === method));
+  document.querySelectorAll('#opPayOpts .pay-opt').forEach(el => {
+    const selected = el.dataset.m === method;
+    el.classList.toggle('on', selected);
+    el.setAttribute('aria-pressed', selected ? 'true' : 'false');
+  });
   const info = $('opPayInfo');
   if (!info) return;
   const opTotal = openPlayFee + _serviceFeeRate;
