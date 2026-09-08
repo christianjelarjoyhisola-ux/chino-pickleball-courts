@@ -5607,7 +5607,7 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(45, 62, 79, .1
         <div style="margin-top:22px;padding-top:20px;border-top:1px solid var(--border)">
           <h4>All courts promo</h4>
           <p style="color:var(--muted);font-size:.84rem;margin:8px 0 16px">Apply one promotional hourly rate to all current courts. This replaces their individual promo settings. Existing bookings keep their saved prices.</p>
-          <label style="display:flex;align-items:center;gap:10px;margin-bottom:16px"><input type="checkbox" id="allPromoEnabled" onchange="updateAllPromoPreview()" /> Enable promo for all courts</label>
+          <label class="court-promo-toggle" for="allPromoEnabled" style="margin-bottom:16px"><input type="checkbox" role="switch" id="allPromoEnabled" onchange="updateAllPromoPreview()" /><span class="court-promo-switch-track" aria-hidden="true"></span><span>Enable promo for all courts</span></label>
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px">
             <div><label class="fl" for="allPromoRate">Promo price / hour (₱)</label><input class="fi" id="allPromoRate" type="number" min="0.01" step="0.01" placeholder="e.g. 265" oninput="updateAllPromoPreview()" /></div>
             <div><label class="fl" for="allPromoStart">Start date · optional</label><input class="fi" id="allPromoStart" type="date" onchange="updateAllPromoPreview()" /></div>
