@@ -130,6 +130,7 @@ img[src="logochino.jpg"] {
 /* Centered photographic welcome. Controls stay in normal flow on short screens. */
 #splashScreen {
   --splash-logo-size:clamp(210px,33dvh,310px);
+  --splash-brand-offset:30px;
   background:#0a1c28!important;
   align-items:center!important;
   justify-content:flex-start!important;
@@ -151,6 +152,9 @@ img[src="logochino.jpg"] {
 .chino-splash-welcome { margin:10px 0 0; color:#f5f8fa; font:400 clamp(1.16rem,3.8vw,1.4rem)/1.2 'Bebas Neue','Arial Narrow',sans-serif; text-transform:uppercase; letter-spacing:.055em; }
 .pr-splash-rule { width:100%; height:1px; flex:0 0 1px; background:linear-gradient(90deg,transparent,rgba(170,204,220,.45),transparent); margin:23px 0 20px; }
 #splashScreen .chino-splash-logo { display:block; width:var(--splash-logo-size); height:var(--splash-logo-size); max-width:90%; flex:0 0 auto; margin:0 0 17px; padding:0!important; object-fit:contain; border:0!important; border-radius:0!important; background:transparent!important; box-shadow:none!important; filter:none!important; }
+/* Lower the brand group while keeping booking controls in their original flow. */
+#splashScreen .chino-splash-intro,#splashScreen .pr-splash-rule,#splashScreen .chino-splash-logo { position:relative; top:var(--splash-brand-offset); }
+#splashScreen .chino-splash-logo,#splashScreen .pr-splash-rule { pointer-events:none; }
 .chino-address-link { display:inline-flex; align-items:center; justify-content:center; gap:8px; max-width:100%; min-height:44px; padding-block:8px; color:inherit; font-size:.875rem; font-weight:400; line-height:1.5; text-decoration:none; text-underline-offset:4px; }
 .chino-address-link svg { width:18px; height:18px; flex:0 0 18px; }
 .chino-address-link span { min-width:0; overflow-wrap:anywhere; }
@@ -194,7 +198,7 @@ img[src="logochino.jpg"] {
   .pr-splash-footer { flex-direction:column; font-size:.75rem; letter-spacing:.035em; }
 }
 @media(max-height:780px) {
-  #splashScreen { --splash-logo-size:clamp(180px,32dvh,225px); gap:16px; padding-top:max(18px,env(safe-area-inset-top))!important; padding-bottom:max(16px,env(safe-area-inset-bottom))!important; }
+  #splashScreen { --splash-logo-size:clamp(180px,32dvh,225px); --splash-brand-offset:20px; gap:16px; padding-top:max(18px,env(safe-area-inset-top))!important; padding-bottom:max(16px,env(safe-area-inset-bottom))!important; }
   .chino-splash-tagline { font-size:.9rem; }
   .chino-splash-welcome { margin-top:7px; font-size:1.13rem; }
   .pr-splash-rule { margin:17px 0 14px; }
