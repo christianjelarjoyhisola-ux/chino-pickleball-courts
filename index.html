@@ -5454,8 +5454,10 @@ function bookingCourtGroupLabel(entries = []) {
 }
 
 function bookingRentalBreakdownHtml(items = uniqueBookingSelections(activeBookingItems()), options = {}) {
-  const groups = bookingRentalBreakdownModel(items);
   const itemizeSchedule = options?.itemizeSchedule === true;
+  const groups = itemizeSchedule
+    ? items.map(bookingItemRateBreakdown).map(entry => ({ ...entry, entries: [entry], subtotal: entry.total }))
+    : bookingRentalBreakdownModel(items);
   const dateFormatter = typeof options?.dateFormatter === 'function' ? options.dateFormatter : value => String(value || '');
   const totalHours = bookingItemsDuration(items);
   const totalCourts = new Set(items.map(item => String(item.courtId || item.courtName || ''))).size;

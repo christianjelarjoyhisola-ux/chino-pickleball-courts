@@ -236,18 +236,20 @@ test('Step 3 itemizes each schedule and price exactly once', () => {
 
   assert.equal((html.match(/Wednesday, September 2, 2026/g) || []).length, 1);
   assert.equal((html.match(/Court 1/g) || []).length, 1);
-  assert.equal((html.match(/Courts 2 & 3/g) || []).length, 1);
+  assert.equal((html.match(/Court 2/g) || []).length, 1);
+  assert.equal((html.match(/Court 3/g) || []).length, 1);
+  assert.doesNotMatch(html, /Courts 2 & 3| each/);
   assert.equal((html.match(/8:00 AM - 10:00 AM/g) || []).length, 1);
-  assert.equal((html.match(/4:00 PM - 6:00 PM/g) || []).length, 1);
+  assert.equal((html.match(/4:00 PM - 6:00 PM/g) || []).length, 2);
   assert.match(html, /₱350\/hr × 2 hrs/);
   assert.match(html, /₱700\.00/);
   assert.match(html, /₱400\/hr × 2 hrs/);
-  assert.match(html, /₱800 each/);
+  assert.equal((html.match(/₱800\.00/g) || []).length, 2);
   assert.doesNotMatch(html, /× 2 courts|₱1,600\.00/);
   assert.doesNotMatch(html, /matching courts|per court|court-hours|Court rental/i);
 });
 
-test('a grouped Step 3 price stays per court while the grand total stays combined', () => {
+test('matching courts have separate Step 3 rows and subtotals', () => {
   const harness = rentalBreakdownHarness();
   const items = [1, 2, 3].map(number => ({
     courtId: String(number),
@@ -262,7 +264,8 @@ test('a grouped Step 3 price stays per court while the grand total stays combine
   }));
   const html = harness.html(items, { itemizeSchedule: true, dateFormatter: value => value });
   assert.match(html, /₱350\/hr × 3 hrs/);
-  assert.match(html, /₱1,050 each/);
+  assert.equal((html.match(/₱1,050\.00/g) || []).length, 3);
+  assert.equal((html.match(/class="pbs-rental-entry"/g) || []).length, 3);
   assert.doesNotMatch(html, /× 3 courts|₱3,150\.00/);
   assert.doesNotMatch(html, /per court|court-hours/);
 });
@@ -282,7 +285,7 @@ test('grouped tiered prices never multiply the formula by the court count', () =
   }));
   const html = harness.html(items, { itemizeSchedule: true, dateFormatter: value => value });
   assert.match(html, /₱350\/hr × 1 hr \+ ₱400\/hr × 1 hr/);
-  assert.match(html, /₱750 each/);
+  assert.equal((html.match(/₱750\.00/g) || []).length, 2);
   assert.doesNotMatch(html, /× 2 courts|\) ×/);
   assert.equal(harness.model(items)[0].subtotal, 1500);
 });
