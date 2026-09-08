@@ -5384,7 +5384,14 @@ function separateBookingFees(items = []) { return items.reduce((sum, item) => su
 function bookingFeeLineHtml(items = []) {
   const amount = separateBookingFees(items);
   const separate = items.some(item => itemBookingFeeMode(item) === 'separate');
-  return '<div class="pbs-price-row"><span>Booking fee' + (separate ? ' · ' + bookingItemsDuration(items) + ' booked court-hours' : '') + '</span><strong>' + (separate ? fmt(amount) : 'Free') + '</strong></div>';
+  const chargedItems = items.filter(item => itemBookingFeeMode(item) === 'separate');
+  const hours = bookingItemsDuration(chargedItems);
+  const rate = hours > 0 ? Math.round(amount / hours * 100) / 100 : 0;
+  const uniformRate = hours > 0 && chargedItems.every(item => Math.abs(itemBookingFeeAmount(item) - rate * Number(item.duration || 0)) < 0.01);
+  const calculation = uniformRate
+    ? `${compactPeso(rate)}/hr × ${hours} ${hours === 1 ? 'hr' : 'hrs'}`
+    : `${hours} booked court-hours`;
+  return '<div class="pbs-price-row"><span>Booking fee' + (separate ? ' · ' + calculation : '') + '</span><strong>' + (separate ? fmt(amount) : 'Free') + '</strong></div>';
 }
 
 function bookingItemRateBreakdown(item = {}) {

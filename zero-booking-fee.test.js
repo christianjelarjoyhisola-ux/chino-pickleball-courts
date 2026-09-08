@@ -409,9 +409,10 @@ test('pricing surfaces use the configurable fee line', () => {
 
 test('summary uses the saved fee mode: included is Free, separate shows its amount', () => {
  const source = sourceBetween('function itemBookingFeeMode', 'function bookingItemRateBreakdown');
- const render = new Function('fmt','bookingItemsDuration', source + '; return bookingFeeLineHtml;')(x=>'₱'+x,items=>items.reduce((n,x)=>n+x.duration,0));
+ const render = new Function('fmt','bookingItemsDuration','compactPeso', source + '; return bookingFeeLineHtml;')(x=>'₱'+x,items=>items.reduce((n,x)=>n+x.duration,0),x=>'₱'+x);
  assert.match(render([{feeMode:'separate',serviceFee:15,duration:1}]), /₱15/);
  assert.match(render([{feeMode:'separate',serviceFee:30,duration:2}]), /₱30/);
  assert.doesNotMatch(render([{feeMode:'separate',serviceFee:0,duration:1}]), /Free/);
  assert.match(render([{feeMode:'included',serviceFee:15,duration:1}]), /Free/);
+ assert.match(render([{feeMode:'separate',serviceFee:30,duration:2},{feeMode:'separate',serviceFee:30,duration:2}]), /₱15\/hr × 4 hrs.*₱60/);
 });
