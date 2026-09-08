@@ -5383,7 +5383,8 @@ function itemBookingFeeAmount(item = {}) { return Math.max(0, Number(item.bookin
 function separateBookingFees(items = []) { return items.reduce((sum, item) => sum + (itemBookingFeeMode(item) === 'separate' ? itemBookingFeeAmount(item) : 0), 0); }
 function bookingFeeLineHtml(items = []) {
   const amount = separateBookingFees(items);
-  return '<div class="pbs-price-row"><span>Booking fee' + (amount > 0 ? ' · ' + bookingItemsDuration(items) + ' booked court-hours' : '') + '</span><strong>' + (amount > 0 ? fmt(amount) : 'Free') + '</strong></div>';
+  const separate = items.some(item => itemBookingFeeMode(item) === 'separate');
+  return '<div class="pbs-price-row"><span>Booking fee' + (separate ? ' · ' + bookingItemsDuration(items) + ' booked court-hours' : '') + '</span><strong>' + (separate ? fmt(amount) : 'Free') + '</strong></div>';
 }
 
 function bookingItemRateBreakdown(item = {}) {
@@ -9828,7 +9829,7 @@ function showInvoice(b) {
   const ticketModel = renderBookingTicketSessions(b);
   const invoicePricingItems = bookingTicketPricingItems(b, ticketModel);
   const separateFee = separateBookingFees(invoicePricingItems);
-  set('iBookingFee', separateFee > 0 ? fmt(separateFee) : 'Free');
+  set('iBookingFee', invoicePricingItems.some(item => itemBookingFeeMode(item) === 'separate') ? fmt(separateFee) : 'Free');
   const rentalBreakdown = $('iRentalBreakdown');
   if (rentalBreakdown) rentalBreakdown.innerHTML = bookingRentalBreakdownHtml(bookingTicketPricingItems(b, ticketModel));
   set('iPay', payLabel);

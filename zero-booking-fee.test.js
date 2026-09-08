@@ -358,7 +358,7 @@ test('player summary and confirmation use the saved fee breakdown', () => {
   assert.match(stepThree, /class="wiz-summary wiz-summary--booking"/, 'Step 3 must use one scoped booking summary card');
   assert.match(page, /\.wiz-summary--booking \.pbs-price-card\s*\{[^}]*border\s*:\s*0;[^}]*background\s*:\s*transparent;/s, 'the nested price shell must be visually flattened');
   assert.match(summaries, /bookingFeeLineHtml\(items\)/);
-  assert.match(page, /amount > 0 \? fmt\(amount\) : 'Free'/);
+  assert.match(page, /separate \? fmt\(amount\) : 'Free'/);
   assert.match(summaries, /Booking total/);
   assert.match(summaries, />Total</);
   assert.doesNotMatch(summaries, /Final booking total|Final total|Live total/i);
@@ -404,5 +404,14 @@ test('pricing surfaces use the configurable fee line', () => {
   assert.doesNotMatch(slotPricing, /Final Prices|Live Total|csl-final/i);
   assert.doesNotMatch(summaries, /Final booking total|Final total|Live total/i);
   assert.match(summaries, /bookingFeeLineHtml\(items\)/);
-  assert.match(page, /amount > 0 \? fmt\(amount\) : 'Free'/);
+  assert.match(page, /separate \? fmt\(amount\) : 'Free'/);
+});
+
+test('summary uses the saved fee mode: included is Free, separate shows its amount', () => {
+ const source = sourceBetween('function itemBookingFeeMode', 'function bookingItemRateBreakdown');
+ const render = new Function('fmt','bookingItemsDuration', source + '; return bookingFeeLineHtml;')(x=>'₱'+x,items=>items.reduce((n,x)=>n+x.duration,0));
+ assert.match(render([{feeMode:'separate',serviceFee:15,duration:1}]), /₱15/);
+ assert.match(render([{feeMode:'separate',serviceFee:30,duration:2}]), /₱30/);
+ assert.doesNotMatch(render([{feeMode:'separate',serviceFee:0,duration:1}]), /Free/);
+ assert.match(render([{feeMode:'included',serviceFee:15,duration:1}]), /Free/);
 });
