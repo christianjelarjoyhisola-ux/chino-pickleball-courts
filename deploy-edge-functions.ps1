@@ -56,8 +56,8 @@ $mailerooReplyTo = Resolve-ConfigValue "MAILEROO_REPLY_TO" $envMap
 $telegramBotToken = Resolve-ConfigValue "TELEGRAM_BOT_TOKEN" $envMap
 $telegramChatId = Resolve-ConfigValue "TELEGRAM_CHAT_ID" $envMap
 
-if ($projectRef -ne "mtomskztsvljvzgmewav") {
-  throw "This deployment is restricted to CHINO project mtomskztsvljvzgmewav."
+if ($projectRef -ne "wskzptxekldhsxluhgos") {
+  throw "This deployment is restricted to CHINO project wskzptxekldhsxluhgos."
 }
 if ($serviceRoleKey.Split('.').Count -eq 3) {
   $keyPayload = $serviceRoleKey.Split('.')[1].Replace('-', '+').Replace('_', '/')
@@ -67,7 +67,7 @@ if ($serviceRoleKey.Split('.').Count -eq 3) {
 }
 if (-not $appPublicUrl) { $appPublicUrl = "https://chinopickleball.pages.dev" }
 if (-not $appAdminUrl) { $appAdminUrl = "$appPublicUrl/admin.html" }
-if (-not $publicLogoUrl) { $publicLogoUrl = "$appPublicUrl/assets/chino-courts.png" }
+if (-not $publicLogoUrl) { $publicLogoUrl = "$appPublicUrl/logochino.jpg" }
 if (-not $emailAllowedOrigins) { $emailAllowedOrigins = $appPublicUrl }
 if (-not $mailerooFromName) { $mailerooFromName = "CHINO Pickleball Courts" }
 
@@ -140,7 +140,9 @@ try {
   } catch {
     throw "Could not parse the Supabase secret inventory. No deployment was attempted."
   }
-  $secretRows = if ($secretList.PSObject.Properties.Name -contains "secrets") {
+  $secretRows = if ($null -eq $secretList) {
+    @()
+  } elseif ($secretList -isnot [array] -and $null -ne $secretList.PSObject.Properties['secrets']) {
     @($secretList.secrets)
   } else {
     @($secretList)

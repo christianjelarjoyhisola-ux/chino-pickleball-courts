@@ -16,7 +16,7 @@ See [Google Vision setup](GOOGLE_VISION_SETUP.md) and [Maya receipt verification
 
 ## Database and Edge Functions
 
-Use CHINO's dedicated project `mtomskztsvljvzgmewav`. Apply the consolidated setup and every required forward migration; payment functionality depends on the full schema, authorization rules, and receipt audit tables.
+Use CHINO's dedicated project `wskzptxekldhsxluhgos`. Apply the consolidated setup and every required forward migration; payment functionality depends on the full schema, authorization rules, and receipt audit tables.
 
 The deployment script publishes the relevant functions, including `verify-gcash-receipt`, `host-booking-balance-payment`, `create-payment-session`, and `payment-webhook`. Functions use server-held service credentials; those credentials never belong in browser code.
 
@@ -33,7 +33,7 @@ A successful session response contains a newly created provider checkout URL and
 
 ## Current webhook contract
 
-The endpoint is `https://mtomskztsvljvzgmewav.supabase.co/functions/v1/payment-webhook`.
+The endpoint is `https://wskzptxekldhsxluhgos.supabase.co/functions/v1/payment-webhook`.
 
 It accepts a POST body with `session_id` or `booking_ref`, `status`, and optional `provider_reference` and `paid_at` fields. It also parses PayMongo-shaped event data. Authentication currently requires an `x-payment-signature` header containing the lowercase hexadecimal HMAC-SHA256 of the exact raw request body, using `PAYMENT_WEBHOOK_SECRET`.
 

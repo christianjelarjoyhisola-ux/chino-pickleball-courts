@@ -219,7 +219,7 @@ test('production setup scripts cannot reinsert sample courts on rerun', () => {
 
 test('CHINO deployment stays on its own backend and ships only its own venue imagery', () => {
   const config = read('supabase-config.js');
-  assert.match(config, /const SUPABASE_URL = 'https:\/\/mtomskztsvljvzgmewav\.supabase\.co'/);
+  assert.match(config, /const SUPABASE_URL = 'https:\/\/wskzptxekldhsxluhgos\.supabase\.co'/);
   assert.match(config, /const STORE_KEY = 'chino_local_db_v1'/);
   assert.match(config, /const PB_DATA_MODE_KEY = 'chino_data_mode'/);
   assert.match(config, /const PB_BOOKING_ACCESS_TOKENS_KEY = 'chino_booking_access_tokens_v1'/);

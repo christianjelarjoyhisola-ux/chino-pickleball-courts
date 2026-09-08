@@ -4,7 +4,7 @@ CHINO's independent court booking and operations platform, with a court-blue, ch
 
 - Website: [chinopickleball.pages.dev](https://chinopickleball.pages.dev)
 - Private repository: [christianjelarjoyhisola-ux/chino-pickleball-courts](https://github.com/christianjelarjoyhisola-ux/chino-pickleball-courts)
-- Dedicated Supabase project: `mtomskztsvljvzgmewav`
+- Dedicated Supabase project: `wskzptxekldhsxluhgos` — Singapore (`ap-southeast-1`)
 - Independent Supabase organization: [CHINO Pickleball Courts](https://supabase.com/dashboard/org/xvtjpartlhxcyirwkhgo)
 
 Adapted from the owner's Paddle Rage Pickleball platform. This project retains its booking and operations features while using independent CHINO data, accounts, configuration, and branding.

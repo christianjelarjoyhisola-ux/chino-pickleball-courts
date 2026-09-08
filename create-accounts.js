@@ -34,7 +34,7 @@ const ACCOUNTS = [
   { email: env.STAFF_EMAIL, password: env.STAFF_PASSWORD, username: 'courtstaff', full_name: 'CHINO Court Staff', role: 'staff' },
 ].filter(account => account.email || account.password);
 
-if (SUPABASE_URL !== 'https://mtomskztsvljvzgmewav.supabase.co') {
+if (SUPABASE_URL !== 'https://wskzptxekldhsxluhgos.supabase.co') {
   throw new Error('Account setup is restricted to the dedicated CHINO project.');
 }
 for (const account of ACCOUNTS) {

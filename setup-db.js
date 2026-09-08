@@ -47,6 +47,11 @@ on conflict (version) do nothing;`;
 }
 
 async function run() {
+  const batchArgument = process.argv.find(argument => argument.startsWith('--batch-size='));
+  const batchSize = batchArgument ? Number(batchArgument.slice('--batch-size='.length)) : 1;
+  if (!Number.isInteger(batchSize) || batchSize < 1 || batchSize > 20) {
+    throw new Error('Migration batch size must be an integer from 1 to 20.');
+  }
   console.log('CHINO fresh installation: consolidated baseline, then ' + forwardMigrations.length + ' forward migrations.');
   if (process.argv.includes('--dry-run')) {
     console.log('SETUP_NEW_SUPABASE.sql');
@@ -58,6 +63,9 @@ async function run() {
   const env = { ...process.env, ...localEnv };
   const useCli = process.argv.includes('--cli') || !localEnv.SUPABASE_ACCESS_TOKEN;
   const ref = String(env.SUPABASE_PROJECT_REF || '').trim();
+  if (ref !== 'wskzptxekldhsxluhgos') {
+    throw new Error('Bootstrap is restricted to the dedicated CHINO Singapore project.');
+  }
   const token = String(localEnv.SUPABASE_ACCESS_TOKEN || '').trim();
   if (!/^[a-z0-9]{20}$/.test(ref) || (!useCli && !token)) {
     throw new Error('Set the new SUPABASE_PROJECT_REF, then use --cli with an authenticated CLI or supply SUPABASE_ACCESS_TOKEN in .env.local.');
@@ -112,8 +120,9 @@ async function run() {
 
   const projects = await management('projects');
   const project = projects.find(item => item.id === ref);
-  if (!project || !/chino/i.test(project.name || '')) {
-    throw new Error('Refusing bootstrap: the selected project is not an accessible CHINO project.');
+  if (!project || !/chino/i.test(project.name || '') ||
+      project.organization_id !== 'xvtjpartlhxcyirwkhgo' || project.region !== 'ap-southeast-1') {
+    throw new Error('Refusing bootstrap: the selected project is not CHINO Singapore in its dedicated organization.');
   }
   console.log('Verified dedicated project: ' + project.name + ' (' + ref + ')');
   await query(`do $$ begin
@@ -134,9 +143,11 @@ on conflict (id) do update set project_url = excluded.project_url;`);
     .map(recordMigration).join('\n'));
   console.log('Consolidated baseline installed and prior migration history recorded.');
 
-  for (const item of forwardMigrations) {
-    await query(fs.readFileSync(item.file, 'utf8') + '\n' + recordMigration(item));
-    console.log('Applied ' + item.name);
+  for (let index = 0; index < forwardMigrations.length; index += batchSize) {
+    const batch = forwardMigrations.slice(index, index + batchSize);
+    // Each request preserves migration order and records only successful SQL.
+    await query(batch.map(item => fs.readFileSync(item.file, 'utf8') + '\n' + recordMigration(item)).join('\n'));
+    for (const item of batch) console.log('Applied ' + item.name);
   }
   console.log('CHINO schema, private storage, Realtime and isolated maintenance jobs are ready.');
   console.log('No venue courts, users, payment recipients or business details were copied.');

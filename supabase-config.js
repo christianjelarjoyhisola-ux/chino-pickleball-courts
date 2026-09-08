@@ -5,8 +5,8 @@
 // =============================================
 // Dedicated CHINO project. The anon key is safe for browser use because
 // database access is enforced by the project's Row Level Security policies.
-const SUPABASE_URL = 'https://mtomskztsvljvzgmewav.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10b21za3p0c3ZsanZ6Z21ld2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg4MzkyNDAsImV4cCI6MjEwNDQxNTI0MH0.z1QJhM0ziEcGmHuGL7m7vZO3fsrBxKaLl7BZPjgN80c';
+const SUPABASE_URL = 'https://wskzptxekldhsxluhgos.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indza3pwdHhla2xkaHN4bHVoZ29zIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg4NDA3NDEsImV4cCI6MjEwNDQxNjc0MX0.hW0ApbdEUbhFkLIG_Z32o6uwpYQ_nMcb0sME9vh1kqA';
 
 const PB_REQUEST_TIMEOUT_MS = 45000;
 const PB_RECEIPT_TIMEOUT_MS = 90000;

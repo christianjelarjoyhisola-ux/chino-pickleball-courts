@@ -40,7 +40,7 @@ if (-not $env:CLOUDFLARE_API_TOKEN) {
 $projectName = if ($envMap["CLOUDFLARE_PAGES_PROJECT"]) { $envMap["CLOUDFLARE_PAGES_PROJECT"] } else { "chinopickleball" }
 $branchName = if ($envMap["CLOUDFLARE_PAGES_BRANCH"]) { $envMap["CLOUDFLARE_PAGES_BRANCH"] } else { "main" }
 $browserConfig = Get-Content -LiteralPath (Join-Path $repoRoot 'supabase-config.js') -Raw
-if ($browserConfig -notmatch "const SUPABASE_URL = 'https://mtomskztsvljvzgmewav.supabase.co'" -or
+if ($browserConfig -notmatch "const SUPABASE_URL = 'https://wskzptxekldhsxluhgos.supabase.co'" -or
     $browserConfig -match "const SUPABASE_ANON_KEY = 'YOUR_") {
   throw 'CHINO deployment requires its dedicated Supabase project and configured public key.'
 }

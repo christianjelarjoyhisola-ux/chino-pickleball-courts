@@ -202,7 +202,7 @@ function publicUrl(): string {
 
 function logoUrl(): string {
   return (Deno.env.get("PUBLIC_LOGO_URL") ||
-    `${publicUrl()}/assets/chino-courts.png`).trim();
+    `${publicUrl()}/logochino.jpg`).trim();
 }
 
 function layout(options: LayoutOptions): string {
