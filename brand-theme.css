@@ -102,6 +102,7 @@ img[src="logochino.jpg"] {
 }
 .nav-brand:hover img[src="logochino.jpg"] { transform:none; }
 .nav .chino-header-logo { width:68px; height:56px; flex:0 0 auto; border-radius:0!important; }
+.chino-nav-motto { display:none; }
 .logo-sub { font-family:'Outfit',system-ui,sans-serif; font-size:.6rem; letter-spacing:.12em; text-transform:uppercase; color:var(--muted)!important; }
 .logo-tx,.title,.sec-hd h1,.sec-hd h2,.hc-tt,.cc-name,.wiz-court-name {
   font-family:'Outfit',system-ui,sans-serif;
@@ -531,6 +532,12 @@ body.host-mode .guest-manage-link {
   .nav-headline {
     display: none;
   }
+  .nav .logo { min-width:0; }
+  .nav .logo-tx { display:block; min-width:0; }
+  .nav .logo-name { font-size:1.05rem; letter-spacing:.1em; }
+  .nav .logo-sub { margin-top:2px; font-size:.65rem; letter-spacing:.08em; }
+  .chino-nav-motto { display:block; margin-top:3px; color:var(--muted); font:400 .7rem/1.4 'Outfit',system-ui,sans-serif; letter-spacing:0; }
+  .nav-r { flex-shrink:0; }
 }
 
 @media (max-width: 620px) {
@@ -539,7 +546,6 @@ body.host-mode .guest-manage-link {
     gap: 8px;
   }
 
-  .nav .logo-tx,
   .nav .sw-wrap > span {
     display: none;
   }
