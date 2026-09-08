@@ -802,7 +802,7 @@ tr:hover td { background: var(--bg2); }
 .mb-book-quick-confirm { width:100%; min-height:44px; margin-top:10px; justify-content:center; }
 .booking-section-toolbar { margin-bottom: 12px; }
 .booking-quick-nav {
-  display:grid; grid-template-columns:auto 1px minmax(0,1fr); gap:14px; align-items:end;
+  display:grid; grid-template-columns:minmax(0,1fr); gap:14px; align-items:end;
   margin-bottom:12px; padding:11px 12px; overflow:hidden;
   border:1px solid rgba(var(--green-rgb),.2); border-radius:16px;
   background:
@@ -5268,24 +5268,9 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(45, 62, 79, .1
         </div>
       </div>
       <nav class="booking-quick-nav" id="bookingQuickNav" aria-label="Booking list quick filters" aria-busy="false">
-        <div class="booking-quick-group booking-quick-type">
-          <span class="booking-quick-label">Booking type</span>
-          <div class="booking-quick-actions booking-quick-type-actions" role="group" aria-label="Filter by booking type">
-            <button type="button" class="booking-filter-chip booking-type-tab active" data-booking-type="all" aria-pressed="true" onclick="setBookingType('all')" onkeydown="bookingQuickFilterKeydown(event)">
-              <span class="booking-filter-text">All</span><span class="booking-filter-count" id="bookingCountAll">0</span>
-            </button>
-            <button type="button" class="booking-filter-chip booking-type-tab" data-booking-type="court" aria-pressed="false" onclick="setBookingType('court')" onkeydown="bookingQuickFilterKeydown(event)">
-              <span class="booking-filter-text">Court</span><span class="booking-filter-count" id="bookingCountCourt">0</span>
-            </button>
-            <button type="button" class="booking-filter-chip booking-type-tab" data-booking-type="host" aria-pressed="false" aria-label="Host bookings" title="Bookings created through a host account" onclick="setBookingType('host')" onkeydown="bookingQuickFilterKeydown(event)">
-              <span class="booking-filter-text"><span class="booking-type-long">Host Bookings</span><span class="booking-type-short">Host</span></span><span class="booking-filter-count" id="bookingCountHost">0</span>
-            </button>
-          </div>
-        </div>
-        <span class="booking-quick-divider" aria-hidden="true"></span>
         <div class="booking-quick-group booking-quick-status">
-          <span class="booking-quick-label">Reservation status</span>
-          <div class="booking-quick-actions booking-status-actions" role="group" aria-label="Filter by reservation status">
+          <span class="booking-quick-label">Status</span>
+          <div class="booking-quick-actions booking-status-actions" role="group" aria-label="Filter by status">
             <button type="button" class="booking-filter-chip booking-status-tab active" data-booking-status="all" aria-pressed="true" onclick="setBookingStatusView('all')" onkeydown="bookingQuickFilterKeydown(event)">
               <span class="booking-filter-dot" aria-hidden="true"></span><span class="booking-filter-text">Any Status</span><span class="booking-filter-count" id="bookingStatusCountAll">0</span>
             </button>

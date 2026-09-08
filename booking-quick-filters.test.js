@@ -100,15 +100,15 @@ test('search, date, and payment filters match the complete grouped reservation',
   assert.equal(helpers.bookingGroupMatchesFormFilters(booking, { q: 'missing' }), false);
 });
 
-test('Bookings exposes premium independent type and status controls accessibly', () => {
+test('Bookings exposes accessible status controls without a booking type row', () => {
   assert.match(adminSource, /id="bookingQuickNav"[^>]*aria-label="Booking list quick filters"/);
-  assert.match(adminSource, /role="group" aria-label="Filter by booking type"/);
-  assert.match(adminSource, /role="group" aria-label="Filter by reservation status"/);
+  assert.doesNotMatch(adminSource, /role="group" aria-label="Filter by booking type"/);
+  assert.match(adminSource, /role="group" aria-label="Filter by status"/);
   assert.match(adminSource, /data-booking-status="pending"[^>]*aria-pressed="false"/);
   assert.match(adminSource, /data-booking-status="confirmed"[^>]*aria-pressed="false"/);
   assert.match(adminSource, /data-booking-status="completed"[^>]*aria-pressed="false"/);
   assert.match(adminSource, /data-booking-status="closed"[^>]*aria-pressed="false"/);
-  assert.match(adminSource, /Host Bookings/);
+  assert.match(adminSource, /class="booking-quick-label">Status<\/span>/);
   assert.match(adminSource, /id="bookingFilterMeta" role="status" aria-live="polite"/);
   assert.doesNotMatch(adminSource, /id="fStatus"/, 'the old duplicate Status dropdown must stay removed');
 });
@@ -189,3 +189,4 @@ test('opening a calendar day applies its date before the single List render', ()
   assert.ok(source.indexOf("$('fDate').value=dateStr") < source.indexOf("switchBookingView('list')"));
   assert.equal((source.match(/renderBookings\(\)/g) || []).length, 0, 'List switching owns the only booking render');
 });
+
