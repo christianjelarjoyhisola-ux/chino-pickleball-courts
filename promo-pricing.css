@@ -1,0 +1,83 @@
+/* Court promos follow the selected play date and the CHINO court-blue palette. */
+.chino-promo-rate {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px 8px;
+  line-height: 1.25;
+}
+.chino-promo-badge {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #86b5dc;
+  border-radius: 5px;
+  padding: 3px 6px;
+  background: #233e54;
+  color: #d5e9f8;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  line-height: 1;
+  vertical-align: middle;
+}
+.chino-promo-rate del,
+.chino-promo-slot-price del,
+.ft-result-price del {
+  color: var(--muted);
+  font-weight: 400;
+  text-decoration-thickness: 1px;
+  text-decoration-color: currentColor;
+}
+.chino-promo-rate del { font-size: .78em; }
+.chino-promo-rate strong {
+  color: var(--text);
+  font-size: 1.15em;
+  font-weight: 700;
+  letter-spacing: -.02em;
+}
+.chino-promo-rate strong small { margin-left: 2px; font-size: .68em; font-weight: 500; }
+.chino-promo-period {
+  display: inline-block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
+.cc-slot-btn.chino-promo-slot { min-height: 65px; }
+.cc-slot-btn .csl-price.chino-promo-slot-price,
+.slot .csl-price.chino-promo-slot-price {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  line-height: 1.15;
+}
+.chino-promo-slot-price del { font-size: 10px; }
+.chino-promo-slot-current {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px;
+  color: var(--text);
+}
+.chino-promo-slot-current strong { font-size: 13px; font-weight: 700; }
+.chino-promo-slot-label { font-size: 8px; font-weight: 600; letter-spacing: .015em; }
+.cc-slot-btn.selected .chino-promo-slot-current,
+.slot.sel .chino-promo-slot-current { color: #fff; }
+.cc-slot-btn.selected .chino-promo-slot-price del,
+.slot.sel .chino-promo-slot-price del { color: #d3deea; }
+.cc-photo-rate .chino-promo-rate { gap: 5px 7px; }
+.cc-photo-rate .chino-promo-rate del { color: #d1dbe3; }
+.cc-photo-rate .chino-promo-rate strong { color: #fff; }
+.ft-result-price { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.ft-result-price strong { color: var(--text); }
+.slot .chino-promo-slot-price { margin-top: 6px; }
+@media (max-width: 600px) {
+  .cc-mobile-meta .chino-promo-rate { gap: 4px 6px; }
+  .cc-mobile-meta .chino-promo-rate strong { font-size: 14px; }
+  .cc-mobile-meta .chino-promo-rate del { font-size: 10px; }
+  .cc-slot-btn.chino-promo-slot { min-height: 67px; }
+  .chino-promo-slot-current { gap: 3px; }
+  .chino-promo-slot-current strong { font-size: 12px; }
+}

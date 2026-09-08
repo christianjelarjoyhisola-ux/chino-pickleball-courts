@@ -28,6 +28,7 @@
 <script src="payment-method-brand.js?v=20260901-payment-icons-v2"></script>
 <script src="booking-balance.js?v=20260831-payment-state-v7"></script>
 <script src="host-balance-payment.js?v=20260831-payment-state-v7"></script>
+<script src="court-pricing.js?v=20260908-court-promo-v1"></script>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -3449,6 +3450,7 @@ body.host-mode .courts { padding-bottom:140px; }
 
 </style>
 <link rel="stylesheet" href="brand-theme.css?v=20260908-navbar-identity">
+<link rel="stylesheet" href="promo-pricing.css?v=20260908-court-promo-v1">
 </head>
 <body class="dark">
 <script>
@@ -5181,8 +5183,11 @@ function selectionListedPrice(sel) {
 function selectionSlotRates(sel) {
   const tiers = Array.isArray(sel?.tiers) && sel.tiers.length ? sel.tiers : pricingTiers;
   const fallbackRate = Number(sel?.rate || 0);
+  const pricingCourt = sel?.courtPricing || { ...sel, rate: fallbackRate, rateSchedule: tiers };
   return normalizedSlots(sel?.slots).map(h => {
-    const rate = Number(getRateForHourFromTiers(h, tiers, fallbackRate));
+    const rate = Number(globalThis.ChinoPricing
+      ? globalThis.ChinoPricing.rateForHour(pricingCourt, h, sel.date, tiers)
+      : getRateForHourFromTiers(h, tiers, fallbackRate));
     return Math.round(Math.max(0, Number.isFinite(rate) ? rate : fallbackRate) * 100) / 100;
   });
 }
@@ -5291,6 +5296,7 @@ function makeBookingItemFromCurrentForm() {
     slots: [...selSlots],
     rate: court.rate,
     tiers: getPricingTiersForCourt(court),
+    courtPricing: courtPricingSnapshot(court),
   };
   return makeBookingItemFromSelection(sel, _reservedRef || null, null);
 }
@@ -5893,10 +5899,15 @@ async function loadOperatingHours() {
   applyVenueDetails(settings);
   openHour  = parseInt(settings.open_hour  || '6');
   closeHour = parseInt(settings.close_hour || '22');
+  let configuredTiers = [];
   if (settings.pricing_tiers) {
-    try { pricingTiers = JSON.parse(settings.pricing_tiers); } catch(e) {}
+    try {
+      const parsed = JSON.parse(settings.pricing_tiers);
+      if (Array.isArray(parsed)) configuredTiers = parsed;
+    } catch(e) {}
   }
-  _settingsTiers = pricingTiers.length ? [...pricingTiers] : null;
+  _settingsTiers = configuredTiers.length ? configuredTiers.map(tier => ({ ...tier })) : null;
+  pricingTiers = configuredTiers;
   if (OPEN_PLAY_AVAILABLE && settings.open_play_config) {
     try {
       openPlayConfig = JSON.parse(settings.open_play_config);
@@ -6182,7 +6193,8 @@ function startPaymentWatch(ref) {
 }
 
 function getRateForHour(h) {
-  return getRateForHourFromTiers(h, pricingTiers, 0);
+  return court ? courtRateForDate(court, h, $('bDate')?.value || cardSel.date || selectedCourtBrowseDate())
+    : getRateForHourFromTiers(h, pricingTiers, 0);
 }
 
 function getRateForHourFromTiers(h, tiers, fallbackRate = 0) {
@@ -6200,6 +6212,67 @@ function getPricingTiersForCourt(c) {
   if (c.rateSchedule && c.rateSchedule.length) return c.rateSchedule;
   if (_settingsTiers && _settingsTiers.length) return _settingsTiers;
   return [{ from: openHour, to: closeHour, rate: c.rate }];
+}
+
+function courtPricingSnapshot(c = {}) {
+  c = c || {};
+  return {
+    rate: Number(c.rate || 0),
+    rateSchedule: getPricingTiersForCourt(c).map(tier => ({ ...tier })),
+    promoEnabled: c.promoEnabled === true,
+    promoRate: c.promoRate ?? null,
+    promoStartDate: c.promoStartDate || null,
+    promoEndDate: c.promoEndDate || null,
+  };
+}
+
+function courtRateForDate(c, hour, date) {
+  return ChinoPricing.rateForHour(c, hour, date, getPricingTiersForCourt(c));
+}
+
+function courtRegularRate(c, hour) {
+  return ChinoPricing.regularRateForHour(c, hour, getPricingTiersForCourt(c));
+}
+
+function courtPromoSlotPriceHtml(rate, regularRate) {
+  return `<div class="csl-price chino-promo-slot-price"><del aria-label="Regular price">${compactPeso(regularRate)}</del><span class="chino-promo-slot-current"><span class="chino-promo-slot-label">Promo</span><strong>${compactPeso(rate)}</strong></span></div>`;
+}
+
+function courtPromoPriceAriaLabel(rate, regularRate) {
+  return `Promo ${compactPeso(rate)} per hour, regular ${compactPeso(regularRate)} per hour`;
+}
+
+function courtPromoRateHtml(c, date, regularLabel) {
+  const promo = ChinoPricing.promoForDate(c, date);
+  const rates = getPricingTiersForCourt(c).map(tier => Number(tier.rate));
+  const regularMinimum = rates.length ? Math.min(...rates) : Number(c.rate);
+  if (!promo.active || promo.rate >= regularMinimum) return '';
+  return `<span class="chino-promo-rate"><span class="chino-promo-badge">Promo</span><del aria-label="Regular hourly rate">${esc(regularLabel)}</del><strong>${compactPeso(promo.rate)}<small>/hr</small></strong></span>`;
+}
+
+function courtPromoPeriodHtml(c, date) {
+  const promo = ChinoPricing.promoForDate(c, date);
+  if (!promo.active) return '';
+  const period = promo.endsOn ? `For play through ${fmtDc(promo.endsOn)}` : 'For your selected play date';
+  return `<span class="chino-promo-period">${esc(period)}</span>`;
+}
+
+function courtRegularRateLabel(c) {
+  const rates = getPricingTiersForCourt(c).map(tier => allInSlotRate(tier.rate));
+  const minimum = rates.length ? Math.min(...rates) : allInSlotRate(c.rate);
+  const maximum = rates.length ? Math.max(...rates) : minimum;
+  return minimum === maximum ? `${compactPeso(minimum)}/hr` : `${compactPeso(minimum)}–${compactPeso(maximum)}/hr`;
+}
+
+function syncCourtPromoPrice(c, date) {
+  const regularLabel = courtRegularRateLabel(c);
+  const rateHtml = courtPromoRateHtml(c, date, regularLabel) || esc(regularLabel);
+  for (const prefix of ['cRateMobile_', 'cRatePhoto_']) {
+    const element = $(prefix + c.id);
+    if (element) element.innerHTML = rateHtml;
+  }
+  const period = $('cPromoPeriod_' + c.id);
+  if (period) period.innerHTML = courtPromoPeriodHtml(c, date);
 }
 
 const fmtTs = h => h === 24 ? '12A' : `${h % 12 || 12}${h < 12 ? 'A' : 'P'}`;
@@ -6297,7 +6370,8 @@ async function findAvailableTimeMatches(date, preferredStart, duration) {
       const slots = Array.from({ length: duration }, (_, i) => start + i);
       if (!findTimeSlotsAvailable({ court: c, date, slots, bookedSet, blockedDates })) continue;
       const tiers = getPricingTiersForCourt(c);
-      const listedPrice = slots.reduce((sum, h) => sum + getRateForHourFromTiers(h, tiers, c.rate), 0);
+      const listedPrice = slots.reduce((sum, h) => sum + courtRateForDate(c, h, date), 0);
+      const regularTotal = slots.reduce((sum, h) => sum + courtRegularRate(c, h), 0);
       matches.push({
         courtId: String(c.id),
         courtName: c.name,
@@ -6307,6 +6381,7 @@ async function findAvailableTimeMatches(date, preferredStart, duration) {
         slots,
         courtFee: Math.max(0, listedPrice - Math.min(listedPrice, calcSvcFee(duration))),
         total: listedPrice,
+        regularTotal,
         exact: start === preferredStart,
       });
     }
@@ -6325,7 +6400,7 @@ function findTimeResultHtml(item) {
     <div class="ft-result-main">
       <div class="ft-result-court">${esc(item.courtName)}</div>
       <div class="ft-result-time">${esc(time)} (${item.duration} hr${item.duration !== 1 ? 's' : ''})</div>
-      <div class="ft-result-price">Price ${fmt(item.total)}</div>
+      <div class="ft-result-price">${item.regularTotal > item.total ? `<span class="chino-promo-badge">Promo</span> <del>${fmt(item.regularTotal)}</del> ` : 'Price '}<strong>${fmt(item.total)}</strong></div>
     </div>
     <button class="btn btn-p btn-sm" type="button" onclick="selectFindTimeResult('${jsArg(item.courtId)}','${jsArg(item.date)}',${item.start},${item.duration})">Select</button>
   </div>`;
@@ -6379,6 +6454,7 @@ async function selectFindTimeResult(courtId, date, start, duration) {
     slots,
     rate: Number(court?.rate || 0),
     tiers: getPricingTiersForCourt(court),
+    courtPricing: courtPricingSnapshot(court),
   };
   refreshCardSelAlias();
   updateCardUI(courtId);
@@ -6419,6 +6495,7 @@ async function toggleCardSlot(courtId, date, h) {
       slots: [],
       rate: Number(court?.rate || 0),
       tiers: getPricingTiersForCourt(court),
+      courtPricing: courtPricingSnapshot(court),
     };
     cardSelections[key] = sel;
   }
@@ -6961,6 +7038,33 @@ function showLateNightExtensionPrompt(candidate) {
   return new Promise(resolve => { lateNightExtensionResolver = resolve; });
 }
 
+async function verifiedReservedBookingItems(quotedItems) {
+  const savedRows = await Promise.all(quotedItems.map(item => DB.getBookingByRef(item.ref)));
+  if (savedRows.some(row => !row || !Number.isFinite(Number(row.total)))) {
+    throw new Error('Could not verify the reserved price. Please refresh and try again.');
+  }
+  const savedItems = savedRows.map(bookingItemFromReservedBooking);
+  const priceChanged = savedItems.some((item, index) => {
+    const quoted = quotedItems[index];
+    return !Number.isFinite(Number(quoted.total)) || Math.abs(item.total - Number(quoted.total)) > 0.01;
+  });
+  if (priceChanged) {
+    DB.clearCache?.(['courts', 'settings']);
+    throw new Error('Court pricing has changed. Please review the updated prices and select your times again.');
+  }
+  return savedItems.map((item, index) => {
+    // Production stores the authoritative total without per-slot rate columns.
+    // Retain the quoted breakdown only when it reconciles to that saved total.
+    const exactRates = rates => Array.isArray(rates) && rates.length === item.duration
+      && rates.every(rate => Number.isFinite(Number(rate)) && Number(rate) >= 0)
+      && Math.abs(rates.reduce((sum, rate) => sum + Number(rate), 0) - item.total) <= 0.01;
+    const quotedRates = quotedItems[index].slotRates;
+    const rates = exactRates(item.slotRates) ? item.slotRates
+      : exactRates(quotedRates) ? quotedRates : [];
+    return { ...item, slotRates: rates.map(Number) };
+  });
+}
+
 async function proceedToBookLegacy(courtId) {
   if (_bookingLaunchInFlight) return;
   setBookingLaunchInFlight(true);
@@ -7000,7 +7104,8 @@ async function proceedToBookLegacy(courtId) {
     timeLabel:     slotsTimeLabel(cardSel.slots),
     duration:      cardSel.slots.length,
     rate:          court.rate,
-    total:         cardSel.slots.reduce((s, h) => s + getRateForHour(h), 0),
+    slotRates:     selectionSlotRates(cardSel),
+    total:         selectionTotal(cardSel),
     paymentMethod: 'gcash',
     paymentFlow:   null,
     paymentStatus: 'for_verification',
@@ -7010,9 +7115,14 @@ async function proceedToBookLegacy(courtId) {
     gcashRef:      null,
     ...reserveIdentity,
   };
+  let savedReserveItem;
+  let reserveCreated = false;
   try {
     await DB.addBooking(reserveData);
+    reserveCreated = true;
+    [savedReserveItem] = await verifiedReservedBookingItems([reserveData]);
   } catch (err) {
+    if (reserveCreated) await cancelReservedBookings([reserveRef]);
     const msg = err?.message || '';
     if (msg.toLowerCase().includes('no longer available') || msg.toLowerCase().includes('already booked')) {
       toast('⚠️ Sorry, someone just reserved that slot! Please choose another time.', 'err');
@@ -7024,9 +7134,10 @@ async function proceedToBookLegacy(courtId) {
   }
   _reservedRef = reserveRef;
   _reservationStartedAt = reserveStartedAt;
+  bookingItems = [savedReserveItem];
 
   selSlots = [...cardSel.slots];
-  await refreshBookingItemViews([reserveData]);
+  await refreshBookingItemViews([savedReserveItem]);
   $('bDate').value = cardSel.date;
   applyHostBookingDraft();
   updatePaymentAmountUI();
@@ -7098,7 +7209,7 @@ async function proceedToBook(courtId = null) {
   const groupRef = bookingSelections.length > 1 ? genRef() + '-G' : null;
   const reserveStartedAt = new Date().toISOString();
   const reserveIdentity = hostBookingIdentity();
-  const reserveItems = bookingSelections.map(sel => makeBookingItemFromSelection(sel, genRef(), groupRef));
+  let reserveItems = bookingSelections.map(sel => makeBookingItemFromSelection(sel, genRef(), groupRef));
   const createdRefs = [];
 
   try {
@@ -7117,6 +7228,7 @@ async function proceedToBook(courtId = null) {
         timeLabel:     item.timeLabel || itemTimeLabel(item),
         duration:      item.duration,
         rate:          item.rate,
+        slotRates:     [...item.slotRates],
         total:         item.total,
         paymentMethod: 'gcash',
         paymentFlow:   null,
@@ -7129,6 +7241,7 @@ async function proceedToBook(courtId = null) {
     }));
     await DB.addBookings(reserveRows);
     createdRefs.push(...reserveItems.map(item => item.ref));
+    reserveItems = await verifiedReservedBookingItems(reserveItems);
   } catch (err) {
     if (createdRefs.length) await cancelReservedBookings(createdRefs);
     const msg = err?.message || '';
@@ -7447,6 +7560,7 @@ async function onCardDate(courtId, date, options = {}) {
     return;
   }
   const cTiers = getPricingTiersForCourt(c);
+  syncCourtPromoPrice(c, date);
 
   if (blockedDates.includes(date)) {
     grid.innerHTML = `<span class="cc-slots-empty" style="grid-column:span 2">🔒 This date is blocked</span>`;
@@ -7510,14 +7624,17 @@ async function onCardDate(courtId, date, options = {}) {
     if (isBooked_) return `<div class="cc-slot-btn taken"><div class="csl-time">${timeRange}</div><div class="csl-name">Booked</div></div>`;
     if (isMaint_)  { const _ml=getMaintenanceLabel(date,h,courtId); return `<div class="cc-slot-btn maintenance"><div class="csl-time">${timeRange}</div><div class="csl-tag">${_ml.icon} ${_ml.text}</div></div>`; }
     if (isOpenPlay_) return '';
-    const baseRate = getRateForHourFromTiers(h, cTiers, c.rate);
-    return `<div class="cc-slot-btn" role="button" tabindex="0" aria-pressed="false" aria-label="${esc(plainTimeRange)}, ${esc(allInSlotAriaLabel(baseRate))}" data-h="${h}" onclick="event.stopPropagation(); toggleCardSlot('${courtId}','${date}',${h})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();toggleCardSlot('${courtId}','${date}',${h})}"><div class="csl-time">${timeRange}</div>${allInSlotPriceHtml(baseRate)}</div>`;
+    const baseRate = courtRateForDate(c, h, date);
+    const regularRate = courtRegularRate(c, h);
+    const discounted = baseRate < regularRate;
+    const priceHtml = discounted ? courtPromoSlotPriceHtml(baseRate, regularRate) : allInSlotPriceHtml(baseRate);
+    const priceAria = discounted ? courtPromoPriceAriaLabel(baseRate, regularRate) : allInSlotAriaLabel(baseRate);
+    return `<div class="cc-slot-btn${discounted ? ' chino-promo-slot' : ''}" role="button" tabindex="0" aria-pressed="false" aria-label="${esc(plainTimeRange)}, ${esc(priceAria)}" data-h="${h}" onclick="event.stopPropagation(); toggleCardSlot('${courtId}','${date}',${h})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();toggleCardSlot('${courtId}','${date}',${h})}"><div class="csl-time">${timeRange}</div>${priceHtml}</div>`;
   }).join('');
 }
 
 /* proceedToBook loads court data if needed */
 async function ensureCourt(courtId) {
-  if (court && court.id === courtId) return;
   const courts = await DB.getCourts();
   court = courts.find(c => c.id === courtId) || null;
   if (court) pricingTiers = getPricingTiersForCourt(court);
@@ -7575,7 +7692,7 @@ async function renderCourts() {
 
     // Use this court's own rate schedule, fall back to global tiers, then flat rate
     const _cTiers = getPricingTiersForCourt(c);
-    const _cRate = h => getRateForHourFromTiers(h, _cTiers, c.rate);
+    const _cRate = h => courtRateForDate(c, h, selectedDate);
     const cardSelection = getCardSelection(c.id);
 
     const rateRange = (() => {
@@ -7585,6 +7702,7 @@ async function renderCourts() {
         ? (Math.min(...r) === Math.max(...r) ? `${compactPeso(Math.min(...r))}/hr` : `${compactPeso(Math.min(...r))}–${compactPeso(Math.max(...r))}/hr`)
         : `${compactPeso(fallback)}/hr`;
     })();
+    const promoRateHtml = courtPromoRateHtml(c, selectedDate, rateRange);
     const compactCourtName = String(c.name || 'Court')
       .replace(/^(?:CHINO|SMASH)\s+/i, '')
       .trim() || String(c.name || 'Court');
@@ -7622,7 +7740,11 @@ async function renderCourts() {
           if (isMaint_)  { const _ml=getMaintenanceLabel(selectedDate,h,c.id); return `<div class="cc-slot-btn maintenance"><div class="csl-time">${timeRange}</div><div class="csl-tag">${esc(_ml.icon)} ${esc(_ml.text)}</div></div>`; }
           if (isOpenPlay_) return '';
           const baseRate = _cRate(h);
-          return `<div class="cc-slot-btn${isSelectedSlot_ ? ' selected' : ''}" role="button" tabindex="0" aria-pressed="${isSelectedSlot_ ? 'true' : 'false'}" aria-label="${esc(plainTimeRange)}, ${esc(allInSlotAriaLabel(baseRate))}" data-h="${h}" onclick="event.stopPropagation(); toggleCardSlot('${jsArg(c.id)}','${jsArg(selectedDate)}',${h})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();toggleCardSlot('${jsArg(c.id)}','${jsArg(selectedDate)}',${h})}"><div class="csl-time">${timeRange}</div>${allInSlotPriceHtml(baseRate)}</div>`;
+          const regularRate = courtRegularRate(c, h);
+          const discounted = baseRate < regularRate;
+          const priceHtml = discounted ? courtPromoSlotPriceHtml(baseRate, regularRate) : allInSlotPriceHtml(baseRate);
+          const priceAria = discounted ? courtPromoPriceAriaLabel(baseRate, regularRate) : allInSlotAriaLabel(baseRate);
+          return `<div class="cc-slot-btn${isSelectedSlot_ ? ' selected' : ''}${discounted ? ' chino-promo-slot' : ''}" role="button" tabindex="0" aria-pressed="${isSelectedSlot_ ? 'true' : 'false'}" aria-label="${esc(plainTimeRange)}, ${esc(priceAria)}" data-h="${h}" onclick="event.stopPropagation(); toggleCardSlot('${jsArg(c.id)}','${jsArg(selectedDate)}',${h})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();toggleCardSlot('${jsArg(c.id)}','${jsArg(selectedDate)}',${h})}"><div class="csl-time">${timeRange}</div>${priceHtml}</div>`;
         }).join('');
     const isSelectedCard = !blk && !!cardSelection && cardSelection.date === selectedDate && cardSelection.slots.length > 0;
     const selectedSummary = isSelectedCard
@@ -7636,7 +7758,7 @@ async function renderCourts() {
       <div class="cc-mobile-hd">
         <div class="cc-mobile-title">
           <span class="cc-mobile-name">${courtTimesHeading}</span>
-          <span class="cc-mobile-meta"><span class="cc-rate-line"><span>${esc(rateRange)}</span></span></span>
+          <span class="cc-mobile-meta"><span class="cc-rate-line" id="cRateMobile_${esc(c.id)}">${promoRateHtml || `<span>${esc(rateRange)}</span>`}</span></span>
         </div>
         <div class="cc-mobile-side">
           <span class="cc-mobile-status ${availBadgeCls}" id="cMobAvail_${esc(c.id)}">${esc(availBadgeTxt)}</span>
@@ -7649,7 +7771,7 @@ async function renderCourts() {
         <div class="cc-photo-avail ${availBadgeCls}" id="cAvail_${esc(c.id)}">${esc(availBadgeTxt)}</div>
         <div class="cc-photo-bar">
           <span class="cc-photo-name">${esc(c.name)}</span>
-          <div class="cc-photo-rate"><span class="cc-rate-line"><span>${esc(rateRange)}</span></span></div>
+          <div class="cc-photo-rate"><span class="cc-rate-line" id="cRatePhoto_${esc(c.id)}">${promoRateHtml || `<span>${esc(rateRange)}</span>`}</span></div>
         </div>
       </div>
 
@@ -7659,6 +7781,7 @@ async function renderCourts() {
           <div>
             <div class="cc-times-title">${courtTimesHeading}</div>
             <div class="cc-times-sub">Select any available court slots</div>
+            <div id="cPromoPeriod_${esc(c.id)}">${courtPromoPeriodHtml(c, selectedDate)}</div>
           </div>
           <input type="hidden" id="cDate_${esc(c.id)}" value="${esc(selectedDate)}" />
         </div>
@@ -7713,11 +7836,9 @@ async function selectCourt(id) {
   pricingTiers = getPricingTiersForCourt(court);
   document.querySelectorAll('.cc').forEach(el => el.classList.toggle('sel', el.dataset.id === id));
   const d = $('courtDisp');
-  const rates = pricingTiers.map(t => allInSlotRate(t.rate));
-  const rateDisp = rates.length && Math.min(...rates) !== Math.max(...rates)
-    ? `${fmt(Math.min(...rates))}–${fmt(Math.max(...rates))}/hr`
-    : `${fmt(allInSlotRate(court.rate))}/hr`;
-  d.textContent = `${court.name} — ${rateDisp}`;
+  const rateDisp = courtRegularRateLabel(court);
+  const selectedDate = $('bDate')?.value || selectedCourtBrowseDate();
+  d.innerHTML = `${esc(court.name)} — ${courtPromoRateHtml(court, selectedDate, rateDisp) || esc(rateDisp)}`;
   d.classList.add('on');
 
   await renderSlots();
@@ -7803,6 +7924,8 @@ async function renderSlots() {
 
   // Always fetch fresh settings so Open Play config is current
   await loadOperatingHours();
+  const courtDisplay = $('courtDisp');
+  if (courtDisplay) courtDisplay.innerHTML = `${esc(court.name)} — ${courtPromoRateHtml(court, date, courtRegularRateLabel(court)) || esc(courtRegularRateLabel(court))}`;
   // Re-apply this court's rate schedule after loadOperatingHours resets pricingTiers
   if (court.rateSchedule && court.rateSchedule.length) {
     pricingTiers = court.rateSchedule;
@@ -7870,6 +7993,7 @@ async function renderSlots() {
       <div class="${cls}" data-h="${h}" onclick="toggleSlot(${h})">
         <div class="slot-time">${fmtT(h)}</div>
         <div class="slot-end">${fmtT(h + 1)}</div>
+        ${!isUnavail && !isNow ? (courtRateForDate(court, h, date) < courtRegularRate(court, h) ? courtPromoSlotPriceHtml(courtRateForDate(court, h, date), courtRegularRate(court, h)) : allInSlotPriceHtml(courtRateForDate(court, h, date))) : ''}
         ${tag}
       </div>`;
   }
@@ -8401,7 +8525,12 @@ async function submitBookingLegacy(e) {
   const hrs = selSlots.length;
   const startH = Math.min(...selSlots);
   const endH = Math.max(...selSlots) + 1;
-  const total = selSlots.reduce((s, h) => s + getRateForHour(h), 0);
+  const reservedItem = bookingItems.find(item => item.ref === _reservedRef);
+  const quotedSlotRates = reservedItem?.slotRates || selectionSlotRates({
+    courtPricing: courtPricingSnapshot(court), rate: court.rate,
+    date: $('bDate').value, slots: selSlots, tiers: getPricingTiersForCourt(court),
+  });
+  const total = reservedItem ? Number(reservedItem.total) : quotedSlotRates.reduce((sum, rate) => sum + rate, 0);
   const svcFee = Math.min(total, Math.max(0, calcSvcFee(selSlots.length)));
   const courtFee = Math.max(0, total - svcFee);
   const downpayment = downpaymentAmount(total, courtFee, svcFee);
@@ -8424,6 +8553,7 @@ async function submitBookingLegacy(e) {
     timeLabel: slotsTimeLabel(selSlots),
     duration: hrs,
     rate: court.rate,
+    slotRates: [...quotedSlotRates],
     total,
     paymentMethod: payMethod,
     gcashRef: gcashRef || null,
@@ -11518,7 +11648,7 @@ async function submitOpenPlay() {
 }
 </script>
 <script src="supabase.min.js"></script>
-<script src="supabase-config.js?v=20260905-grouped-reschedule-v3"></script>
+<script src="supabase-config.js?v=20260908-court-promo"></script>
 
 <!-- MOBILE STICKY BOOK NOW BAR -->
 <div id="mobileBookBar" class="mobile-book-bar" style="display:none">

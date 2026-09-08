@@ -935,6 +935,70 @@ function isMissingOptionalBookingColumnError(error) {
   return /host_booking|host_user_id|host_name|host_email|created_via|created_by_user_id|created_by_role|created_by_name|created_by_email/i.test(error?.message || '');
 }
 
+function _pbNormalizeCourtPromo(court, settings = {}) {
+  const suppliedEnabled = court.promoEnabled;
+  if (suppliedEnabled != null && typeof suppliedEnabled !== 'boolean') {
+    throw new Error('Promo enabled must be true or false.');
+  }
+  const promoEnabled = suppliedEnabled === true;
+  const empty = value => value == null || (typeof value === 'string' && !value.trim());
+  const rawRate = court.promoRate;
+  const promoRate = empty(rawRate) ? null : Number(rawRate);
+  if (promoRate !== null && (!['number', 'string'].includes(typeof rawRate)
+      || !Number.isFinite(promoRate) || promoRate <= 0 || promoRate >= 10000000000)) {
+    throw new Error('Promo hourly rate must be a positive number.');
+  }
+  if (promoRate !== null && Math.abs(promoRate - Math.round((promoRate + Number.EPSILON) * 100) / 100) > 0.0000001) {
+    throw new Error('Promo hourly rate must use no more than two decimal places.');
+  }
+  if (promoEnabled && promoRate === null) {
+    throw new Error('Enter a promo hourly rate before enabling the promo.');
+  }
+  const normalizeDate = (value, label) => {
+    if (empty(value)) return null;
+    const date = String(value).trim();
+    const parsed = /^\d{4}-\d{2}-\d{2}$/.test(date)
+      ? new Date(`${date}T00:00:00Z`) : null;
+    if (!parsed || !Number.isFinite(parsed.getTime()) || date.startsWith('0000-')
+        || parsed.toISOString().slice(0, 10) !== date) {
+      throw new Error(`Promo ${label} date must be a valid calendar date (YYYY-MM-DD).`);
+    }
+    return date;
+  };
+  const promoStartDate = normalizeDate(court.promoStartDate, 'start');
+  const promoEndDate = normalizeDate(court.promoEndDate, 'end');
+  if (promoStartDate && promoEndDate && promoEndDate < promoStartDate) {
+    throw new Error('Promo end date must be on or after the start date.');
+  }
+  if (promoEnabled && promoRate !== null) {
+    const parseTiers = value => {
+      if (empty(value)) return [];
+      let tiers = value;
+      if (typeof tiers === 'string') {
+        try { tiers = JSON.parse(tiers); } catch (_) {
+          throw new Error('Check the regular pricing tiers before saving a promo.');
+        }
+      }
+      if (!Array.isArray(tiers)) {
+        throw new Error('Check the regular pricing tiers before saving a promo.');
+      }
+      return tiers;
+    };
+    const courtTiers = parseTiers(court.rateSchedule);
+    const tiers = courtTiers.length ? courtTiers : parseTiers(settings.pricing_tiers);
+    const validTiers = tiers.filter(tier => tier && Number.isFinite(Number(tier.from))
+      && Number.isFinite(Number(tier.to)) && Number.isFinite(Number(tier.rate)) && Number(tier.rate) >= 0);
+    const regularRates = validTiers.length ? validTiers.map(tier => Number(tier.rate)) : [Number(court.rate)];
+    if (regularRates.some(rate => !Number.isFinite(rate) || rate <= 0)) {
+      throw new Error('Set valid positive regular hourly rates before saving a promo.');
+    }
+    if (regularRates.some(rate => promoRate >= rate)) {
+      throw new Error('Promo hourly rate must be lower than every regular pricing tier or the base rate when no tiers apply.');
+    }
+  }
+  return { promoEnabled, promoRate, promoStartDate, promoEndDate };
+}
+
 function rowToCourt(r) {
   return {
     id:           r.id,
@@ -945,11 +1009,16 @@ function rowToCourt(r) {
     feats:        r.feats || [],
     photo:        r.photo || '',
     rateSchedule: r.rate_schedule || null,
+    promoEnabled: r.promo_enabled === true,
+    promoRate: r.promo_rate == null ? null : Number(r.promo_rate),
+    promoStartDate: r.promo_start_date || null,
+    promoEndDate: r.promo_end_date || null,
     createdAt:    r.created_at || null,
   };
 }
 
-function courtToRow(c) {
+function courtToRow(c, settings = {}) {
+  const promo = _pbNormalizeCourtPromo(c, settings);
   return {
     id:            c.id,
     name:          c.name,
@@ -959,6 +1028,10 @@ function courtToRow(c) {
     feats:         c.feats || [],
     photo:         c.photo || null,
     rate_schedule: c.rateSchedule || null,
+    promo_enabled: promo.promoEnabled,
+    promo_rate: promo.promoRate,
+    promo_start_date: promo.promoStartDate,
+    promo_end_date: promo.promoEndDate,
   };
 }
 
@@ -1170,7 +1243,9 @@ window.DB = {
   },
 
   async saveCourt(court) {
-    const { error } = await _sb.from('courts').upsert(courtToRow(court));
+    const hasPromo = court.promoEnabled === true || (court.promoRate != null && String(court.promoRate).trim() !== '');
+    const settings = hasPromo ? await this.getSettings() : {};
+    const { error } = await _sb.from('courts').upsert(courtToRow(court, settings));
     if (error) { console.error('saveCourt:', error); throw error; }
     _pbClearFastCache(['courts']);
   },
@@ -4267,9 +4342,21 @@ window.DB = {
     },
     async saveCourt(court) {
       const db = readDb();
-      const row = { ...court, id: String(court.id || localRef('court')).toLowerCase() };
-      const idx = db.courts.findIndex(c => String(c.id) === String(row.id));
-      if (idx >= 0) db.courts[idx] = { ...db.courts[idx], ...row };
+      const id = String(court.id || localRef('court')).toLowerCase();
+      const idx = db.courts.findIndex(c => String(c.id) === id);
+      const previous = idx >= 0 ? db.courts[idx] : {};
+      const combined = { ...previous, ...court, id };
+      const promo = _pbNormalizeCourtPromo(combined, db.settings);
+      const promoChanged = Object.keys(promo).some(key => promo[key] !== (previous[key] ?? (key === 'promoEnabled' ? false : null)));
+      if (promoChanged) {
+        const session = window.Auth?.getSession?.();
+        if (!session || !['owner', 'court_owner'].includes(session.role)
+            || (session.status && session.status !== 'active')) {
+          throw new Error('Only an active owner can change court promos.');
+        }
+      }
+      const row = { ...combined, ...promo };
+      if (idx >= 0) db.courts[idx] = row;
       else db.courts.push(row);
       writeDb(db);
     },

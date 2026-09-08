@@ -1,0 +1,45 @@
+/* Per-court promo editor. All values inherit the current admin theme. */
+.court-promo-panel {
+  margin:4px 0 22px;
+  padding:18px;
+  border:1px solid var(--border);
+  border-radius:14px;
+  background:linear-gradient(135deg,rgba(62,121,181,.08),transparent 75%),var(--input);
+}
+.court-promo-panel [hidden],.court-promo-panel[hidden] { display:none!important; }
+.court-promo-head { display:flex; align-items:center; justify-content:space-between; gap:18px; }
+.court-promo-head h3 { margin:0; color:var(--text); font:600 1rem/1.3 'Outfit',system-ui,sans-serif; letter-spacing:-.015em; }
+.court-promo-head p { margin:5px 0 0; color:var(--muted); font-size:.8rem; line-height:1.5; }
+.court-promo-toggle { position:relative; display:inline-flex; flex:0 0 auto; align-items:center; gap:9px; min-height:44px; font-size:.82rem; color:var(--text); cursor:pointer; }
+.court-promo-toggle input { position:absolute; inset:0; width:100%; height:100%; margin:0; opacity:0; cursor:pointer; }
+.court-promo-switch-track { position:relative; display:block; flex:0 0 40px; width:40px; height:24px; box-sizing:border-box; border:1px solid var(--border); border-radius:999px; background:var(--card); box-shadow:inset 0 1px 3px rgba(0,0,0,.12); pointer-events:none; transition:background .18s ease,border-color .18s ease; }
+.court-promo-switch-track::after { content:""; position:absolute; top:2px; left:2px; width:18px; height:18px; border-radius:50%; background:var(--muted); box-shadow:0 1px 4px rgba(0,0,0,.2); transition:transform .18s ease,background .18s ease; }
+.court-promo-toggle input:checked + .court-promo-switch-track { background:#356b9f; border-color:#4788c9; }
+.court-promo-toggle input:checked + .court-promo-switch-track::after { transform:translateX(16px); background:#fff; }
+.court-promo-toggle input:focus-visible + .court-promo-switch-track { outline:3px solid var(--accent); outline-offset:3px; }
+.court-promo-toggle input:disabled ~ span { opacity:.55; }
+.court-promo-fields { min-width:0; margin:18px 0 0; padding:0; border:0; }
+.court-promo-fields .fg { margin-bottom:14px; min-width:0; }
+.court-promo-fields .fl { display:block; font-size:.75rem; line-height:1.5; }
+.court-promo-fields .fl span { color:var(--muted); font-weight:400; text-transform:none; letter-spacing:0; }
+.court-promo-fields .fi { width:100%; min-width:0; min-height:44px; box-sizing:border-box; }
+.court-promo-fields input[aria-invalid="true"] { border-color:var(--red,#dc2626); }
+.court-promo-fields input:focus-visible { outline:3px solid var(--accent); outline-offset:3px; }
+.court-promo-dates { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:12px; }
+.court-promo-hint { margin:0; color:var(--muted); font-size:.78rem; line-height:1.6; }
+.court-promo-preview { display:flex; align-items:flex-start; gap:10px; margin-top:16px; padding-top:14px; border-top:1px solid var(--border); color:var(--text2); font-size:.79rem; line-height:1.6; }
+.court-promo-status { display:inline-flex; flex:0 0 auto; align-items:center; padding:3px 8px; border:1px solid var(--border); border-radius:6px; color:var(--muted); font-size:.68rem; line-height:1.5; font-weight:600; white-space:nowrap; }
+.court-promo-status[data-status="active"] { color:var(--accent); background:rgba(62,121,181,.12); border-color:rgba(62,121,181,.3); }
+.court-promo-status[data-status="scheduled"] { color:var(--text2); background:rgba(62,121,181,.06); }
+.court-promo-status[data-status="invalid"] { color:var(--red,#dc2626); }
+.court-promo-error { margin:12px 0 0; color:var(--red,#dc2626); font-size:.8rem; line-height:1.5; }
+.court-promo-list { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-top:7px; color:var(--muted); font-size:.73rem; line-height:1.5; }
+.court-promo-sr { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+@media(max-width:420px) {
+  .court-promo-panel { padding:14px; }
+  .court-promo-dates { grid-template-columns:minmax(0,1fr); gap:0; }
+  .court-promo-preview { flex-wrap:wrap; }
+}
+@media(prefers-reduced-motion:reduce) {
+  .court-promo-switch-track,.court-promo-switch-track::after { transition:none; }
+}
