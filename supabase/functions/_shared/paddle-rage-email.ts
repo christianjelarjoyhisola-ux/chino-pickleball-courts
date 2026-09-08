@@ -196,7 +196,8 @@ export function formatDeadline(value?: string | null): string {
 }
 
 function publicUrl(): string {
-  return (Deno.env.get("APP_PUBLIC_URL") || "https://chinopickleball.pages.dev").trim()
+  return (Deno.env.get("APP_PUBLIC_URL") || "https://chinopickleball.pages.dev")
+    .trim()
     .replace(/\/+$/, "");
 }
 
@@ -249,7 +250,13 @@ function layout(options: LayoutOptions): string {
             <td style="vertical-align:middle;">
               <div class="brand-name" style="font-size:22px;line-height:1.15;font-weight:900;letter-spacing:1.8px;color:#ffffff;">CHINO</div>
               <div style="margin-top:3px;font-size:12px;line-height:1.3;font-weight:700;letter-spacing:2.1px;color:${BRAND.neon};">PICKLEBALL COURTS</div>
-              ${venueLocation() ? `<div style="margin-top:5px;font-size:11px;line-height:1.3;color:${BRAND.muted};">${escapeHtml(venueLocation())}</div>` : ""}
+              ${
+    venueLocation()
+      ? `<div style="margin-top:5px;font-size:11px;line-height:1.3;color:${BRAND.muted};">${
+        escapeHtml(venueLocation())
+      }</div>`
+      : ""
+  }
             </td>
           </tr></table>
         </td></tr>
@@ -297,8 +304,7 @@ export function renderHostVerificationEmail(
   const fullName = plain(payload.fullName) || "Host applicant";
   const verificationUrl = plain(payload.verificationUrl);
   const html = layout({
-    preheader:
-      "Verify your email to complete your CHINO host application.",
+    preheader: "Verify your email to complete your CHINO host application.",
     status: "HOST APPLICATION · EMAIL VERIFICATION",
     statusBackground: BRAND.neonTint,
     statusColor: BRAND.neon,
@@ -344,9 +350,7 @@ export function renderConfirmationEmail(
   payload: ConfirmationPayload,
 ): { html: string; plain: string } {
   const items = getConfirmationItems(payload);
-  const name = escapeHtml(payload.fullName || "Player");
   const rawRef = plain(payload.bookingRef);
-  const ref = escapeHtml(rawRef);
   const manageUrl = `${publicUrl()}/manage-booking.html#ref=${
     encodeURIComponent(rawRef)
   }`;
@@ -365,161 +369,107 @@ export function renderConfirmationEmail(
     )
     : 0;
   const paidInFull = remaining < 1;
-  const confirmationIntro = paidInFull
-    ? "we received your full payment, and your CHINO booking is confirmed. Everything you need is below."
-    : paid > 0
-    ? "we received your downpayment, and your CHINO booking is confirmed. Everything you need is below."
-    : "your CHINO booking is confirmed. No payment has been recorded yet, so please review the payment details below.";
-  const confirmationPlain = paidInFull
-    ? "We received your full payment, and your booking is confirmed."
-    : paid > 0
-    ? "We received your downpayment, and your booking is confirmed."
-    : "Your booking is confirmed. No payment has been recorded yet.";
-  const duration =
-    items.reduce((sum, item) => sum + Number(item.duration || 0), 0) ||
-    Number(payload.duration || 0);
-  const courts =
-    [...new Set(items.map((item) => plain(item.courtName)).filter(Boolean))]
-      .join(", ") || plain(payload.courtName);
-  const firstDate = items[0]?.date || payload.date;
-  const scheduleRows = items.map((item, index) => `
-    <tr>
-      <td style="padding:${index ? "13px 0 0" : "0"};vertical-align:top;">
-        <div style="font-size:14px;line-height:1.45;font-weight:800;color:${BRAND.text};">${
-    escapeHtml(item.courtName)
-  }</div>
-        <div style="margin-top:3px;font-size:14px;line-height:1.5;color:${BRAND.muted};">${
-    escapeHtml(formatDate(item.date))
-  }<br>${escapeHtml(item.startTime)} &ndash; ${escapeHtml(item.endTime)}</div>
-      </td>
-      <td align="right" style="padding:${
-    index ? "13px 0 0 12px" : "0 0 0 12px"
-  };vertical-align:top;white-space:nowrap;font-size:14px;line-height:1.45;font-weight:800;color:${BRAND.text};">${
-    formatPhp(Number(item.total || 0))
-  }</td>
-    </tr>`).join("");
   const deadline = hostBooking && !paidInFull
     ? formatDeadline(payload.balanceDueAt)
     : "";
-  const paymentCopy = paidInFull
-    ? "Your payment is complete. There is no remaining balance."
-    : deadline
-    ? `Your remaining balance of <strong style="color:${BRAND.text};">${
+  const location = venueLocation() || "Prk. Bautista, Mankilam, Tagum City";
+  const mapsUrl = "https://maps.app.goo.gl/7Su6CtSH7HCbpn1K6";
+  const scheduleRows = items.map((item) =>
+    `<tr>
+    <td style="padding:12px 0;border-bottom:1px solid ${BRAND.border};vertical-align:top;">
+      <strong style="font-size:14px;color:${BRAND.text};">${
+      escapeHtml(item.courtName)
+    }</strong>
+      <div style="margin-top:3px;font-size:13px;line-height:1.5;color:${BRAND.muted};">${
+      escapeHtml(formatDate(item.date))
+    }<br>${escapeHtml(item.startTime)} &ndash; ${escapeHtml(item.endTime)}</div>
+    </td>
+    <td align="right" style="padding:12px 0 12px 10px;border-bottom:1px solid ${BRAND.border};vertical-align:top;white-space:nowrap;font-size:14px;font-weight:700;color:${BRAND.text};">${
+      formatPhp(Number(item.total || 0))
+    }</td>
+  </tr>`
+  ).join("");
+  const hostBalance = paidInFull
+    ? ""
+    : `<tr><td colspan="2" style="padding-top:10px;font-size:13px;line-height:1.5;color:${BRAND.muted};">
+    Booking total: ${
+      formatPhp(total)
+    } &middot; <strong style="color:${BRAND.warning};">Balance: ${
       formatPhp(remaining)
-    }</strong> is due by <strong>${escapeHtml(deadline)}</strong>.`
-    : `Your remaining balance of <strong style="color:${BRAND.text};">${
-      formatPhp(remaining)
-    }</strong> is due on the day of play.`;
-
-  const bodyHtml = `
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:20px;background:${BRAND.surfaceRaised};border:1px solid ${BRAND.border};border-radius:13px;">
-      <tr><td style="padding:18px 20px;">
-        <div style="font-size:11px;line-height:1.3;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:${BRAND.muted};">CHINO booking reference</div>
-        <div style="margin-top:5px;font-family:Consolas,'Courier New',monospace;font-size:19px;line-height:1.35;font-weight:900;letter-spacing:.8px;color:${BRAND.neon};overflow-wrap:anywhere;">${ref}</div>
-        <div style="margin-top:8px;font-size:12px;line-height:1.55;color:${BRAND.muted};">This <strong style="color:${BRAND.text};">PB-...</strong> number is not your GCash, Maya, BDO Pay, BPI, bank, or e-wallet payment reference.</div>
-        <div style="margin-top:16px;">
-          <a href="${escapeHtml(manageUrl)}" style="display:inline-block;padding:13px 20px;border-radius:10px;background:${BRAND.neon};color:${BRAND.black};font-size:14px;line-height:1.2;font-weight:900;text-decoration:none;">View booking status</a>
-        </div>
-      </td></tr>
-    </table>
-    <table role="presentation" class="detail-table" width="100%" cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:20px;border:1px solid ${BRAND.border};border-radius:13px;">
-      <tr><td style="padding:18px 20px;border-bottom:1px solid ${BRAND.border};">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0">${scheduleRows}</table>
-      </td></tr>
-      <tr><td style="padding:16px 20px;">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
-          <td class="stack-cell" width="50%" style="width:50%;vertical-align:top;">
-            <div style="font-size:11px;line-height:1.3;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:${BRAND.muted};">Court${
-    items.length > 1 ? "s" : ""
-  }</div>
-            <div style="margin-top:4px;font-size:14px;line-height:1.5;font-weight:800;color:${BRAND.text};">${
-    escapeHtml(courts)
-  }</div>
-          </td>
-          <td class="stack-cell stack-gap" width="50%" style="width:50%;vertical-align:top;">
-            <div style="font-size:11px;line-height:1.3;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:${BRAND.muted};">Total court time</div>
-            <div style="margin-top:4px;font-size:14px;line-height:1.5;font-weight:800;color:${BRAND.text};">${duration} hour${
-    duration !== 1 ? "s" : ""
-  }</div>
-          </td>
-        </tr></table>
-      </td></tr>
-    </table>
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:20px;background:${BRAND.neonTint};border:1px solid ${BRAND.neonDark};border-radius:13px;">
-      <tr><td style="padding:17px 20px;">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
-          <td class="stack-cell" width="33.33%" style="width:33.33%;vertical-align:top;">
-            <div style="font-size:10px;line-height:1.3;font-weight:800;letter-spacing:.7px;text-transform:uppercase;color:${BRAND.muted};">Total</div>
-            <div style="margin-top:4px;font-size:16px;line-height:1.4;font-weight:900;color:${BRAND.text};">${
-    formatPhp(total)
-  }</div>
-          </td>
-          <td class="stack-cell stack-gap" width="33.33%" style="width:33.33%;vertical-align:top;">
-            <div style="font-size:10px;line-height:1.3;font-weight:800;letter-spacing:.7px;text-transform:uppercase;color:${BRAND.muted};">Paid</div>
-            <div style="margin-top:4px;font-size:16px;line-height:1.4;font-weight:900;color:${BRAND.neon};">${
+    }</strong><br>
+    ${
+      deadline
+        ? `Due ${
+          escapeHtml(deadline)
+        }. Missing this deadline releases the reservation; payments remain non-refundable.`
+        : "Balance due on the day of play."
+    }
+  </td></tr>`;
+  const html = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light">
+<title>Booking confirmed | CHINO Pickleball Courts</title>
+<style>
+body,table,td,a{-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}table,td{mso-table-lspace:0pt;mso-table-rspace:0pt}img{border:0;outline:none;text-decoration:none}table{border-collapse:separate}
+@media only screen and (max-width:620px){.email-wrap{padding:12px 8px!important}.email-card{width:100%!important}.receipt-pad{padding:20px!important}}
+</style></head>
+<body style="margin:0;padding:0;background:${BRAND.black};font-family:Arial,'Helvetica Neue',sans-serif;color:${BRAND.text};">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">Booking ${
+    escapeHtml(rawRef)
+  } confirmed. ${escapeHtml(formatDate(items[0]?.date || payload.date))}.</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;background:${BRAND.black};"><tr><td class="email-wrap" align="center" style="padding:24px 12px;">
+<table role="presentation" class="email-card" width="520" cellpadding="0" cellspacing="0" style="width:520px;max-width:520px;background:${BRAND.surface};border:1px solid ${BRAND.border};border-radius:16px;">
+<tr><td class="receipt-pad" style="padding:24px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+<td width="64" style="width:64px;vertical-align:middle;"><img src="${
+    escapeHtml(publicUrl())
+  }/assets/chino-logo-transparent.png" width="52" height="52" alt="CHINO Pickleball Courts" style="display:block;width:52px;height:52px;object-fit:contain;"></td>
+<td style="vertical-align:middle;"><h1 style="margin:0;font-size:23px;line-height:1.2;font-weight:700;color:${BRAND.text};">Booking confirmed</h1><div style="margin-top:4px;font-size:12px;color:${BRAND.neon};">${
+    paidInFull
+      ? "Paid in full"
+      : paid > 0
+      ? "Downpayment received"
+      : "Payment not yet recorded"
+  }</div></td>
+</tr></table>
+<p style="margin:18px 0 4px;font-size:14px;line-height:1.5;overflow-wrap:anywhere;color:${BRAND.text};">Hi ${
+    escapeHtml(payload.fullName || "Player")
+  }, see you on the court.</p>
+<div style="margin-bottom:6px;font-size:12px;line-height:1.5;color:${BRAND.muted};">Booking reference &middot; <strong style="color:${BRAND.neon};overflow-wrap:anywhere;">${
+    escapeHtml(rawRef)
+  }</strong></div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;">${scheduleRows}
+<tr><td style="padding-top:16px;font-size:14px;font-weight:700;color:${BRAND.text};">Total paid</td><td align="right" style="padding-top:16px;font-size:23px;line-height:1.2;font-weight:700;white-space:nowrap;color:${BRAND.neon};">${
     formatPhp(paid)
-  }</div>
-          </td>
-          <td class="stack-cell stack-gap" width="33.33%" style="width:33.33%;vertical-align:top;">
-            <div style="font-size:10px;line-height:1.3;font-weight:800;letter-spacing:.7px;text-transform:uppercase;color:${BRAND.muted};">Balance</div>
-            <div style="margin-top:4px;font-size:16px;line-height:1.4;font-weight:900;color:${
-    paidInFull ? BRAND.neon : BRAND.danger
-  };">${paidInFull ? "Paid in full" : formatPhp(remaining)}</div>
-          </td>
-        </tr></table>
-      </td></tr>
-    </table>
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;background:${BRAND.surfaceRaised};border-left:4px solid ${BRAND.neon};border-radius:8px;">
-      <tr><td style="padding:16px 18px;">
-        <div style="font-size:13px;line-height:1.55;font-weight:900;color:${BRAND.text};">Before you arrive</div>
-        <div style="margin-top:7px;font-size:14px;line-height:1.7;color:${BRAND.text};">
-          &bull; Please arrive 10 minutes early.<br>
-          &bull; Keep booking reference <strong>${ref}</strong> ready.<br>
-          &bull; ${paymentCopy}
-          ${
-    hostBooking && deadline && !paidInFull
-      ? "<br>&bull; Missing the host balance deadline forfeits the reservation and releases the slot; payments already made remain non-refundable."
-      : ""
-  }
-        </div>
-      </td></tr>
-    </table>`;
-
-  const plainSchedules = items.map((item) =>
-    `- ${plain(item.courtName)} | ${formatDate(item.date)} | ${
+  }</td></tr>${hostBalance}</table>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;margin-top:20px;"><tr><td align="center" style="background:${BRAND.neon};border-radius:9px;"><a href="${
+    escapeHtml(manageUrl)
+  }" style="display:block;padding:14px 18px;font-size:14px;line-height:1.2;font-weight:700;text-decoration:none;color:${BRAND.black};">View booking</a></td></tr></table>
+<div style="margin-top:16px;text-align:center;font-size:12px;line-height:1.5;"><a href="${mapsUrl}" style="color:${BRAND.muted};text-decoration:underline;">${
+    escapeHtml(location)
+  }</a></div>
+</td></tr></table></td></tr></table></body></html>`;
+  const schedules = items.map((item) =>
+    `${plain(item.courtName)} | ${formatDate(item.date)} | ${
       plain(item.startTime)
     } - ${plain(item.endTime)} | ${formatPhpPlain(Number(item.total || 0))}`
   ).join("\n");
-  const plainPayment = paidInFull
+  const balanceText = paidInFull
     ? "Payment status: Paid in full"
-    : `Remaining balance: ${formatPhpPlain(remaining)}${
-      deadline ? `\nBalance due: ${deadline}` : " (due on the day of play)"
+    : `Booking total: ${formatPhpPlain(total)}\nRemaining balance: ${
+      formatPhpPlain(remaining)
+    }\n${
+      deadline
+        ? `Balance due: ${deadline}. Missing this deadline releases the reservation; payments remain non-refundable.`
+        : "Balance due on the day of play."
     }`;
-
   return {
-    html: layout({
-      preheader: `Booking ${plain(payload.bookingRef)} is confirmed for ${
-        formatDate(firstDate)
-      }.`,
-      status: "BOOKING CONFIRMED",
-      statusBackground: BRAND.neon,
-      statusColor: BRAND.black,
-      title: "Your court is locked in.",
-      introHtml:
-        `<p style="margin:0 0 10px;">Hi <strong>${name}</strong>,</p><p style="margin:0;">Great news&mdash;${confirmationIntro}</p>`,
-      bodyHtml,
-      footerText:
-        "Need to view your status or request a reschedule? Use Manage booking on the device used to reserve, or contact CHINO for help.",
-    }),
-    plain: `CHINO PICKLEBALL COURTS\nBOOKING CONFIRMED\n\nHi ${
+    html,
+    plain: `CHINO PICKLEBALL COURTS\nBOOKING CONFIRMED\nHi ${
       plain(payload.fullName || "Player")
-    },\n\n${confirmationPlain}\n\nBooking reference: ${
-      plain(payload.bookingRef)
-    }\n\nSCHEDULE\n${plainSchedules}\n\nTotal court time: ${duration} hour${
-      duration !== 1 ? "s" : ""
-    }\nTotal: ${formatPhpPlain(total)}\nPaid: ${
+    }, see you on the court.\nBooking reference: ${rawRef}\n\nSCHEDULE\n${schedules}\n\nTotal paid: ${
       formatPhpPlain(paid)
-    }\n${plainPayment}\n\nPlease arrive 10 minutes early and keep your booking reference ready.\nThis PB- number is your CHINO booking reference, not your bank or e-wallet payment reference.\nView booking status: ${manageUrl}\n\nCHINO Pickleball Courts\n${plain(venueLocation())}\n${publicUrl()}`,
+    }\n${balanceText}\n\nView booking: ${manageUrl}\n${location}\n${mapsUrl}`,
   };
 }
 
@@ -624,45 +574,86 @@ export function renderGroupedRescheduleEmail(
     encodeURIComponent(payload.bookingRef.replace(/-G$/i, ""))
   }`;
   const scheduleCards = payload.items.map((item) => {
-    const duration = `${Number(item.newDuration)} hour${item.newDuration === 1 ? "" : "s"}`;
+    const duration = `${Number(item.newDuration)} hour${
+      item.newDuration === 1 ? "" : "s"
+    }`;
     return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:20px;border:1px solid ${BRAND.border};border-radius:12px;">
       <tr><td style="padding:16px 18px;border-bottom:1px solid ${BRAND.border};">
-        <div style="font-size:16px;line-height:1.5;font-weight:900;color:${BRAND.text};">${escapeHtml(item.courtName)}</div>
-        <div style="margin-top:3px;font-family:Consolas,'Courier New',monospace;font-size:12px;line-height:1.5;color:${BRAND.muted};overflow-wrap:anywhere;">${escapeHtml(item.bookingRef)}</div>
+        <div style="font-size:16px;line-height:1.5;font-weight:900;color:${BRAND.text};">${
+      escapeHtml(item.courtName)
+    }</div>
+        <div style="margin-top:3px;font-family:Consolas,'Courier New',monospace;font-size:12px;line-height:1.5;color:${BRAND.muted};overflow-wrap:anywhere;">${
+      escapeHtml(item.bookingRef)
+    }</div>
       </td></tr>
       <tr><td style="padding:16px 18px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
         <td class="stack-cell" width="48%" style="width:48%;vertical-align:top;background:${BRAND.dangerTint};border-radius:9px;padding:13px;box-sizing:border-box;">
           <div style="font-size:10px;line-height:1.4;font-weight:900;letter-spacing:.7px;text-transform:uppercase;color:${BRAND.danger};">Previous schedule</div>
-          <div style="margin-top:7px;font-size:14px;line-height:1.6;color:${BRAND.muted};">${escapeHtml(formatDate(item.oldDate))}<br>${escapeHtml(item.oldStartTime)} &ndash; ${escapeHtml(item.oldEndTime)}<br>${escapeHtml(duration)}</div>
+          <div style="margin-top:7px;font-size:14px;line-height:1.6;color:${BRAND.muted};">${
+      escapeHtml(formatDate(item.oldDate))
+    }<br>${escapeHtml(item.oldStartTime)} &ndash; ${
+      escapeHtml(item.oldEndTime)
+    }<br>${escapeHtml(duration)}</div>
         </td>
         <td class="stack-cell" width="4%" style="width:4%;font-size:0;line-height:0;">&nbsp;</td>
         <td class="stack-cell stack-gap" width="48%" style="width:48%;vertical-align:top;background:${BRAND.neonTint};border-radius:9px;padding:13px;box-sizing:border-box;">
           <div style="font-size:10px;line-height:1.4;font-weight:900;letter-spacing:.7px;text-transform:uppercase;color:${BRAND.neon};">New schedule</div>
-          <div style="margin-top:7px;font-size:14px;line-height:1.6;font-weight:900;color:${BRAND.text};">${escapeHtml(formatDate(item.newDate))}<br>${escapeHtml(item.newStartTime)} &ndash; ${escapeHtml(item.newEndTime)}<br>${escapeHtml(duration)}</div>
+          <div style="margin-top:7px;font-size:14px;line-height:1.6;font-weight:900;color:${BRAND.text};">${
+      escapeHtml(formatDate(item.newDate))
+    }<br>${escapeHtml(item.newStartTime)} &ndash; ${
+      escapeHtml(item.newEndTime)
+    }<br>${escapeHtml(duration)}</div>
         </td>
       </tr></table></td></tr>
     </table>`;
   }).join("");
   const noteHtml = note
-    ? `<div style="margin-bottom:20px;padding:15px 17px;background:${BRAND.surfaceRaised};border-left:4px solid ${BRAND.neon};border-radius:8px;font-size:14px;line-height:1.65;color:${BRAND.text};"><strong>Message from our team</strong><br>${escapeHtml(note)}</div>`
+    ? `<div style="margin-bottom:20px;padding:15px 17px;background:${BRAND.surfaceRaised};border-left:4px solid ${BRAND.neon};border-radius:8px;font-size:14px;line-height:1.65;color:${BRAND.text};"><strong>Message from our team</strong><br>${
+      escapeHtml(note)
+    }</div>`
     : "";
-  const unchangedCopy = "Only the reservations listed above were moved. Any other reservations in your booking keep their current schedules.";
+  const unchangedCopy =
+    "Only the reservations listed above were moved. Any other reservations in your booking keep their current schedules.";
   const schedulesPlain = payload.items.map((item) =>
-    `${plain(item.courtName)} | ${plain(item.bookingRef)}\nPREVIOUS: ${formatDate(item.oldDate)} | ${plain(item.oldStartTime)} - ${plain(item.oldEndTime)}\nNEW: ${formatDate(item.newDate)} | ${plain(item.newStartTime)} - ${plain(item.newEndTime)}\nDuration: ${Number(item.newDuration)} hour${item.newDuration === 1 ? "" : "s"}`
+    `${plain(item.courtName)} | ${plain(item.bookingRef)}\nPREVIOUS: ${
+      formatDate(item.oldDate)
+    } | ${plain(item.oldStartTime)} - ${plain(item.oldEndTime)}\nNEW: ${
+      formatDate(item.newDate)
+    } | ${plain(item.newStartTime)} - ${plain(item.newEndTime)}\nDuration: ${
+      Number(item.newDuration)
+    } hour${item.newDuration === 1 ? "" : "s"}`
   ).join("\n\n");
 
   return {
     html: layout({
-      preheader: `${count} ${itemLabel} updated for booking ${plain(payload.bookingRef)}.`,
+      preheader: `${count} ${itemLabel} updated for booking ${
+        plain(payload.bookingRef)
+      }.`,
       status: "BOOKING RESCHEDULED",
       statusBackground: BRAND.danger,
       statusColor: "#ffffff",
       title: "Your booking has a new schedule.",
-      introHtml: `<p style="margin:0 0 10px;">Hi <strong>${escapeHtml(payload.fullName || "Player")}</strong>,</p><p style="margin:0;">We updated ${count} ${itemLabel} in your CHINO booking. Review each new schedule below.</p>`,
-      bodyHtml: `${noteHtml}<div style="margin-bottom:18px;font-size:13px;line-height:1.5;color:${BRAND.muted};">Booking reference: <strong style="color:${BRAND.neon};overflow-wrap:anywhere;">${escapeHtml(payload.bookingRef)}</strong></div>${scheduleCards}<p style="margin:0 0 18px;font-size:14px;line-height:1.65;color:${BRAND.muted};">${unchangedCopy}</p><a href="${escapeHtml(manageUrl)}" style="display:inline-block;padding:13px 20px;border-radius:10px;background:${BRAND.neon};color:${BRAND.black};font-size:14px;line-height:1.3;font-weight:900;text-decoration:none;">Manage booking</a>`,
-      footerText: "Need help with the new schedule? Contact the CHINO team and include your booking reference.",
+      introHtml: `<p style="margin:0 0 10px;">Hi <strong>${
+        escapeHtml(payload.fullName || "Player")
+      }</strong>,</p><p style="margin:0;">We updated ${count} ${itemLabel} in your CHINO booking. Review each new schedule below.</p>`,
+      bodyHtml:
+        `${noteHtml}<div style="margin-bottom:18px;font-size:13px;line-height:1.5;color:${BRAND.muted};">Booking reference: <strong style="color:${BRAND.neon};overflow-wrap:anywhere;">${
+          escapeHtml(payload.bookingRef)
+        }</strong></div>${scheduleCards}<p style="margin:0 0 18px;font-size:14px;line-height:1.65;color:${BRAND.muted};">${unchangedCopy}</p><a href="${
+          escapeHtml(manageUrl)
+        }" style="display:inline-block;padding:13px 20px;border-radius:10px;background:${BRAND.neon};color:${BRAND.black};font-size:14px;line-height:1.3;font-weight:900;text-decoration:none;">Manage booking</a>`,
+      footerText:
+        "Need help with the new schedule? Contact the CHINO team and include your booking reference.",
     }),
-    plain: `CHINO PICKLEBALL COURTS\nBOOKING RESCHEDULED\n\nHi ${plain(payload.fullName || "Player")},\n\nWe updated ${count} ${itemLabel} in your booking.\nBooking reference: ${plain(payload.bookingRef)}\n\n${schedulesPlain}${note ? `\n\nMessage from our team: ${note}` : ""}\n\n${unchangedCopy}\nManage booking: ${manageUrl}\n\nCHINO Pickleball Courts\n${plain(venueLocation())}\n${publicUrl()}`,
+    plain: `CHINO PICKLEBALL COURTS\nBOOKING RESCHEDULED\n\nHi ${
+      plain(payload.fullName || "Player")
+    },\n\nWe updated ${count} ${itemLabel} in your booking.\nBooking reference: ${
+      plain(payload.bookingRef)
+    }\n\n${schedulesPlain}${
+      note ? `\n\nMessage from our team: ${note}` : ""
+    }\n\n${unchangedCopy}\nManage booking: ${manageUrl}\n\nCHINO Pickleball Courts\n${
+      plain(venueLocation())
+    }\n${publicUrl()}`,
   };
 }
 
@@ -739,7 +730,9 @@ export function renderBookingCancellationEmail(
         paid > 0
           ? "Contact the CHINO team with your booking reference if you need the payment reviewed."
           : "No settled payment is recorded for this booking."
-      }\nThe court slot has been released. Create a new booking if you still want to play.\n\nCHINO Pickleball Courts\n${plain(venueLocation())}\n${publicUrl()}`,
+      }\nThe court slot has been released. Create a new booking if you still want to play.\n\nCHINO Pickleball Courts\n${
+        plain(venueLocation())
+      }\n${publicUrl()}`,
   };
 }
 
@@ -757,29 +750,41 @@ export function renderBookingPaymentTransferEmail(
       <tr>
         <td class="stack-cell" width="48%" style="width:48%;vertical-align:top;background:${BRAND.dangerTint};border:1px solid ${BRAND.danger};border-radius:12px;padding:17px;box-sizing:border-box;">
           <div style="font-size:10px;line-height:1.3;font-weight:900;letter-spacing:.9px;text-transform:uppercase;color:${BRAND.danger};">Cancelled booking</div>
-          <div style="margin-top:8px;font-family:Consolas,'Courier New',monospace;font-size:15px;line-height:1.5;font-weight:900;color:${BRAND.muted};text-decoration:line-through;overflow-wrap:anywhere;">${escapeHtml(sourceRef)}</div>
+          <div style="margin-top:8px;font-family:Consolas,'Courier New',monospace;font-size:15px;line-height:1.5;font-weight:900;color:${BRAND.muted};text-decoration:line-through;overflow-wrap:anywhere;">${
+    escapeHtml(sourceRef)
+  }</div>
         </td>
         <td class="stack-cell" width="4%" style="width:4%;font-size:0;line-height:0;">&nbsp;</td>
         <td class="stack-cell stack-gap" width="48%" style="width:48%;vertical-align:top;background:${BRAND.neonTint};border:1px solid ${BRAND.neonDark};border-radius:12px;padding:17px;box-sizing:border-box;">
           <div style="font-size:10px;line-height:1.3;font-weight:900;letter-spacing:.9px;text-transform:uppercase;color:${BRAND.neon};">Confirmed booking</div>
-          <div style="margin-top:8px;font-family:Consolas,'Courier New',monospace;font-size:15px;line-height:1.5;font-weight:900;color:${BRAND.neon};overflow-wrap:anywhere;">${escapeHtml(targetRef)}</div>
+          <div style="margin-top:8px;font-family:Consolas,'Courier New',monospace;font-size:15px;line-height:1.5;font-weight:900;color:${BRAND.neon};overflow-wrap:anywhere;">${
+    escapeHtml(targetRef)
+  }</div>
         </td>
       </tr>
     </table>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:20px;border:1px solid ${BRAND.border};border-radius:13px;">
       <tr><td style="padding:17px 20px;border-bottom:1px solid ${BRAND.border};">
         <div style="font-size:10px;line-height:1.3;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:${BRAND.muted};">New confirmed schedule</div>
-        <div style="margin-top:5px;font-size:14px;line-height:1.6;font-weight:800;color:${BRAND.text};">${escapeHtml(payload.courtName)}<br>${escapeHtml(scheduleDate)}<br>${escapeHtml(payload.startTime)} &ndash; ${escapeHtml(payload.endTime)}</div>
+        <div style="margin-top:5px;font-size:14px;line-height:1.6;font-weight:800;color:${BRAND.text};">${
+    escapeHtml(payload.courtName)
+  }<br>${escapeHtml(scheduleDate)}<br>${
+    escapeHtml(payload.startTime)
+  } &ndash; ${escapeHtml(payload.endTime)}</div>
       </td></tr>
       <tr><td style="padding:17px 20px;">
         <div style="font-size:10px;line-height:1.3;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:${BRAND.muted};">Payment moved</div>
-        <div style="margin-top:4px;font-size:18px;line-height:1.4;font-weight:900;color:${BRAND.neon};">${formatPhp(payload.amount)}</div>
+        <div style="margin-top:4px;font-size:18px;line-height:1.4;font-weight:900;color:${BRAND.neon};">${
+    formatPhp(payload.amount)
+  }</div>
       </td></tr>
     </table>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:20px;background:${BRAND.surfaceRaised};border-left:4px solid ${BRAND.neon};border-radius:8px;">
       <tr><td style="padding:16px 18px;">
         <div style="font-size:10px;line-height:1.3;font-weight:900;letter-spacing:.8px;text-transform:uppercase;color:${BRAND.neon};">Correction note</div>
-        <div style="margin-top:7px;font-size:14px;line-height:1.7;color:${BRAND.text};">${escapeHtml(reason)}</div>
+        <div style="margin-top:7px;font-size:14px;line-height:1.7;color:${BRAND.text};">${
+    escapeHtml(reason)
+  }</div>
       </td></tr>
     </table>
     <div style="font-size:14px;line-height:1.7;color:${BRAND.muted};">Your original booking remains cancelled. Its court slots stay released. The existing payment was moved to the confirmed booking above; no new charge was made.</div>`;
@@ -791,12 +796,23 @@ export function renderBookingPaymentTransferEmail(
       statusBackground: BRAND.neon,
       statusColor: BRAND.black,
       title: "Your payment is now on the correct booking.",
-      introHtml: `<p style="margin:0 0 10px;">Hi <strong>${escapeHtml(name)}</strong>,</p><p style="margin:0;">We corrected your CHINO reservation and moved the existing payment to your new booking.</p>`,
+      introHtml: `<p style="margin:0 0 10px;">Hi <strong>${
+        escapeHtml(name)
+      }</strong>,</p><p style="margin:0;">We corrected your CHINO reservation and moved the existing payment to your new booking.</p>`,
       bodyHtml,
       footerText:
         "Questions about this correction? Reply to this email or contact the CHINO team with your new booking reference.",
     }),
-    plain: `CHINO PICKLEBALL COURTS\nPAYMENT MOVED - BOOKING CONFIRMED\n\nHi ${name},\n\nWe corrected your reservation and moved the existing payment to your new booking.\n\nCancelled booking: ${sourceRef}\nConfirmed booking: ${targetRef}\nCourt: ${plain(payload.courtName)}\nNew schedule: ${scheduleDate}, ${plain(payload.startTime)} - ${plain(payload.endTime)}\nPayment moved: ${formatPhpPlain(payload.amount)}\n\nCorrection note: ${reason}\n\nThe original booking remains cancelled and its slots stay released. No new charge was made.\n\nCHINO Pickleball Courts\n${plain(venueLocation())}\n${publicUrl()}`,
+    plain:
+      `CHINO PICKLEBALL COURTS\nPAYMENT MOVED - BOOKING CONFIRMED\n\nHi ${name},\n\nWe corrected your reservation and moved the existing payment to your new booking.\n\nCancelled booking: ${sourceRef}\nConfirmed booking: ${targetRef}\nCourt: ${
+        plain(payload.courtName)
+      }\nNew schedule: ${scheduleDate}, ${plain(payload.startTime)} - ${
+        plain(payload.endTime)
+      }\nPayment moved: ${
+        formatPhpPlain(payload.amount)
+      }\n\nCorrection note: ${reason}\n\nThe original booking remains cancelled and its slots stay released. No new charge was made.\n\nCHINO Pickleball Courts\n${
+        plain(venueLocation())
+      }\n${publicUrl()}`,
   };
 }
 

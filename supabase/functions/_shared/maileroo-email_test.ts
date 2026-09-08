@@ -103,7 +103,7 @@ Deno.test("confirmation email is responsive, readable, branded, and escapes cust
     "site palette missing",
   );
   assert(
-    email.html.includes("Your court is locked in."),
+    email.html.includes("Booking confirmed"),
     "confirmation headline missing",
   );
   assert(email.html.includes("PR-TEST-001"), "booking reference missing");
@@ -124,7 +124,7 @@ Deno.test("confirmation email is responsive, readable, branded, and escapes cust
     "plain-text details missing",
   );
   assert(
-    email.html.includes("Great news&mdash;we received your downpayment"),
+    email.html.includes("Downpayment received"),
     "confirmation intro grammar regressed",
   );
 });
@@ -185,12 +185,12 @@ Deno.test("regular confirmation uses full-payment language and has no balance", 
 
   assert(
     email.html.includes(
-      "Great news&mdash;we received your full payment",
+      "Paid in full",
     ),
     "regular full-payment confirmation grammar regressed",
   );
   assert(
-    email.html.includes("There is no remaining balance"),
+    email.html.includes("Total paid"),
     "regular paid-in-full disclosure missing",
   );
   assert(
@@ -199,7 +199,7 @@ Deno.test("regular confirmation uses full-payment language and has no balance", 
     "regular booking contains partial-payment language",
   );
   assert(
-    email.plain.includes("Paid: PHP 800.00") &&
+    email.plain.includes("Total paid: PHP 800.00") &&
       email.plain.includes("Payment status: Paid in full"),
     "regular full-payment plain text is incomplete",
   );
@@ -309,7 +309,8 @@ Deno.test("payment-transfer email is explicit, complete, and escapes every opera
     "transfer lifecycle and both booking sides must be unmistakable",
   );
   assert(
-    email.html.includes("PHP") === false && email.plain.includes("PHP 1,290.00"),
+    email.html.includes("PHP") === false &&
+      email.plain.includes("PHP 1,290.00"),
     "HTML must use the shared peso formatting while plain text keeps an accessible currency label",
   );
   assert(
@@ -318,20 +319,27 @@ Deno.test("payment-transfer email is explicit, complete, and escapes every opera
       email.plain.includes("No new charge was made"),
     "plain text must include both references and the no-new-charge explanation",
   );
-  for (const rawHtml of [
-    "<script>alert(1)</script>",
-    "<img src=x onerror=alert(2)>",
-    "<script>alert(3)</script>",
-    "Court <Three>",
-  ]) {
-    assert(!email.html.includes(rawHtml), `unsafe HTML was not escaped: ${rawHtml}`);
+  for (
+    const rawHtml of [
+      "<script>alert(1)</script>",
+      "<img src=x onerror=alert(2)>",
+      "<script>alert(3)</script>",
+      "Court <Three>",
+    ]
+  ) {
+    assert(
+      !email.html.includes(rawHtml),
+      `unsafe HTML was not escaped: ${rawHtml}`,
+    );
   }
   assert(
     email.html.includes("OLD-&lt;script&gt;alert(1)&lt;/script&gt;") &&
       email.html.includes("NEW-&amp;-002") &&
       email.html.includes("Jamie &lt;img src=x onerror=alert(2)&gt;") &&
       email.html.includes("Court &lt;Three&gt;") &&
-      email.html.includes("Player corrected the reservation &lt;script&gt;alert(3)&lt;/script&gt;"),
+      email.html.includes(
+        "Player corrected the reservation &lt;script&gt;alert(3)&lt;/script&gt;",
+      ),
     "escaped transfer content is missing",
   );
 });
