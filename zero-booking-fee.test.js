@@ -3,7 +3,6 @@ const fs = require('node:fs');
 const test = require('node:test');
 
 const page = fs.readFileSync('index.html', 'utf8');
-const brandTheme = fs.readFileSync('brand-theme.css', 'utf8');
 
 function sourceBetween(start, end) {
   const from = page.indexOf(start);
@@ -115,29 +114,17 @@ function hostDepositHarness() {
   `)();
 }
 
-test('premium price promise sits beside each court rate without exposing the private rate', () => {
+test('splash and court cards omit the booking-fee promotion while preserving actual rates', () => {
   const courtCards = sourceBetween('async function renderCourts()', 'async function selectCourt(id)');
-  assert.equal((courtCards.match(/class="cc-rate-promise">NO BOOKING FEES/g) || []).length, 2);
-  assert.match(courtCards, /cc-mobile-meta[^\n]*cc-rate-line[^\n]*\$\{esc\(rateRange\)\}[^\n]*cc-rate-promise/);
-  assert.match(courtCards, /cc-photo-rate[^\n]*cc-rate-line[^\n]*\$\{esc\(rateRange\)\}[^\n]*cc-rate-promise/);
+  assert.match(courtCards, /cc-mobile-meta[^\n]*\$\{esc\(rateRange\)\}/);
+  assert.match(courtCards, /cc-photo-rate[^\n]*\$\{esc\(rateRange\)\}/);
+  assert.match(courtCards, /_cTiers\.map\(t => allInSlotRate\(t\.rate\)\)/);
+  assert.match(courtCards, /allInSlotRate\(c\.rate\)/);
+  assert.doesNotMatch(courtCards, /NO BOOKING FEES|cc-rate-promise/i);
   assert.doesNotMatch(courtCards, /₱\s*10|\/hr\s*[×x]/i);
   assert.doesNotMatch(sourceBetween('<!-- COURTS -->', '<div class="find-time-entry">'), /NO BOOKING FEES/);
-
-  assert.match(page, /\.cc-rate-promise\s*\{[^}]*animation:courtRatePromiseIn\s+\.38s[^}]*\}/s);
-  assert.match(page, /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{\s*\.cc-rate-promise\s*\{[^}]*animation:none;[^}]*\}\s*\}/s);
-  assert.doesNotMatch(page, /\.cc-rate-promise\s*\{[^}]*(?:border|background|box-shadow):/s);
-  assert.match(page, /\.cc-mobile-meta \.cc-rate-promise\s*\{[^}]*font-size:\.51rem;[^}]*letter-spacing:\.4px;[^}]*\}/s);
-  assert.match(page, /\.cc-mobile-meta \.cc-rate-promise::before\s*\{[^}]*margin:0 3px;[^}]*\}/s);
-  assert.match(page, /@media\(max-width:330px\)\s*\{[^}]*\.cc-mobile-meta\s*\{[^}]*white-space:normal;[^}]*overflow:visible;[^}]*\}[^}]*\.cc-mobile-meta \.cc-rate-line\s*\{[^}]*flex-wrap:wrap;[^}]*\}/s);
-
-  const splashOffer = sourceBetween('<p class="pr-splash-offer"', '</p>');
-  assert.match(splashOffer, /role="note"/);
-  assert.equal(splashOffer.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim(), 'NO BOOKING FEES');
-  assert.doesNotMatch(splashOffer, /aria-live|₱\s*10|\/hr\s*[×x]/i);
-  assert.match(brandTheme, /#splashScreen \.pr-splash-offer\s*\{[^}]*color:\s*#a4bece/s);
-  assert.doesNotMatch(brandTheme, /\.pr-splash-offer\s*\{[^}]*(?:border|background|box-shadow):/s);
   const splashMarkup = sourceBetween('<!-- SPLASH SCREEN -->', '<!-- NAVBAR -->');
-  assert.match(splashMarkup, /<button class="pr-splash-enter"[\s\S]*?<\/button>[\s\S]*?<p class="pr-splash-offer"/);
+  assert.doesNotMatch(splashMarkup, /NO BOOKING FEES|pr-splash-offer/i);
 });
 
 test('per-hour configuration creates exact all-in slot prices', () => {

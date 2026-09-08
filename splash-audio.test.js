@@ -5,163 +5,120 @@ const vm = require('node:vm');
 
 const page = fs.readFileSync('index.html', 'utf8');
 const brandTheme = fs.readFileSync('brand-theme.css', 'utf8');
-const start = page.indexOf('async function startSplashSound');
-const end = page.indexOf('\nfunction stopSplashSound', start);
+const mapUrl = 'https://maps.app.goo.gl/7Su6CtSH7HCbpn1K6';
+const defaultAddress = 'Prk. Bautista, Mankilam, Tagum City';
 
-assert.notEqual(start, -1, 'index.html must define startSplashSound');
-assert.notEqual(end, -1, 'startSplashSound must remain independently testable');
-
-const startSplashSoundSource = page.slice(start, end);
-
-test('splash Book Now goes directly to court booking without the September notice', () => {
-  assert.match(
-    page,
-    /class="pr-splash-enter"[^>]*onclick="event\.stopPropagation\(\);dismissSplashAndBook\(\)"/,
-  );
-  assert.match(
-    page,
-    /function dismissSplashAndBook\(\)\s*\{[\s\S]*?dismissSplash\(\);[\s\S]*?getElementById\('courts'\)\?\.scrollIntoView/,
-  );
-  assert.doesNotMatch(page, /advanceBookingNotice|September bookings are open|View September Time Slots/i);
-  assert.doesNotMatch(brandTheme, /\.advance-booking-/i);
-});
-
-function createHarness({ rejectPlay = false, pauseOnAudibleVolume = false } = {}) {
-  const label = { textContent: 'Play music' };
-  const updates = [];
-  const fades = [];
-  let beatStarts = 0;
-  let volumeAtPlay = null;
-
-  let storedVolume = 1;
-  const audio = {
-    paused: true,
-    defaultMuted: true,
-    muted: true,
-    play() {
-      volumeAtPlay = this.volume;
-      if (rejectPlay) {
-        const error = new Error('Autoplay requires a user gesture');
-        error.name = 'NotAllowedError';
-        return Promise.reject(error);
-      }
-      this.paused = false;
-      return Promise.resolve();
-    }
-  };
-  Object.defineProperty(audio, 'volume', {
-    enumerable: true,
-    get() {
-      return storedVolume;
-    },
-    set(value) {
-      storedVolume = value;
-      if (pauseOnAudibleVolume && !audio.paused && value > 0) audio.paused = true;
-    }
-  });
-
-  const splashAudio = {
-    active: false,
-    starting: false,
-    autoBlocked: false,
-    fadeFrame: 0,
-    targetVolume: 0.52
-  };
-
-  const context = vm.createContext({
-    document: {
-      getElementById(id) {
-        return id === 'splashWelcomeMusic' ? audio : null;
-      },
-      querySelector(selector) {
-        return selector === '.pr-splash-sound-label' ? label : null;
-      }
-    },
-    splashAudio,
-    splashIsVisible: () => true,
-    fadeSplashMusic: (...args) => fades.push(args),
-    updateSplashSoundButton: isPlaying => updates.push(isPlaying),
-    startRageBeatAnimation: () => { beatStarts += 1; }
-  });
-
-  vm.runInContext(startSplashSoundSource, context);
-
-  return {
-    audio,
-    fades,
-    label,
-    splashAudio,
-    updates,
-    start: automatic => context.startSplashSound(automatic),
-    beatStarts: () => beatStarts,
-    volumeAtPlay: () => volumeAtPlay
-  };
+function functionSource(name) {
+  const match = page.match(new RegExp('^function ' + name + '\\([^\\n]*\\)\\s*\\{[\\s\\S]*?^\\}', 'm'));
+  assert.ok(match, 'index.html must define ' + name);
+  return match[0];
 }
 
-test('automatic splash playback uses a silent permission request then raises volume without a fade', async () => {
+function createHarness({ missingSplash = false } = {}) {
+  const classes = new Set();
+  const transitions = [];
+  const timers = [];
+  const scrolls = [];
+  const focusCalls = [];
+  const splash = {
+    style: {},
+    classList: { contains: name => classes.has(name), add: name => classes.add(name) },
+    addEventListener: (...args) => transitions.push(args),
+  };
+  const body = { style: { overflow: 'hidden' } };
+  const context = vm.createContext({
+    document: {
+      body,
+      getElementById(id) {
+        if (id === 'splashScreen') return missingSplash ? null : splash;
+        if (id === 'courts') return { scrollIntoView: options => scrolls.push(options) };
+        if (id === 'courtSharedDateDisplay') return { focus: options => focusCalls.push(options) };
+        return null;
+      },
+    },
+    window: { setTimeout: (callback, delay) => timers.push({ callback, delay }) },
+  });
+  vm.runInContext(['dismissSplash', 'dismissSplashAndBook', 'handleSplashBackgroundTap'].map(functionSource).join('\n'), context);
+  return { context, classes, splash, body, transitions, timers, scrolls, focusCalls };
+}
+
+test('the welcome screen has no audio playback, music controls, or beat animation machinery', () => {
+  assert.doesNotMatch(page, /<audio\b|new\s+Audio\s*\(|AudioContext|splashWelcomeMusic|splash-music\.mp3|splashSoundToggle|splashAudio|SplashSound|SplashMusic|RageBeat|pr-splash-sound|autoplay/i);
+  assert.doesNotMatch(brandTheme, /pr-splash-sound|rage-beat|splash-beat|beat-pulse/i);
+});
+
+test('dismissing the splash restores page scrolling and is safe to repeat', () => {
   const harness = createHarness();
-
-  const started = await harness.start(true);
-
-  assert.equal(started, true);
-  assert.equal(harness.volumeAtPlay(), 0);
-  assert.equal(harness.audio.volume, harness.splashAudio.targetVolume);
-  assert.equal(harness.audio.muted, false);
-  assert.equal(harness.audio.defaultMuted, false);
-  assert.equal(harness.fades.length, 0, 'automatic playback must not remain silent while a fade is scheduled');
-  assert.equal(harness.splashAudio.active, true);
-  assert.equal(harness.splashAudio.autoBlocked, false);
-  assert.equal(harness.splashAudio.starting, false);
-  assert.deepEqual(harness.updates, [true]);
-  assert.equal(harness.beatStarts(), 1);
+  harness.context.dismissSplash();
+  assert.equal(harness.classes.has('dismissed'), true);
+  assert.equal(harness.body.style.overflow, '');
+  assert.equal(harness.transitions.length, 1);
+  const [event, complete, options] = harness.transitions[0];
+  assert.equal(event, 'transitionend');
+  assert.equal(options.once, true);
+  complete();
+  assert.equal(harness.splash.style.display, 'none');
+  harness.context.dismissSplash();
+  assert.equal(harness.transitions.length, 1);
+  assert.doesNotThrow(() => createHarness({ missingSplash: true }).context.dismissSplash());
 });
 
-test('gesture-started splash playback can retain the premium fade-in', async () => {
+test('Tap to book dismisses the splash and moves focus to court booking', () => {
+  const button = page.match(/<button\b[^>]*class="pr-splash-enter"[^>]*>/);
+  assert.ok(button, 'the booking entry must remain a native button');
+  const handler = button[0].match(/onclick="([^"]+)"/);
+  assert.ok(handler);
   const harness = createHarness();
-
-  const started = await harness.start(false);
-
-  assert.equal(started, true);
-  assert.equal(harness.volumeAtPlay(), 0);
-  assert.equal(harness.fades.length, 1);
-  const [audio, from, to, duration] = harness.fades[0];
-  assert.equal(audio, harness.audio);
-  assert.equal(from, 0);
-  assert.equal(to, harness.splashAudio.targetVolume);
-  assert.equal(duration, 650);
-  assert.equal(harness.splashAudio.active, true);
-  assert.deepEqual(harness.updates, [true]);
+  let propagationStopped = false;
+  harness.context.event = { stopPropagation: () => { propagationStopped = true; } };
+  vm.runInContext(handler[1], harness.context);
+  assert.equal(propagationStopped, true);
+  assert.equal(harness.classes.has('dismissed'), true);
+  assert.equal(harness.timers.length, 1);
+  assert.equal(harness.scrolls.length, 0);
+  harness.timers[0].callback();
+  assert.equal(harness.scrolls.length, 1);
+  assert.equal(harness.scrolls[0].block, 'start');
+  assert.equal(harness.focusCalls.length, 1);
+  assert.equal(harness.focusCalls[0].preventScroll, true);
+  assert.doesNotMatch(page, /advanceBookingNotice|September bookings are open|View September Time Slots/i);
 });
 
-test('blocked automatic playback offers an honest tap-for-music fallback', async () => {
-  const harness = createHarness({ rejectPlay: true });
-
-  const started = await harness.start(true);
-
-  assert.equal(started, false);
-  assert.equal(harness.volumeAtPlay(), 0);
-  assert.equal(harness.splashAudio.active, false);
-  assert.equal(harness.splashAudio.autoBlocked, true);
-  assert.equal(harness.splashAudio.starting, false);
-  assert.equal(harness.label.textContent, 'Tap for music');
-  assert.equal(harness.fades.length, 0);
-  assert.deepEqual(harness.updates, [false]);
-  assert.equal(harness.beatStarts(), 0);
+test('background taps enter booking while links and buttons keep their own action', () => {
+  for (const tagName of ['A', 'BUTTON']) {
+    const harness = createHarness();
+    harness.context.handleSplashBackgroundTap({ target: { closest: () => ({ tagName }) } });
+    assert.equal(harness.classes.has('dismissed'), false, tagName + ' clicks must not dismiss the splash');
+    assert.equal(harness.timers.length, 0);
+  }
+  const harness = createHarness();
+  harness.context.handleSplashBackgroundTap({ target: { closest: () => null } });
+  assert.equal(harness.classes.has('dismissed'), true);
+  assert.equal(harness.timers.length, 1);
 });
 
-test('automatic playback does not claim success when the browser pauses on the audible volume raise', async () => {
-  const harness = createHarness({ pauseOnAudibleVolume: true });
+test('splash and footer addresses open the approved map without dismissing the splash', () => {
+  for (const id of ['chinoSplashAddress', 'venueAddress']) {
+    const anchor = page.match(new RegExp('<a\\b[^>]*id="' + id + '"[^>]*>[\\s\\S]*?<\\/a>'));
+    assert.ok(anchor, id + ' must be a native link');
+    const attribute = name => anchor[0].match(new RegExp('\\b' + name + '="([^"]*)"'))?.[1];
+    assert.equal(attribute('href'), mapUrl);
+    assert.equal(attribute('target'), '_blank');
+    assert.deepEqual(attribute('rel').split(/\s+/).sort(), ['noopener', 'noreferrer']);
+    assert.ok(anchor[0].includes('<span id="' + id + 'Text">' + defaultAddress + '</span>'), 'the confirmed address is visible before settings load');
 
-  const started = await harness.start(true);
-
-  assert.equal(started, false);
-  assert.equal(harness.volumeAtPlay(), 0);
-  assert.equal(harness.audio.paused, true);
-  assert.equal(harness.splashAudio.active, false);
-  assert.equal(harness.splashAudio.autoBlocked, true);
-  assert.equal(harness.splashAudio.starting, false);
-  assert.equal(harness.label.textContent, 'Tap for music');
-  assert.equal(harness.fades.length, 0);
-  assert.deepEqual(harness.updates, [false]);
-  assert.equal(harness.beatStarts(), 0);
+    const harness = createHarness();
+    let propagationStopped = false;
+    let defaultPrevented = false;
+    harness.context.event = {
+      stopPropagation: () => { propagationStopped = true; },
+      preventDefault: () => { defaultPrevented = true; },
+    };
+    assert.ok(attribute('onclick'), 'map links must stop the splash click from bubbling');
+    vm.runInContext(attribute('onclick'), harness.context);
+    assert.equal(propagationStopped, true);
+    assert.equal(defaultPrevented, false, 'the browser must be allowed to open the map');
+    assert.equal(harness.classes.has('dismissed'), false);
+    assert.equal(harness.timers.length, 0);
+  }
 });

@@ -17,6 +17,8 @@ Public court availability and multi-court booking, temporary slot holds, tiered 
 
 The owner can configure CHINO's courts, hours, rates, payment recipients, contact details, and policies through the dashboard. A fresh project starts without sample courts. Payment methods remain disabled until configured; setup does not reuse another venue's merchant information. The starting internal allocation rate is zero.
 
+Venue address: [Prk. Bautista, Mankilam, Tagum City](https://maps.app.goo.gl/7Su6CtSH7HCbpn1K6).
+
 The date fallback `2026-01-01` is an internal lower bound, not an advertised opening date. Public bookings also enforce today's date in Manila time. Set a different launch boundary consistently in the browser, Edge Functions, and database if CHINO later needs an advance-booking restriction.
 
 ## Brand assets

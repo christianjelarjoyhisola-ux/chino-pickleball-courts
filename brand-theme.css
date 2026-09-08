@@ -162,30 +162,27 @@ body.host-mode .chino-welcome { display:none; }
 .pr-splash-title { font-family:'Bebas Neue','Arial Narrow',sans-serif!important; font-size:clamp(3.1rem,9vw,3.85rem); font-weight:400; letter-spacing:.07em; line-height:1; text-transform:uppercase; color:#fff; margin:0 0 22px!important; animation:none!important; text-shadow:0 2px 14px rgba(0,0,0,.2)!important; }
 .pr-splash-title-word { display:block; transform:none!important; animation:none!important; }
 .pr-splash-sport { display:block; margin-top:8px; color:#d7e8f1; font-family:inherit; text-transform:uppercase; letter-spacing:.09em; font-size:.66em; font-weight:400; line-height:1.1; }
-.pr-splash-location { max-width:100%; color:#c5d7e2; font-size:.8rem; font-weight:400; line-height:1.5; letter-spacing:.06em; text-transform:uppercase; overflow-wrap:anywhere; margin:-6px 0 20px; }
+.chino-address-link { display:inline-flex; align-items:center; justify-content:center; gap:8px; max-width:100%; min-height:44px; padding-block:8px; color:inherit; font-size:.875rem; font-weight:400; line-height:1.5; text-decoration:none; text-underline-offset:4px; }
+.chino-address-link svg { width:18px; height:18px; flex:0 0 18px; }
+.chino-address-link span { min-width:0; overflow-wrap:anywhere; }
+.chino-address-link:hover { text-decoration:underline; }
+.chino-address-link:focus-visible { outline:3px solid var(--accent); outline-offset:4px; border-radius:4px; }
+.pr-splash-location { color:#c5d7e2; letter-spacing:.01em; text-transform:none; margin:-6px 0 20px; }
+#venueAddress { justify-content:flex-start; margin-top:8px; }
+#venueAddress span { white-space:pre-line; }
 #splashScreen [hidden] { display:none!important; }
 .pr-splash-enter { display:flex; align-items:center; justify-content:center; width:min(420px,100%); min-height:60px; flex:0 0 auto; padding:12px 24px; border:1px solid rgba(155,207,234,.55); border-radius:10px; background:linear-gradient(110deg,#285f91,#237b9a); color:#fff; font:400 clamp(1.4rem,5vw,1.7rem)/1.1 'Bebas Neue','Arial Narrow',sans-serif; letter-spacing:.09em; text-transform:uppercase; cursor:pointer; box-shadow:inset 0 1px 1px rgba(255,255,255,.16),0 8px 24px rgba(0,0,0,.16); transition:background .2s,transform .2s,box-shadow .2s; }
 .pr-splash-enter:hover { background:linear-gradient(110deg,#3476ad,#2a8da9); color:#fff; transform:translateY(-1px); box-shadow:inset 0 1px 1px rgba(255,255,255,.2),0 10px 28px rgba(0,0,0,.2); }
 .pr-splash-enter:active { transform:translateY(0); }
 .pr-splash-copy { max-width:420px; color:#c4d6e0; font-size:.875rem; font-weight:400; line-height:1.6; margin:13px 0 6px; }
 .chino-splash-utilities { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; column-gap:28px; width:100%; }
-.pr-splash-sound { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:44px; margin:0; padding:5px 0; border:0; background:transparent; color:#b5ccd9; font:400 .8rem 'Outfit',system-ui,sans-serif; cursor:pointer; }
-.pr-splash-sound:hover,.pr-splash-sound.is-playing { color:#fff; }
-.pr-splash-sound-bars { display:flex; align-items:center; gap:3px; height:14px; }
-.pr-splash-sound-bars i { display:block; width:2px; height:5px; background:currentColor; border-radius:2px; }
-.pr-splash-sound-bars i:nth-child(2) { height:12px; }
-.pr-splash-sound.is-playing i { animation:chino-sound-bars .7s ease-in-out infinite alternate; }
-.pr-splash-sound.is-playing i:nth-child(2) { animation-delay:.2s; }
-.pr-splash-sound.is-playing i:nth-child(3) { animation-delay:.4s; }
 #splashScreen .pr-splash-manage { order:0; min-height:44px; margin:0; padding:5px 0; gap:7px; color:#b5ccd9; font-size:.8rem; font-weight:400; }
 #splashScreen .pr-splash-manage strong { color:inherit; font-weight:600; }
-.pr-splash-sound:focus-visible,.pr-splash-enter:focus-visible,#splashScreen .pr-splash-manage:focus-visible { outline:3px solid #8eb9e1; outline-offset:4px; }
-#splashScreen .pr-splash-offer { order:0; font-size:.75rem; font-weight:500; line-height:1.5; letter-spacing:.09em; color:#a4bece; margin:5px 0 0; }
+.pr-splash-enter:focus-visible,#splashScreen .pr-splash-manage:focus-visible,#splashScreen .chino-address-link:focus-visible { outline:3px solid #8eb9e1; outline-offset:4px; }
 .pr-splash-footer { position:relative; z-index:3; flex:0 0 auto; width:min(580px,100%); margin-top:auto; padding-top:6px; color:#9db7c7; font-size:.75rem; font-weight:400; letter-spacing:.055em; text-transform:uppercase; line-height:1.7; }
 .pr-splash-footer { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; column-gap:12px; row-gap:2px; }
 .pr-splash-footer span { white-space:nowrap; }
 @keyframes chino-welcome-in { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:none; } }
-@keyframes chino-sound-bars { from { transform:scaleY(.45); } to { transform:scaleY(1); } }
 @media(max-width:1208px) { .chino-welcome { margin-inline:24px; } }
 @media(max-width:700px) {
   .chino-welcome { margin:20px 16px 8px; grid-template-columns:1fr; border-radius:16px; }
@@ -208,13 +205,12 @@ body.host-mode .chino-welcome { display:none; }
   #splashScreen .chino-splash-logo { margin-bottom:12px; }
   .pr-splash-title { font-size:2.65rem; margin-bottom:17px!important; }
   .pr-splash-sport { margin-top:6px; }
-  .pr-splash-location { font-size:.78rem; margin-bottom:15px; }
+  .pr-splash-location { margin-bottom:15px; }
   .pr-splash-enter { min-height:53px; padding-block:10px; font-size:1.4rem; }
   .pr-splash-copy { margin-top:10px; font-size:.84rem; }
-  #splashScreen .pr-splash-offer { margin-top:1px; }
 }
 @media(max-width:360px) { #splashScreen { padding-inline:18px!important; } .chino-splash-tagline { letter-spacing:.16em; } .chino-splash-utilities { column-gap:20px; } }
-@media(prefers-reduced-motion:reduce) { .pr-splash-content,.pr-splash-sound-bars i { animation:none!important; } .pr-splash-enter { transition:none; } }
+@media(prefers-reduced-motion:reduce) { .pr-splash-content { animation:none!important; } .pr-splash-enter { transition:none; } }
 
 /* Real light theme. Keep the launch splash dark, but switch every application
    surface and native control to a high-contrast light palette. */
@@ -451,11 +447,6 @@ body.host-mode .guest-manage-link {
 .pr-splash-manage:hover {
   color: #fff !important;
   text-decoration: underline;
-}
-
-.pr-splash-content .pr-splash-offer {
-  order: 2;
-  margin-top: 1px;
 }
 
 .inv-ref-wrap .inv-ref-note {

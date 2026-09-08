@@ -89,8 +89,7 @@ $publicFiles = @(
   "qrcode-LICENSE.txt",
   "qrcode.min.js",
   "supabase-config.js",
-  "supabase.min.js",
-  "splash-music.mp3"
+  "supabase.min.js"
 )
 
 $stagingDir = [IO.Path]::GetFullPath((Join-Path $repoRoot ".cf-pages-deploy"))

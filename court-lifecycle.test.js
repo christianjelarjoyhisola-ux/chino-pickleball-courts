@@ -312,7 +312,7 @@ test('venue settings load and save owner-supplied details while rejecting unauth
   assert.ok(notices.some(notice => notice.level === 'err'));
 });
 
-test('public venue footer renders text safely and removes cleared or invalid contact links', () => {
+test('public venue addresses render settings safely, retain the confirmed fallback, and clear invalid contact links', () => {
   const page = read('index.html');
   const start = page.indexOf('function applyVenueDetails(settings = {})');
   const end = page.indexOf('function applyPaymentSettings(settings)', start);
@@ -334,16 +334,23 @@ test('public venue footer renders text safely and removes cleared or invalid con
     venue_description: '<script>example</script>',
     venue_contact: '+63 917 123 4567', venue_email: 'booking@example.com',
   });
-  assert.equal(get('venueAddress').textContent, '<img src=x onerror=alert(1)>');
+  assert.equal(get('venueAddressText').textContent, '<img src=x onerror=alert(1)>');
+  assert.equal(get('chinoSplashAddressText').textContent, '<img src=x onerror=alert(1)>');
   assert.equal(get('venueDescription').textContent, '<script>example</script>');
   assert.equal(get('venuePhoneLink').href, 'tel:+639171234567');
   assert.equal(get('venueEmailLink').href, 'mailto:booking%40example.com');
   assert.equal(get('venuePhoneRow').hidden, false);
   context.applyVenueDetails({ venue_contact: 'javascript:alert(1)', venue_email: '<a>@example.com' });
-  assert.equal(get('venueAddress').hidden, true);
+  assert.equal(get('venueAddressText').textContent, 'Prk. Bautista, Mankilam, Tagum City');
+  assert.equal(get('chinoSplashAddressText').textContent, 'Prk. Bautista, Mankilam, Tagum City');
+  assert.equal(get('venueAddress').hidden, false);
+  assert.equal(get('chinoSplashAddress').hidden, false);
   assert.equal(get('venuePhoneRow').hidden, true);
   assert.equal(get('venueEmailRow').hidden, true);
   assert.equal(get('venuePhoneLink').href, undefined);
   assert.equal(get('venueEmailLink').href, undefined);
-  assert.match(get('venueContactNote').textContent, /will be published here/);
+  assert.match(get('venueContactNote').textContent, /contact CHINO/);
+  context.applyVenueDetails({ venue_address: '   ' });
+  assert.equal(get('venueAddressText').textContent, 'Prk. Bautista, Mankilam, Tagum City');
+  assert.equal(get('chinoSplashAddressText').textContent, 'Prk. Bautista, Mankilam, Tagum City');
 });

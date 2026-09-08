@@ -331,25 +331,9 @@ body.dark .shared-date-display {
 .ft-result-price { color:var(--accent); font-size:.8rem; font-weight:800; margin-top:3px; }
 .ft-result .btn { padding:8px 13px; }
 
-/* Borderless price promise beside each court's displayed rate. */
+/* Keep the displayed court rate together at every screen size. */
 .cc-rate-line {
   display:inline-flex; align-items:center; min-width:0; white-space:nowrap;
-}
-.cc-rate-promise {
-  display:inline-block; color:var(--lime-ink); font-family:'Outfit',sans-serif;
-  font-size:.58rem; font-weight:900; line-height:1; letter-spacing:.72px;
-  text-transform:uppercase;
-  animation:courtRatePromiseIn .38s cubic-bezier(.22,1,.36,1) both;
-}
-.cc-rate-promise::before {
-  content:'·'; margin:0 5px; color:rgba(var(--lime-rgb),.58);
-}
-@keyframes courtRatePromiseIn {
-  from { opacity:0; transform:translateX(-3px); }
-  to { opacity:1; transform:translateX(0); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .cc-rate-promise { animation:none; opacity:1; transform:none; }
 }
 @media(max-width:700px) {
   .find-time-entry { margin-top:-6px; gap:10px; }
@@ -428,7 +412,6 @@ body.dark .shared-date-display {
 }
 .cc-photo-name { font-family:'Bebas Neue',sans-serif; font-size:1.2rem; letter-spacing:1.5px; color:#fff; display:block; }
 .cc-photo-rate { font-size:.75rem; color:rgba(255,255,255,.7); margin-top:1px; }
-.cc-photo-rate .cc-rate-promise { color:var(--lime); }
 
 /* RIGHT: Times panel */
 .cc-times {
@@ -626,8 +609,6 @@ body.dark .shared-date-display {
     color:var(--muted); font-size:.7rem; font-weight:700; line-height:1.2;
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
   }
-  .cc-mobile-meta .cc-rate-promise { font-size:.51rem; letter-spacing:.4px; }
-  .cc-mobile-meta .cc-rate-promise::before { margin:0 3px; }
   .cc-mobile-side {
     display:flex; flex-direction:column; align-items:flex-end; gap:5px; flex:0 0 auto;
   }
@@ -645,10 +626,6 @@ body.dark .shared-date-display {
 @media(max-width:330px) {
   .cc-mobile-meta { white-space:normal; overflow:visible; text-overflow:clip; }
   .cc-mobile-meta .cc-rate-line { display:flex; width:100%; flex-wrap:wrap; row-gap:2px; }
-  .cc-mobile-meta .cc-rate-promise {
-    flex:0 0 100%; font-size:.53rem; letter-spacing:.48px;
-  }
-  .cc-mobile-meta .cc-rate-promise::before { content:none; margin:0; }
 }
 
 /* SLOT BUTTON — landscape style */
@@ -3471,7 +3448,7 @@ body.host-mode .courts { padding-bottom:140px; }
 @media(prefers-reduced-motion:reduce) { .host-balance-progress::after { animation:none; width:100%; background:var(--lime); } }
 
 </style>
-<link rel="stylesheet" href="brand-theme.css?v=20260908-premium-welcome-v2">
+<link rel="stylesheet" href="brand-theme.css?v=20260908-court-location">
 </head>
 <body class="dark">
 <script>
@@ -3596,20 +3573,17 @@ try {
     <div class="pr-splash-rule" aria-hidden="true"></div>
     <img class="chino-splash-logo" src="assets/chino-logo-transparent.png" alt="CHINO Pickleball Courts official logo" width="260" height="260" fetchpriority="high">
     <h1 class="pr-splash-title" aria-label="CHINO Pickleball Courts"><span class="pr-splash-title-word pr-splash-title-rage">CHINO</span><span class="pr-splash-sport">Pickleball Courts</span></h1>
-    <p class="pr-splash-location" id="chinoSplashAddress" hidden></p>
-    <audio id="splashWelcomeMusic" src="splash-music.mp3" preload="auto" autoplay loop playsinline aria-hidden="true" onplay="this.volume=Math.min(this.volume,0.52)"></audio>
+    <a class="pr-splash-location chino-address-link" id="chinoSplashAddress" href="https://maps.app.goo.gl/7Su6CtSH7HCbpn1K6" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 6-8 11-8 11S4 16 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></svg>
+      <span id="chinoSplashAddressText">Prk. Bautista, Mankilam, Tagum City</span>
+    </a>
     <button class="pr-splash-enter" type="button" onclick="event.stopPropagation();dismissSplashAndBook()">
       <span class="pr-splash-enter-label">Tap to book</span>
     </button>
     <p class="pr-splash-copy">Choose your court and time, then complete your booking.</p>
     <div class="chino-splash-utilities">
-      <button id="splashSoundToggle" class="pr-splash-sound" type="button" aria-label="Play welcome music" aria-pressed="false" onclick="event.stopPropagation();toggleSplashSound()">
-        <span class="pr-splash-sound-bars" aria-hidden="true"><i></i><i></i><i></i></span>
-        <span class="pr-splash-sound-label">Play music</span>
-      </button>
       <a class="pr-splash-manage" href="manage-booking.html" aria-label="Already booked? Manage your booking" onclick="event.stopPropagation()"><strong>Manage booking</strong> <span aria-hidden="true">&rarr;</span></a>
     </div>
-    <p class="pr-splash-offer" role="note">NO BOOKING FEES</p>
   </div>
   <div class="pr-splash-footer"><span>CHINO Pickleball Courts</span><span class="chino-footer-divider" aria-hidden="true">&middot;</span><span>Your court. Your community.</span></div>
 </div>
@@ -4167,8 +4141,11 @@ try {
       </div>
       <p class="ft-d" id="venueDescription">Your go-to platform for pickleball court reservations. Fast, simple, and reliable for all skill levels.</p>
       <div class="ft-address" id="venueContact">
-        <p id="venueContactNote">For booking help, contact CHINO staff and include your booking reference. Venue contact and location details will be published here.</p>
-        <p id="venueAddress" style="white-space:pre-line;margin-top:8px" hidden></p>
+        <p id="venueContactNote">For booking help, contact CHINO staff and include your booking reference.</p>
+        <a class="chino-address-link" id="venueAddress" href="https://maps.app.goo.gl/7Su6CtSH7HCbpn1K6" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 6-8 11-8 11S4 16 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></svg>
+          <span id="venueAddressText">Prk. Bautista, Mankilam, Tagum City</span>
+        </a>
         <p id="venuePhoneRow" style="margin-top:8px" hidden><a id="venuePhoneLink"></a></p>
         <p id="venueEmailRow" style="margin-top:8px" hidden><a id="venueEmailLink"></a></p>
       </div>
@@ -5941,7 +5918,7 @@ async function loadOperatingHours() {
 }
 
 function applyVenueDetails(settings = {}) {
-  const address = String(settings.venue_address || '').trim().slice(0, 500);
+  const address = String(settings.venue_address || '').trim().slice(0, 500) || 'Prk. Bautista, Mankilam, Tagum City';
   const contact = String(settings.venue_contact || '').trim().slice(0, 40);
   const email = String(settings.venue_email || '').trim().slice(0, 254);
   const description = String(settings.venue_description || '').trim().slice(0, 500);
@@ -5950,14 +5927,8 @@ function applyVenueDetails(settings = {}) {
   const dialNumber = validContact && /^\+?\d{7,15}$/.test(normalizedNumber) ? normalizedNumber : '';
   const validEmail = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(email);
   if ($('venueDescription')) $('venueDescription').textContent = description || 'Your go-to platform for pickleball court reservations. Fast, simple, and reliable for all skill levels.';
-  if ($('venueAddress')) {
-    $('venueAddress').textContent = address;
-    $('venueAddress').hidden = !address;
-  }
-  if ($('chinoSplashAddress')) {
-    $('chinoSplashAddress').textContent = address;
-    $('chinoSplashAddress').hidden = !address;
-  }
+  if ($('venueAddressText')) $('venueAddressText').textContent = address;
+  if ($('chinoSplashAddressText')) $('chinoSplashAddressText').textContent = address;
   if ($('venuePhoneRow')) $('venuePhoneRow').hidden = !dialNumber;
   if ($('venuePhoneLink')) {
     $('venuePhoneLink').textContent = dialNumber ? contact : '';
@@ -7668,7 +7639,7 @@ async function renderCourts() {
       <div class="cc-mobile-hd">
         <div class="cc-mobile-title">
           <span class="cc-mobile-name">${courtTimesHeading}</span>
-          <span class="cc-mobile-meta"><span class="cc-rate-line"><span>${esc(rateRange)}</span><span class="cc-rate-promise">NO BOOKING FEES</span></span></span>
+          <span class="cc-mobile-meta"><span class="cc-rate-line"><span>${esc(rateRange)}</span></span></span>
         </div>
         <div class="cc-mobile-side">
           <span class="cc-mobile-status ${availBadgeCls}" id="cMobAvail_${esc(c.id)}">${esc(availBadgeTxt)}</span>
@@ -7681,7 +7652,7 @@ async function renderCourts() {
         <div class="cc-photo-avail ${availBadgeCls}" id="cAvail_${esc(c.id)}">${esc(availBadgeTxt)}</div>
         <div class="cc-photo-bar">
           <span class="cc-photo-name">${esc(c.name)}</span>
-          <div class="cc-photo-rate"><span class="cc-rate-line"><span>${esc(rateRange)}</span><span class="cc-rate-promise">NO BOOKING FEES</span></span></div>
+          <div class="cc-photo-rate"><span class="cc-rate-line"><span>${esc(rateRange)}</span></span></div>
         </div>
       </div>
 
@@ -10818,7 +10789,6 @@ function animateStat(el, final) {
 function dismissSplash() {
   const sp = document.getElementById('splashScreen');
   if (!sp || sp.classList.contains('dismissed')) return;
-  stopSplashSound();
   sp.classList.add('dismissed');
   document.body.style.overflow = '';
   sp.addEventListener('transitionend', () => { sp.style.display = 'none'; }, { once: true });
@@ -10832,211 +10802,11 @@ function dismissSplashAndBook() {
   }, 180);
 }
 
-const splashAudio = {
-  active: false,
-  starting: false,
-  autoBlocked: false,
-  holdNextSplashClick: false,
-  fadeFrame: 0,
-  targetVolume: 0.52
-};
-
-const splashBeat = {
-  bpm: 100.49,
-  offset: 0,
-  frame: 0,
-  lastBeat: -1
-};
-const splashReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-
-function splashIsVisible() {
-  const splash = document.getElementById('splashScreen');
-  return !!splash && splash.style.display !== 'none' && !splash.classList.contains('dismissed');
-}
-
-function updateSplashSoundButton(isPlaying) {
-  const button = document.getElementById('splashSoundToggle');
-  if (!button) return;
-  button.classList.toggle('is-playing', isPlaying);
-  button.setAttribute('aria-pressed', String(isPlaying));
-  button.setAttribute('aria-label', isPlaying ? 'Stop welcome music' : 'Play welcome music');
-  const label = button.querySelector('.pr-splash-sound-label');
-  if (label) label.textContent = isPlaying ? 'Stop music' : 'Play music';
-}
-
-function fadeSplashMusic(audio, from, to, duration, onComplete) {
-  if (splashAudio.fadeFrame) cancelAnimationFrame(splashAudio.fadeFrame);
-  const startedAt = performance.now();
-  const frame = now => {
-    const progress = Math.min((now - startedAt) / duration, 1);
-    audio.volume = Math.max(0, Math.min(1, from + (to - from) * progress));
-    if (progress < 1) splashAudio.fadeFrame = requestAnimationFrame(frame);
-    else {
-      splashAudio.fadeFrame = 0;
-      if (onComplete) onComplete();
-    }
-  };
-  splashAudio.fadeFrame = requestAnimationFrame(frame);
-}
-
-function stopRageBeatAnimation() {
-  if (splashBeat.frame) cancelAnimationFrame(splashBeat.frame);
-  splashBeat.frame = 0;
-  splashBeat.lastBeat = -1;
-  const rage = document.querySelector('.pr-splash-title-rage');
-  if (!rage) return;
-  rage.classList.remove('is-beat', 'is-downbeat');
-}
-
-function startRageBeatAnimation() {
-  stopRageBeatAnimation();
-  if (splashReducedMotion.matches) return;
-  const audio = document.getElementById('splashWelcomeMusic');
-  const rage = document.querySelector('.pr-splash-title-rage');
-  if (!audio || !rage) return;
-  const beatLength = 60 / splashBeat.bpm;
-
-  const animate = () => {
-    if (!splashAudio.active || audio.paused || !splashIsVisible()) {
-      stopRageBeatAnimation();
-      return;
-    }
-
-    const playhead = audio.currentTime - splashBeat.offset;
-    if (playhead < 0) {
-      splashBeat.frame = requestAnimationFrame(animate);
-      return;
-    }
-
-    const beatPosition = playhead / beatLength;
-    const beatIndex = Math.floor(beatPosition);
-
-    if (beatIndex !== splashBeat.lastBeat) {
-      splashBeat.lastBeat = beatIndex;
-      rage.classList.remove('is-beat', 'is-downbeat');
-      void rage.offsetWidth;
-      if (beatIndex % 4 === 0) rage.classList.add('is-downbeat');
-      rage.classList.add('is-beat');
-    }
-
-    splashBeat.frame = requestAnimationFrame(animate);
-  };
-
-  splashBeat.frame = requestAnimationFrame(animate);
-}
-
-splashReducedMotion.addEventListener?.('change', event => {
-  if (event.matches) stopRageBeatAnimation();
-  else if (splashAudio.active) startRageBeatAnimation();
-});
-
-async function startSplashSound(automatic = false) {
-  const audio = document.getElementById('splashWelcomeMusic');
-  if (!audio || splashAudio.active || splashAudio.starting || !splashIsVisible()) return splashAudio.active;
-  splashAudio.starting = true;
-  audio.defaultMuted = false;
-  audio.muted = false;
-  if (audio.paused) audio.volume = 0;
-  try {
-    await audio.play();
-    if (automatic) {
-      audio.volume = splashAudio.targetVolume;
-      if (audio.paused || audio.ended || audio.muted || audio.volume <= 0) {
-        throw new DOMException('Audible autoplay was blocked.', 'NotAllowedError');
-      }
-    } else {
-      fadeSplashMusic(audio, audio.volume, splashAudio.targetVolume, 650);
-    }
-    splashAudio.active = true;
-    splashAudio.autoBlocked = false;
-    updateSplashSoundButton(true);
-    startRageBeatAnimation();
-    return true;
-  } catch (_) {
-    splashAudio.active = false;
-    if (automatic) {
-      splashAudio.autoBlocked = true;
-      if (!audio.paused) audio.pause();
-      try { audio.currentTime = 0; } catch (_) {}
-    }
-    updateSplashSoundButton(false);
-    if (automatic) {
-      const label = document.querySelector('.pr-splash-sound-label');
-      if (label) label.textContent = 'Tap for music';
-    }
-    return false;
-  } finally {
-    splashAudio.starting = false;
-  }
-}
-
-function stopSplashSound() {
-  const audio = document.getElementById('splashWelcomeMusic');
-  splashAudio.active = false;
-  stopRageBeatAnimation();
-  updateSplashSoundButton(false);
-  if (!audio || audio.paused) return;
-  const currentVolume = audio.volume;
-  fadeSplashMusic(audio, currentVolume, 0, 280, () => {
-    audio.pause();
-    audio.currentTime = 0;
-  });
-}
-
-function toggleSplashSound() {
-  if (splashAudio.active) stopSplashSound();
-  else startSplashSound(false);
-}
-
-function handleSplashBackgroundTap() {
-  if (splashAudio.holdNextSplashClick) {
-    splashAudio.holdNextSplashClick = false;
-    return;
-  }
+function handleSplashBackgroundTap(event) {
+  if (event?.target?.closest('a, button')) return;
   dismissSplashAndBook();
 }
 
-function unlockSplashMusicFromGesture(event) {
-  if (!splashIsVisible() || splashAudio.active || splashAudio.starting) return;
-  const target = event.target instanceof Element ? event.target : null;
-  if (target?.closest('.pr-splash-sound, .pr-splash-enter, .pr-splash-manage')) return;
-  splashAudio.holdNextSplashClick = event.type === 'pointerdown' || event.type === 'touchstart';
-  startSplashSound(false);
-}
-
-function attemptSplashAutoplay() {
-  if (splashIsVisible() && !splashAudio.active) startSplashSound(true);
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-  const audio = document.getElementById('splashWelcomeMusic');
-  if (audio) {
-    audio.defaultMuted = false;
-    audio.muted = false;
-    audio.addEventListener('canplay', attemptSplashAutoplay, { once: true });
-    audio.addEventListener('pause', () => {
-      if (!splashAudio.active || !splashIsVisible()) return;
-      splashAudio.active = false;
-      splashAudio.autoBlocked = true;
-      stopRageBeatAnimation();
-      updateSplashSoundButton(false);
-      const label = document.querySelector('.pr-splash-sound-label');
-      if (label) label.textContent = 'Tap for music';
-    });
-  }
-  attemptSplashAutoplay();
-}, { once: true });
-
-window.addEventListener('load', attemptSplashAutoplay, { once: true });
-window.addEventListener('pageshow', attemptSplashAutoplay);
-document.addEventListener('pointerdown', unlockSplashMusicFromGesture, { capture: true });
-document.addEventListener('touchstart', unlockSplashMusicFromGesture, { capture: true, passive: true });
-document.addEventListener('keydown', unlockSplashMusicFromGesture, { capture: true });
-
-document.addEventListener('visibilitychange', () => {
-  if (document.hidden) stopSplashSound();
-  else attemptSplashAutoplay();
-});
 // Lock scroll while splash is showing
 document.body.style.overflow = 'hidden';
 
