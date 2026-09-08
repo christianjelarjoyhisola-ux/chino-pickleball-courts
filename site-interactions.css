@@ -1,0 +1,18 @@
+/* Suppress accidental tap zoom and page bounce, preserving accessible zoom. */
+html, body {
+  touch-action: manipulation;
+  overscroll-behavior: none;
+}
+html { overflow-x: clip; }
+button, a, input, select, textarea, label, [role="button"],
+.bk-modal-body, .modal-body, #splashScreen {
+  touch-action: manipulation;
+}
+.bk-modal-body, .modal-body, #splashScreen { overscroll-behavior: none; }
+img, a, button { -webkit-user-drag: none; }
+button, [role="button"] { -webkit-user-select:none; user-select:none; }
+/* iOS focuses small text fields by zooming. Keep their text at 16px instead. */
+@media (max-width:700px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select, textarea { font-size:16px !important; }
+}

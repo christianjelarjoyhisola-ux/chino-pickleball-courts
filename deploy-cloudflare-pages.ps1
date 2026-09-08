@@ -52,6 +52,8 @@ $publicFiles = @(
   "availability-graphic.css",
   "availability-graphic.js",
   "brand-theme.css",
+    "site-interactions.css",
+    "site-interactions.js",
   "court-pricing.js",
   "promo-admin.css",
   "promo-pricing.css",
