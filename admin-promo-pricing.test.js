@@ -105,6 +105,7 @@ test('court list compares promos with effective regular tiers and clears stale g
   let settings = { pricing_tiers:JSON.stringify([{ from:0, to:24, rate:365 }]) };
   const context = vm.createContext({
     window:{ ChinoPricing:pricing }, $:id => id === 'courtBody' ? body : null,
+    loadAllCourtsPromo:() => {},
     courtPromoFallbackTiers:[], adminTiers:[], fmt:amount => `₱${amount}`, esc:value => String(value ?? ''), jsArg:value => String(value),
     DB:{ getCourts:async () => courts, getSettings:async () => settings },
     renderVenueDetailsSettings:async () => {}, renderHours:async () => {}, renderMaintRateSettings:async () => {}, renderPaymentSettings:async () => {}, renderTiersUI:() => {},
@@ -165,4 +166,18 @@ test('manual bookings use the selected play date and preserve per-slot prices fo
   assert.deepEqual(Array.from(afterPromo[0].slotRates), [250, 250]);
   assert.equal(context._nbGetRateForHour(promo, 8, '2026-10-01'), 150);
   assert.equal(context._nbGetRateForHour(promo, 8, '2026-09-30'), 250);
+});
+
+test('all-courts promo validates every court before one atomic save and supports disabling', async () => {
+ const nodes=new Map();const get=id=>{if(!nodes.has(id))nodes.set(id,{value:'',checked:false,disabled:false});return nodes.get(id);};
+ const courts=[{name:'Court 1',rate:315},{name:'Court 2',rate:300}];const writes=[],notices=[];
+ const c=vm.createContext({$:get,ChinoPricing:pricing,fmt:n=>'₱'+n,parsePricingTiers:()=>[],renderCourts:async()=>{},toast:m=>notices.push(m),
+ DB:{getCourts:async()=>courts,getSettings:async()=>({}),setAllCourtsPromo:async p=>{writes.push(p);return courts.length;}}});
+ vm.runInContext(['loadAllCourtsPromo','updateAllPromoPreview','saveAllCourtsPromo'].map(source).join('\n'),c);
+ get('allPromoEnabled').checked=true;get('allPromoRate').value='310';
+ await c.saveAllCourtsPromo();assert.equal(writes.length,0);assert.match(notices.at(-1),/Court 2/);assert.equal(get('allPromoSave').disabled,false);
+ get('allPromoRate').value='265';await c.saveAllCourtsPromo();assert.equal(writes.length,1);assert.equal(writes[0].promoRate,265);
+ get('allPromoEnabled').checked=false;await c.saveAllCourtsPromo();assert.equal(writes[1].promoEnabled,false);
+ c.loadAllCourtsPromo([{promoEnabled:true,promoRate:265},{promoEnabled:true,promoRate:265}]);assert.equal(get('allPromoEnabled').checked,true);
+ c.loadAllCourtsPromo([{promoEnabled:true,promoRate:265},{promoEnabled:false}]);assert.match(get('allPromoPreview').textContent,/different promos/);
 });

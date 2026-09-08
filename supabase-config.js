@@ -1252,6 +1252,16 @@ window.DB = {
     _pbClearFastCache(['courts']);
   },
 
+  async setAllCourtsPromo(promo) {
+    const {data,error} = await _sb.rpc('set_all_courts_promo', {
+      p_enabled:promo.promoEnabled, p_rate:promo.promoRate,
+      p_start:promo.promoStartDate || null, p_end:promo.promoEndDate || null,
+    });
+    if (error) throw error;
+    _pbClearFastCache(['courts']);
+    return data;
+  },
+
   async deleteCourt(id) {
     const { data, error } = await _sb.from('courts').delete().eq('id', id).select('id');
     if (error) { console.error('deleteCourt:', error); throw error; }

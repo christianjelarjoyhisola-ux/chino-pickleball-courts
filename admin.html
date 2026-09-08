@@ -5604,6 +5604,18 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(45, 62, 79, .1
           <button class="btn btn-g btn-sm" onclick="addTierRow()">+ Add Tier</button>
           <button class="btn btn-p btn-sm" onclick="savePricingTiers()">💾 Save Tiers</button>
         </div>
+        <div style="margin-top:22px;padding-top:20px;border-top:1px solid var(--border)">
+          <h4>All courts promo</h4>
+          <p style="color:var(--muted);font-size:.84rem;margin:8px 0 16px">Apply one promotional hourly rate to all current courts. This replaces their individual promo settings. Existing bookings keep their saved prices.</p>
+          <label style="display:flex;align-items:center;gap:10px;margin-bottom:16px"><input type="checkbox" id="allPromoEnabled" onchange="updateAllPromoPreview()" /> Enable promo for all courts</label>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px">
+            <div><label class="fl" for="allPromoRate">Promo price / hour (₱)</label><input class="fi" id="allPromoRate" type="number" min="0.01" step="0.01" placeholder="e.g. 265" oninput="updateAllPromoPreview()" /></div>
+            <div><label class="fl" for="allPromoStart">Start date · optional</label><input class="fi" id="allPromoStart" type="date" onchange="updateAllPromoPreview()" /></div>
+            <div><label class="fl" for="allPromoEnd">End date · optional</label><input class="fi" id="allPromoEnd" type="date" onchange="updateAllPromoPreview()" /></div>
+          </div>
+          <p id="allPromoPreview" role="status" style="color:var(--muted);font-size:.84rem;line-height:1.6;margin:12px 0"></p>
+          <button class="btn btn-p btn-sm" id="allPromoSave" onclick="saveAllCourtsPromo()">Apply to all courts</button>
+        </div>
       </div>
 
       <div class="tbl-wrap">
@@ -14071,6 +14083,7 @@ async function renderCourts(){
   await loadPricingTiers();
   await renderPaymentSettings();
   const courts=await DB.getCourts();
+  loadAllCourtsPromo(courts);
   $('courtBody').innerHTML=courts.map(c=>`<tr>
     <td data-label="Name">
       ${c.photo?`<img src="${esc(c.photo)}" alt="${esc(c.name)}" style="width:60px;height:44px;object-fit:cover;border-radius:6px;border:1px solid var(--border);vertical-align:middle;margin-right:8px;display:inline-block;"/>`:
@@ -14394,6 +14407,45 @@ async function loadPricingTiers() {
   courtPromoFallbackTiers = parsePricingTiers(settings.pricing_tiers);
   adminTiers = courtPromoFallbackTiers.map(tier => ({ ...tier }));
   renderTiersUI();
+}
+
+function loadAllCourtsPromo(courts) {
+  const first = courts[0];
+  const same = first && courts.every(c => ['promoEnabled','promoRate','promoStartDate','promoEndDate'].every(key => (c[key] ?? null) === (first[key] ?? null)));
+  $('allPromoEnabled').checked = !!(same && first.promoEnabled);
+  $('allPromoRate').value = same ? first.promoRate ?? '' : '';
+  $('allPromoStart').value = same ? first.promoStartDate || '' : '';
+  $('allPromoEnd').value = same ? first.promoEndDate || '' : '';
+  updateAllPromoPreview();
+  if (!same && courts.length) $('allPromoPreview').textContent = 'Courts currently have different promos. Choose a shared price and dates, then apply to all courts.';
+}
+function updateAllPromoPreview() {
+  const enabled = $('allPromoEnabled').checked;
+  const rate = Number($('allPromoRate').value);
+  $('allPromoPreview').textContent = !enabled
+    ? 'Applying this will turn off promos for all current courts and restore their regular rates.'
+    : rate > 0
+      ? `Promo: ${fmt(rate)}/hr for each court. ${$('allPromoStart').value || 'Starts immediately'} — ${$('allPromoEnd').value || 'until switched off'}. Any separate booking fee still applies.`
+      : 'Enter a promo price below every court’s lowest regular hourly rate. Dates follow the booked play date.';
+}
+async function saveAllCourtsPromo() {
+  const button = $('allPromoSave');
+  const promo = {promoEnabled:$('allPromoEnabled').checked,promoRate:$('allPromoRate').value === '' ? null : Number($('allPromoRate').value),promoStartDate:$('allPromoStart').value || null,promoEndDate:$('allPromoEnd').value || null};
+  button.disabled = true;
+  try {
+    const courts = await DB.getCourts();
+    if (!courts.length) throw new Error('Add a court before applying a promotion.');
+    const settings = await DB.getSettings();
+    const tiers = parsePricingTiers(settings.pricing_tiers);
+    for (const court of courts) {
+      const error = ChinoPricing.validatePromo({...court,...promo},tiers);
+      if (error) throw new Error(`${court.name}: ${error}`);
+    }
+    const count = await DB.setAllCourtsPromo(promo);
+    await renderCourts();
+    toast(promo.promoEnabled ? `Promo applied to ${count} courts.` : `Promos disabled for ${count} courts.`);
+  } catch(error) { toast(error.message || 'Could not update court promos. Please try again.', 'err'); }
+  finally { button.disabled = false; }
 }
 
 function tierFmtH(h) {
@@ -18770,7 +18822,7 @@ async function checkAgreementGate(session) {
 
 <script src="supabase.min.js"></script>
 <script src="open-play-rating.js?v=20260729-head-to-head-v1"></script>
-<script src="supabase-config.js?v=20260909-bank-verifier"></script>
+<script src="supabase-config.js?v=20260909-all-courts-promo"></script>
 <script src="qrcode.min.js?v=1.5.4"></script>
 <script src="availability-graphic.js?v=20260909-domain-v1"></script>
 <script src="play-manager.js?v=20260909-official-logo-v1"></script>
