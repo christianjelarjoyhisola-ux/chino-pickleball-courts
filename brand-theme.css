@@ -101,6 +101,7 @@ img[src="logochino.jpg"] {
   border-radius:10px!important;
 }
 .nav-brand:hover img[src="logochino.jpg"] { transform:none; }
+.nav .chino-header-logo { width:68px; height:56px; flex:0 0 auto; border-radius:0!important; }
 .logo-sub { font-family:'Outfit',system-ui,sans-serif; font-size:.6rem; letter-spacing:.12em; text-transform:uppercase; color:var(--muted)!important; }
 .logo-tx,.title,.sec-hd h1,.sec-hd h2,.hc-tt,.cc-name,.wiz-court-name {
   font-family:'Outfit',system-ui,sans-serif;
@@ -581,6 +582,10 @@ body.light #slotCountdown { color:#86580c; }
 body.light #slotCountdown.urgent { color:#b42318; }
 
 #courts { scroll-margin-top:84px; }
+body:not(.host-mode) #courtsGrid { padding-bottom:0; }
+.courts-manage { display:flex; justify-content:center; margin-top:24px; }
+.courts-manage .nav-manage-link { min-width:180px; min-height:48px; font-size:.875rem; }
+@media(max-width:700px) { .courts-manage { padding-bottom:72px; } }
 
 .chino-courts-empty {
   grid-column:1 / -1;
