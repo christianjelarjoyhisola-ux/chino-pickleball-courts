@@ -3554,7 +3554,7 @@ try {
       </div>
       <div class="late-ext-courts" id="lateExtCourts"></div>
       <div class="late-ext-price">
-        <span class="late-ext-price-copy"><strong>Added price</strong><span id="lateExtFeeNote">Booking fee included</span></span>
+        <span class="late-ext-price-copy"><strong>Added price</strong><span id="lateExtFeeNote">Free booking fee</span></span>
         <strong class="late-ext-price-value" id="lateExtPrice">—</strong>
       </div>
       <div class="late-ext-note">This will be added as a separate next-day booking item in the same reservation.</div>
@@ -4415,7 +4415,7 @@ function allInSlotPriceHtml(baseRate) {
   return `<div class="csl-price">${compactPeso(allInSlotRate(baseRate))}</div>`;
 }
 function allInSlotAriaLabel(baseRate) {
-  return `${compactPeso(allInSlotRate(baseRate))} per hour${isSeparateBookingFee() ? ', including ' + compactPeso(calcSvcFee(1)) + ' booking fee' : ', booking fee included'}`;
+  return `${compactPeso(allInSlotRate(baseRate))} per hour${isSeparateBookingFee() ? ', including ' + compactPeso(calcSvcFee(1)) + ' booking fee' : ', free booking fee'}`;
 }
 function activeHostSession() {
   const sess = window.Auth?.getSession?.();
@@ -5382,8 +5382,7 @@ function itemBookingFeeAmount(item = {}) { return Math.max(0, Number(item.bookin
 function separateBookingFees(items = []) { return items.reduce((sum, item) => sum + (itemBookingFeeMode(item) === 'separate' ? itemBookingFeeAmount(item) : 0), 0); }
 function bookingFeeLineHtml(items = []) {
   const amount = separateBookingFees(items);
-  const included = items.some(item => itemBookingFeeAmount(item) > 0);
-  return '<div class="pbs-price-row"><span>Booking fee' + (amount > 0 ? ' · ' + bookingItemsDuration(items) + ' booked court-hours' : '') + '</span><strong>' + (amount > 0 ? fmt(amount) : included ? 'Included' : 'Free') + '</strong></div>';
+  return '<div class="pbs-price-row"><span>Booking fee' + (amount > 0 ? ' · ' + bookingItemsDuration(items) + ' booked court-hours' : '') + '</span><strong>' + (amount > 0 ? fmt(amount) : 'Free') + '</strong></div>';
 }
 
 function bookingItemRateBreakdown(item = {}) {
@@ -7076,7 +7075,7 @@ function showLateNightExtensionPrompt(candidate) {
       : `Applies to ${courts[0] || 'your selected court'}.`;
   }
   if ($('lateExtPrice')) $('lateExtPrice').textContent = fmt(addedTotal);
-  if ($('lateExtFeeNote')) $('lateExtFeeNote').textContent = isSeparateBookingFee() ? 'Includes booking fee per added court-hour' : 'Booking fee included';
+  if ($('lateExtFeeNote')) $('lateExtFeeNote').textContent = isSeparateBookingFee() ? 'Includes booking fee per added court-hour' : 'Free booking fee';
   modal.classList.add('show');
   modal.setAttribute('aria-hidden', 'false');
   document.body.style.overflow = 'hidden';
@@ -8125,7 +8124,7 @@ function updatePriceLegacy() {
   if ($('pRate')) $('pRate').textContent = rateLabel;
   if ($('pCourtFee')) $('pCourtFee').textContent = fmt(isSeparateBookingFee() ? courtTotal : total);
   if ($('pSvcFeeRow')) $('pSvcFeeRow').style.display = '';
-  if ($('pSvcFee')) $('pSvcFee').textContent = isSeparateBookingFee() ? fmt(svcFee) : svcFee > 0 ? 'Included' : 'Free';
+  if ($('pSvcFee')) $('pSvcFee').textContent = isSeparateBookingFee() ? fmt(svcFee) : 'Free';
   if ($('pTot')) $('pTot').textContent  = fmt(total);
   if ($('pDown')) $('pDown').textContent = fmt(payAmt);
 
@@ -8165,7 +8164,7 @@ function updatePrice() {
   if ($('pRate')) $('pRate').textContent = bookingItemsRateLabel(items);
   if ($('pCourtFee')) $('pCourtFee').textContent = fmt(isSeparateBookingFee() ? courtTotal : total);
   if ($('pSvcFeeRow')) $('pSvcFeeRow').style.display = '';
-  if ($('pSvcFee')) $('pSvcFee').textContent = isSeparateBookingFee() ? fmt(svcFee) : svcFee > 0 ? 'Included' : 'Free';
+  if ($('pSvcFee')) $('pSvcFee').textContent = isSeparateBookingFee() ? fmt(svcFee) : 'Free';
   if ($('pTot')) $('pTot').textContent  = fmt(total);
   if ($('pDown')) $('pDown').textContent = fmt(payAmt);
 
@@ -9828,7 +9827,7 @@ function showInvoice(b) {
   const ticketModel = renderBookingTicketSessions(b);
   const invoicePricingItems = bookingTicketPricingItems(b, ticketModel);
   const separateFee = separateBookingFees(invoicePricingItems);
-  set('iBookingFee', separateFee > 0 ? fmt(separateFee) : invoicePricingItems.some(item => itemBookingFeeAmount(item) > 0) ? 'Included' : 'Free');
+  set('iBookingFee', separateFee > 0 ? fmt(separateFee) : 'Free');
   const rentalBreakdown = $('iRentalBreakdown');
   if (rentalBreakdown) rentalBreakdown.innerHTML = bookingRentalBreakdownHtml(bookingTicketPricingItems(b, ticketModel));
   set('iPay', payLabel);

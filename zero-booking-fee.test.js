@@ -134,7 +134,7 @@ test('per-hour configuration creates exact all-in slot prices', () => {
   assert.equal(quote.rate, 350);
   assert.match(quote.html, /₱350/);
   assert.doesNotMatch(quote.html, /Final|Live total|csl-final/i);
-  assert.match(quote.aria, /₱350 per hour, booking fee included/);
+  assert.match(quote.aria, /₱350 per hour, free booking fee/);
 });
 
 test('flat configuration never repeats the flat share on every slot', () => {
@@ -144,7 +144,7 @@ test('flat configuration never repeats the flat share on every slot', () => {
   assert.match(quote.html, /₱350/);
   assert.doesNotMatch(quote.html, /Live total|Final|csl-final/i);
   assert.doesNotMatch(quote.html, /₱360/);
-  assert.match(quote.aria, /₱350 per hour, booking fee included/);
+  assert.match(quote.aria, /₱350 per hour, free booking fee/);
 
 });
 
@@ -348,7 +348,7 @@ test('player summary and confirmation use the saved fee breakdown', () => {
   assert.match(stepThree, /class="wiz-summary wiz-summary--booking"/, 'Step 3 must use one scoped booking summary card');
   assert.match(page, /\.wiz-summary--booking \.pbs-price-card\s*\{[^}]*border\s*:\s*0;[^}]*background\s*:\s*transparent;/s, 'the nested price shell must be visually flattened');
   assert.match(summaries, /bookingFeeLineHtml\(items\)/);
-  assert.match(page, /included \? 'Included' : 'Free'/);
+  assert.match(page, /amount > 0 \? fmt\(amount\) : 'Free'/);
   assert.match(summaries, /Booking total/);
   assert.match(summaries, />Total</);
   assert.doesNotMatch(summaries, /Final booking total|Final total|Live total/i);
@@ -394,5 +394,5 @@ test('pricing surfaces use the configurable fee line', () => {
   assert.doesNotMatch(slotPricing, /Final Prices|Live Total|csl-final/i);
   assert.doesNotMatch(summaries, /Final booking total|Final total|Live total/i);
   assert.match(summaries, /bookingFeeLineHtml\(items\)/);
-  assert.match(page, /included \? 'Included' : 'Free'/);
+  assert.match(page, /amount > 0 \? fmt\(amount\) : 'Free'/);
 });
