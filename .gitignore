@@ -26,3 +26,6 @@ Thumbs.db
 .wrangler-login*.txt
 test-results/
 tmp/imagegen/
+
+# Private CHINO setup handoff
+.private/

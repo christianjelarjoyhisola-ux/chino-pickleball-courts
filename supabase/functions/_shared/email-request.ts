@@ -1,7 +1,5 @@
 const DEFAULT_ORIGINS = [
-  "https://paddleragecdo.ph",
-  "https://www.paddleragecdo.ph",
-  "https://paddle-rage-pickleball.pages.dev",
+  "https://chinopickleball.pages.dev",
   "http://localhost:8788",
   "http://127.0.0.1:8788",
 ];
@@ -39,7 +37,7 @@ export function emailCorsHeaders(req: Request): Record<string, string> {
   const requestedOrigin = normalizedOrigin(req.headers.get("origin") || "");
   const allowOrigin = requestedOrigin && allowedOrigins().has(requestedOrigin)
     ? requestedOrigin
-    : "https://paddleragecdo.ph";
+    : "https://chinopickleball.pages.dev";
   return {
     "Access-Control-Allow-Origin": allowOrigin,
     "Access-Control-Allow-Headers":

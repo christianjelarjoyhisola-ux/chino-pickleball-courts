@@ -79,7 +79,7 @@ function fmtDateTime(value: unknown): string {
 
 function adminUrl(): string {
   return Deno.env.get("APP_ADMIN_URL") ||
-    "https://paddleragecdo.ph/admin.html";
+    "https://chinopickleball.pages.dev/admin.html";
 }
 
 function registrationNeedsReview(row: Record<string, unknown>): boolean {
@@ -173,7 +173,7 @@ function openPlayMessage(row: Record<string, unknown>): string {
       esc(fmtDateTime(row.created_at))
     }\n` +
     `📅 Starts ${esc(fmtDate(row.date))} · ${esc(row.time_label)}\n` +
-    `<a href="${adminUrl()}">Open the Paddle Rage dashboard</a>`
+    `<a href="${adminUrl()}">Open the CHINO dashboard</a>`
   );
 }
 
@@ -193,7 +193,7 @@ function hostSessionMessage(
     `📅 Starts ${esc(fmtDate(session.date))} · ${
       esc(`${session.start_hour}:00`)
     }\n` +
-    `<a href="${adminUrl()}">Open the Paddle Rage dashboard</a>`
+    `<a href="${adminUrl()}">Open the CHINO dashboard</a>`
   );
 }
 

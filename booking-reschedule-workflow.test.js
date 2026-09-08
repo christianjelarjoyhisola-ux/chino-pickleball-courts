@@ -133,7 +133,7 @@ test('guest UI uses a native premium flow and cannot submit from owner preview',
   assert.match(guestJs, /withdrawBookingRescheduleRequest/);
   assert.match(guestJs, /if \(!bookingContext \|\| ownerPreviewActive\) return/);
   assert.match(guestJs, /payments are final and non-refundable/);
-  assert.match(guestJs, /not reserved until Paddle Rage approves/i);
+  assert.match(guestJs, /not reserved until CHINO approves/i);
   assert.match(guestCss, /@media \(max-width: 720px\)[\s\S]*reschedule-sheet/);
 });
 

@@ -579,7 +579,7 @@ declare
 begin
   if nullif(btrim(coalesce(p_court_id, '')), '') is null
      or p_date is null
-     or p_date < greatest(date '2026-09-19', ph_today)
+     or p_date < greatest(public.court_opening_date(), ph_today)
      or p_date > ph_today + 366
      or coalesce(cardinality(p_slots), 0) < 1
      or cardinality(p_slots) > 24
@@ -1141,7 +1141,7 @@ begin
   end if;
 
   if p_date is null
-     or p_date < greatest(date '2026-09-19', timezone('Asia/Manila', now())::date)
+     or p_date < greatest(public.court_opening_date(), timezone('Asia/Manila', now())::date)
      or p_date > timezone('Asia/Manila', now())::date + 366 then
     raise exception 'Requested date is outside the available booking window.'
       using errcode = '22023';
@@ -2299,7 +2299,7 @@ begin
   set status = 'approved',
       reviewed_by_user_id = actor_id,
       reviewed_by_role = actor_role,
-      decision_reason = coalesce(clean_reason, 'Approved by Paddle Rage.'),
+      decision_reason = coalesce(clean_reason, 'Approved by CHINO.'),
       reviewed_at = clock_timestamp(),
       approved_at = clock_timestamp(),
       updated_at = clock_timestamp()
@@ -2318,7 +2318,7 @@ begin
     actor_user_id, actor_role, reason, details
   ) values (
     request_row.id, 'approved', 'pending', 'approved', 'operator',
-    actor_id, actor_role, coalesce(clean_reason, 'Approved by Paddle Rage.'),
+    actor_id, actor_role, coalesce(clean_reason, 'Approved by CHINO.'),
     jsonb_build_object(
       'itemRefs', to_jsonb(request_row.selected_booking_refs),
       'paymentChanged', false,

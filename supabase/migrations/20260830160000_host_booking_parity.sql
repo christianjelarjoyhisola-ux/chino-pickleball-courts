@@ -1,4 +1,4 @@
--- Paddle Rage host-booking parity: remaining-balance payments, identity-scoped
+-- CHINO host-booking parity: remaining-balance payments, identity-scoped
 -- host history, atomic settlement/recovery, and serialized court-slot writes.
 -- This is intentionally one forward-only migration so existing Paddle systems
 -- (Maileroo, cron authentication, delivery leases, and initial confirmation)
@@ -1700,7 +1700,7 @@ end;
 $$;
 
 comment on function public.prevent_double_booking() is
-  'Serializes active Paddle Rage booking writes per court/date/slot before checking overlaps.';
+  'Serializes active CHINO booking writes per court/date/slot before checking overlaps.';
 
 -- Never split a grouped reservation during forfeiture. If even one row has
 -- already become fully paid, leave the entire group unchanged for owner review.

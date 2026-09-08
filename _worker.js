@@ -2,10 +2,15 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
-    const primaryHostname = String(env.PRIMARY_HOSTNAME || 'paddleragecdo.ph').trim().toLowerCase();
+    const primaryHostname = String(env.PRIMARY_HOSTNAME || 'chinopickleball.pages.dev').trim().toLowerCase();
     if (primaryHostname && url.hostname === `www.${primaryHostname}`) {
       url.hostname = primaryHostname;
       return Response.redirect(url.toString(), 301);
+    }
+
+    if (['/manage', '/manage/'].includes(url.pathname)) {
+      url.pathname = '/login';
+      return Response.redirect(url.toString(), 302);
     }
 
     // Cloudflare Pages resolves extensionless HTML routes through the asset

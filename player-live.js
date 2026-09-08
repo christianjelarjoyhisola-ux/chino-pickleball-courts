@@ -2,7 +2,7 @@
   "use strict";
 
   const POLL_MS = 3000;
-  const PLAYER_NAME_KEY = "paddle_rage_player_live_name_v1";
+  const PLAYER_NAME_KEY = "chino_player_live_name_v1";
   const state = {
     token: String(location.hash || "").slice(1).trim(),
     snapshot: null,
@@ -1020,12 +1020,12 @@
     const headerSession = document.getElementById("plbHeaderSession");
     if (headerSession) {
       headerSession.innerHTML = `
-        <strong>${escapeHtml(session.timeLabel || "Paddle Rage Open Play")}</strong>
+        <strong>${escapeHtml(session.timeLabel || "CHINO Open Play")}</strong>
         <span>${escapeHtml(formatDate(session.date))} · Round ${Number(round.roundNo || session.currentRound || 0)}</span>
       `;
     }
 
-    document.title = `Round ${Number(round.roundNo || 0)} · Paddle Rage Live`;
+    document.title = `Round ${Number(round.roundNo || 0)} · CHINO Live`;
     element.className = `plb-board${initialRender ? " is-initial-render" : ""}`;
     element.setAttribute("aria-busy", "false");
     element.innerHTML = `
@@ -1037,7 +1037,7 @@
         </div>
         <div class="plb-session-meta">
           <span>${escapeHtml(formatDate(session.date))}</span>
-          <strong>${escapeHtml(session.timeLabel || "Paddle Rage Open Play")} · Round ${Number(round.roundNo || session.currentRound || 0)}</strong>
+          <strong>${escapeHtml(session.timeLabel || "CHINO Open Play")} · Round ${Number(round.roundNo || session.currentRound || 0)}</strong>
         </div>
       </section>
 
@@ -1164,11 +1164,11 @@
       <span class="plb-message-icon" aria-hidden="true">×</span>
       <span class="plb-eyebrow">Player link unavailable</span>
       <h1>This live board is no longer active.</h1>
-      <p>The session may have ended, or the manager may have generated a new link. Ask Paddle Rage staff for the latest QR code.</p>
+      <p>The session may have ended, or the manager may have generated a new link. Ask CHINO staff for the latest QR code.</p>
     `;
     const announcement = document.getElementById("plbAnnouncements");
     if (announcement) {
-      announcement.textContent = "This player link is no longer active. Ask Paddle Rage staff for the latest QR code.";
+      announcement.textContent = "This player link is no longer active. Ask CHINO staff for the latest QR code.";
     }
     updateHeader();
   }
@@ -1366,8 +1366,8 @@
 
   async function shareBoard(button) {
     const shareData = {
-      title: "Paddle Rage Live Match Center",
-      text: "Follow the Paddle Rage live courts, queue, and standings.",
+      title: "CHINO Live Match Center",
+      text: "Follow the CHINO live courts, queue, and standings.",
       url: location.href,
     };
     button.disabled = true;

@@ -195,7 +195,7 @@ Deno.serve(async (req) => {
       const sent = await sendMailerooEmail({
         to: payload.email,
         toName: payload.fullName,
-        subject: `Booking rescheduled: ${payload.bookingRef} | Paddle Rage Pickleball`,
+        subject: `Booking rescheduled: ${payload.bookingRef} | CHINO Pickleball Courts`,
         html: content.html,
         plain: content.plain,
         tags: {
@@ -274,7 +274,7 @@ Deno.serve(async (req) => {
       to: payload.email,
       toName: payload.fullName,
       subject:
-        `Booking rescheduled: ${payload.bookingRef} | Paddle Rage Pickleball`,
+        `Booking rescheduled: ${payload.bookingRef} | CHINO Pickleball Courts`,
       html: content.html,
       plain: content.plain,
       tags: {

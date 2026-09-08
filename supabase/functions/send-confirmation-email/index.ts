@@ -237,7 +237,7 @@ Deno.serve(async (req) => {
       to: payload.email,
       toName: payload.fullName,
       subject:
-        `Booking confirmed: ${payload.bookingRef} | Paddle Rage Pickleball`,
+        `Booking confirmed: ${payload.bookingRef} | CHINO Pickleball Courts`,
       html: content.html,
       plain: content.plain,
       tags: {

@@ -27,7 +27,7 @@ function sourceBetween(source, start, end) {
 function dateHarness(initialToday) {
   const source = sourceBetween(
     page,
-    "const PUBLIC_COURT_OPENING_DATE = '2026-09-19';",
+    "const PUBLIC_COURT_OPENING_DATE = '2026-01-01';",
     'function selectedCourtBrowseDate()',
   );
   return new Function(`
@@ -44,28 +44,28 @@ function dateHarness(initialToday) {
   `)();
 }
 
-test('opening boundary follows Manila business date and never moves before September 19', () => {
-  const harness = dateHarness('2026-09-18');
-  assert.equal(harness.minimum(), '2026-09-19');
-  assert.equal(harness.normalize('2026-09-18'), '2026-09-19');
-  assert.equal(harness.normalize('2026-09-19'), '2026-09-19');
-  assert.equal(harness.allowed('2026-09-18'), false);
-  assert.equal(harness.allowed('2026-09-19'), true);
-  assert.match(harness.message(), /September 19, 2026/);
+test('opening boundary follows Manila business date and uses the neutral CHINO lower bound', () => {
+  const harness = dateHarness('2025-12-31');
+  assert.equal(harness.minimum(), '2026-01-01');
+  assert.equal(harness.normalize('2025-12-31'), '2026-01-01');
+  assert.equal(harness.normalize('2026-01-01'), '2026-01-01');
+  assert.equal(harness.allowed('2025-12-31'), false);
+  assert.equal(harness.allowed('2026-01-01'), true);
+  assert.match(harness.message(), /2026-01-01/);
 
-  harness.setToday('2026-09-19');
-  assert.equal(harness.minimum(), '2026-09-19');
-  harness.setToday('2026-09-20');
-  assert.equal(harness.minimum(), '2026-09-20');
-  assert.equal(harness.allowed('2026-09-19'), false);
-  assert.equal(harness.allowed('2026-09-20'), true);
+  harness.setToday('2026-01-01');
+  assert.equal(harness.minimum(), '2026-01-01');
+  harness.setToday('2026-01-02');
+  assert.equal(harness.minimum(), '2026-01-02');
+  assert.equal(harness.allowed('2026-01-01'), false);
+  assert.equal(harness.allowed('2026-01-02'), true);
 });
 
 test('public date controls clamp navigation and disable every date before launch', () => {
   const controls = sourceBetween(page, '<div class="shared-date-entry">', '<div class="courts" id="courtsGrid">');
   assert.match(controls, /id="courtSharedPrev"/);
   assert.match(controls, /id="courtSharedQuickDate"/);
-  assert.match(controls, /Advance booking · opening Sep 19/);
+  assert.match(controls, /Choose your next court session/);
 
   const dateLogic = sourceBetween(page, 'function selectedCourtBrowseDate()', 'function emptyCardSelection()');
   assert.match(dateLogic, /input\.min = minimumPublicBookingDate\(\)/);
@@ -115,18 +115,18 @@ test('remote and local clients reject an invalid batch atomically before mutatio
     assert.ok(assertion >= 0 && assertion < firstMutation, 'date validation must happen before any write');
   }
   assert.match(client, /timeZone: 'Asia\/Manila'/);
-  assert.match(client, /PB_PUBLIC_COURT_OPENING_DATE = '2026-09-19'/);
+  assert.match(client, /PB_PUBLIC_COURT_OPENING_DATE = '2026-01-01'/);
 });
 
 test('Edge and database enforce the same authoritative opening date', () => {
-  assert.match(edge, /PUBLIC_COURT_OPENING_DATE = "2026-09-19"/);
+  assert.match(edge, /PUBLIC_COURT_OPENING_DATE = "2026-01-01"/);
   assert.match(edge, /timeZone: "Asia\/Manila"/);
   const precheck = edge.indexOf('bookings.some((booking) =>');
   const rpc = edge.indexOf('db.rpc("submit_public_booking_holds"');
   assert.ok(precheck >= 0 && rpc > precheck, 'Edge must reject the whole batch before the RPC');
 
   for (const sql of [migration, baseline]) {
-    assert.match(sql, /greatest\(\s*date '2026-09-19',\s*timezone\('Asia\/Manila', now\(\)\)::date\s*\)/i);
+    assert.match(sql, /greatest\(\s*public\.court_opening_date\(\),\s*timezone\('Asia\/Manila', now\(\)\)::date\s*\)/i);
     assert.match(sql, /before insert or update of date on public\.bookings/i);
     assert.match(sql, /before insert or update of date on public\.open_play_registrations/i);
     assert.match(sql, /before insert or update of date on public\.open_play_host_sessions/i);

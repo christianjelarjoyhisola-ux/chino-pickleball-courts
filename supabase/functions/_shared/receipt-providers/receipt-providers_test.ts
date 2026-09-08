@@ -26,8 +26,8 @@ const CONTEXT = {
   expectedAmount: 1080,
   pricingAvailable: true,
   amountTolerance: 0.01,
-  expectedRecipientNumber: "09455107667",
-  expectedRecipientName: "Paddle Rage Pickleball",
+  expectedRecipientNumber: "09981234567",
+  expectedRecipientName: "CHINO Pickleball Courts",
   bookingStartedAt: "2026-08-31T02:40:00.000Z",
   bookingStartedDate: "2026-08-31",
   paymentWindowMinutes: 15,
@@ -38,9 +38,9 @@ const GOTYME_OCR = `
 GoTyme Bank
 Transfer successful
 To
-Paddle Rage Pickleball
+CHINO Pickleball Courts
 GCash / G-Xchange
-Mobile number 0945 510 7667
+Mobile number 0998 123 4567
 Amount PHP 1,080.00
 Transaction ID GTY2026083112345678
 InstaPay Ref No 987654321234
@@ -52,9 +52,9 @@ const MARIBANK_OCR = `
 MariBank
 Money sent
 Recipient
-Paddle Rage Pickleball
+CHINO Pickleball Courts
 GCash
-Account number 0945-510-7667
+Account number 0998-123-4567
 Amount PHP 1,080.00
 Reference No MB2026083198765432
 InstaPay Reference No 987654321234
@@ -63,8 +63,8 @@ via InstaPay
 `;
 
 const GCASH_OCR = `
-PADDLE RAGE PICKLEBALL
-+63 945 510 7667
+CHINO PICKLEBALL COURTS
++63 998 123 4567
 Sent via GCash
 Amount
 1,080.00
@@ -78,7 +78,7 @@ const REORDERED_GCASH_OCR = `
 Amount
 Express Send
 J•• KE••••H M.
-+63 945 510 7667
++63 998 123 4567
 Sent via GCash
 Total Amount Sent
 55
@@ -98,7 +98,7 @@ Transaction Ref. No. 099408
 Sent via BPI
 Transfer to
 GCash/G-Xchange
-PaddleRage (QR Code)
+CHINO (QR Code)
 XXXXXXXXXXXXNS8
 Transfer amount
 PHP 3,600.00
@@ -121,9 +121,9 @@ Service Fee
 PHP 0.00
 Send Money via InstaPay
 To
-PaddleRage
+CHINO
 G-XCHANGE, INC. / GCASH
-DWQM4TK3JDO9O0NS8
+CHINOTEST0000NS8
 From
 Meriam Plaza
 •••• •••• 5751
@@ -140,8 +140,8 @@ Deno.test("dispatches clean dedicated BDO Pay evidence", () => {
     ...CONTEXT,
     typedReference,
     expectedAmount: 1600,
-    expectedRecipientName: "PaddleRage",
-    expectedRecipientAccount: "DWQM4TK3JDO9O0NS8",
+    expectedRecipientName: "CHINO",
+    expectedRecipientAccount: "CHINOTEST0000NS8",
     bookingStartedAt: "2026-09-02T11:05:00.000Z",
     bookingStartedDate: "2026-09-02",
   });
@@ -270,7 +270,7 @@ Deno.test("GCash verifier catches a labeled amount contradicting the total block
     "gcash",
     `
 J•• KE••••H M.
-+63 945 510 7667
++63 998 123 4567
 Sent via GCash
 Amount P3,500.00
 Amount P3,500.00
@@ -384,7 +384,7 @@ Deno.test("GCash verifier rejects descriptive or same-line amount lookalikes", (
       "gcash",
       `
 J•• KE••••H M.
-+63 945 510 7667
++63 998 123 4567
 Sent via GCash
 Amount
 Total Amount Sent
@@ -460,8 +460,8 @@ Deno.test("parses and verifies the live BPI-to-GCash receipt layout", () => {
     ...CONTEXT,
     typedReference,
     expectedAmount: 3600,
-    expectedRecipientName: "PaddleRage",
-    expectedRecipientAccount: "DWQM4TK3JDO9O0NS8",
+    expectedRecipientName: "CHINO",
+    expectedRecipientAccount: "CHINOTEST0000NS8",
     bookingStartedAt: "2026-09-01T23:06:00.000Z",
     bookingStartedDate: "2026-09-02",
   });
@@ -503,8 +503,8 @@ Deno.test("BPI typed confirmation is comparison-only and mismatches fail closed"
     ...CONTEXT,
     typedReference: "1624507073999",
     expectedAmount: 3600,
-    expectedRecipientName: "PaddleRage",
-    expectedRecipientAccount: "DWQM4TK3JDO9O0NS8",
+    expectedRecipientName: "CHINO",
+    expectedRecipientAccount: "CHINOTEST0000NS8",
     bookingStartedAt: "2026-09-01T23:06:00.000Z",
     bookingStartedDate: "2026-09-02",
   });
@@ -522,7 +522,7 @@ Deno.test("BPI missing transaction or wrong recipient stays in review", () => {
     "bpi",
     BPI_OCR
       .replace("Transaction Ref. No. 099408", "")
-      .replace("PaddleRage (QR Code)", "Another Merchant (QR Code)"),
+      .replace("CHINO (QR Code)", "Another Merchant (QR Code)"),
     { typedReference },
   );
   assert(parsed.provider === "bpi", "BPI provider");
@@ -530,8 +530,8 @@ Deno.test("BPI missing transaction or wrong recipient stays in review", () => {
     ...CONTEXT,
     typedReference,
     expectedAmount: 3600,
-    expectedRecipientName: "PaddleRage",
-    expectedRecipientAccount: "DWQM4TK3JDO9O0NS8",
+    expectedRecipientName: "CHINO",
+    expectedRecipientAccount: "CHINOTEST0000NS8",
     bookingStartedAt: "2026-09-01T23:06:00.000Z",
     bookingStartedDate: "2026-09-02",
   });

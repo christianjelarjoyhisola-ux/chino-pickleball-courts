@@ -21,7 +21,7 @@ function assert(condition: unknown, message: string): asserts condition {
 
 const USER_GCASH_OCR = `
 J•• KE••••H M.
-+63 945 510 7667
++63 998 123 4567
 Sent via GCash
 Amount
 12.00
@@ -33,7 +33,7 @@ By going digital, you reduce your carbon footprint.
 `;
 
 const EXPECTED_RECIPIENT = {
-  phone: "09455107667",
+  phone: "09981234567",
   name: "Jan Kennith Magallano",
 };
 
@@ -69,12 +69,12 @@ Deno.test("parses the supplied masked-name GCash receipt", () => {
   assertEquals(parsed.timestamp.completeness, "date_time", "timestamp");
   assertEquals(
     parsed.receiver.phone.raw,
-    "+63 945 510 7667",
+    "+63 998 123 4567",
     "receiver phone raw",
   );
   assertEquals(
     parsed.receiver.phone.normalized,
-    "9455107667",
+    "9981234567",
     "receiver phone normalized",
   );
   assertEquals(parsed.receiver.phone.visibility, "full", "phone visibility");
@@ -177,7 +177,7 @@ Deno.test("does not overstate a masked name with too few visible letters", () =>
 Deno.test("a wrong full receiver phone cannot be rescued by the name", () => {
   const parsed = parseGcashReceipt(
     USER_GCASH_OCR.replace(
-      "+63 945 510 7667",
+      "+63 998 123 4567",
       "+63 945 510 9999",
     ),
   );
@@ -196,8 +196,8 @@ Deno.test("a wrong full receiver phone cannot be rescued by the name", () => {
 Deno.test("phone last four digits elsewhere cannot create a receiver match", () => {
   const parsed = parseGcashReceipt(
     USER_GCASH_OCR
-      .replace("+63 945 510 7667\n", "")
-      .replace("2043350406766", "2043350407667"),
+      .replace("+63 998 123 4567\n", "")
+      .replace("2043350406766", "2043350404567"),
   );
   const comparison = compareGcashRecipient(
     parsed.receiver,
@@ -210,26 +210,26 @@ Deno.test("phone last four digits elsewhere cannot create a receiver match", () 
 Deno.test("normalizes supported full Philippine mobile formats", () => {
   for (
     const value of [
-      "0945 510 7667",
-      "+63 945 510 7667",
-      "945-510-7667",
+      "0998 123 4567",
+      "+63 998 123 4567",
+      "998-123-4567",
     ]
   ) {
     assertEquals(
       normalizeGcashMobile(value),
-      "9455107667",
+      "9981234567",
       `normalize ${value}`,
     );
   }
   assertEquals(normalizeGcashMobile("945510766"), null, "short mobile");
-  assertEquals(normalizeGcashMobile("94551076670"), null, "long mobile");
+  assertEquals(normalizeGcashMobile("99812345670"), null, "long mobile");
 });
 
 Deno.test("parses a masked receiver phone as last-four evidence only", () => {
   const parsed = parseGcashReceipt(
     USER_GCASH_OCR.replace(
-      "+63 945 510 7667",
-      "+63 9•• ••• 7667",
+      "+63 998 123 4567",
+      "+63 9•• ••• 4567",
     ),
   );
   const comparison = compareGcashRecipient(
@@ -238,7 +238,7 @@ Deno.test("parses a masked receiver phone as last-four evidence only", () => {
   );
   assertEquals(parsed.receiver.phone.visibility, "masked", "masked phone");
   assertEquals(parsed.receiver.phone.normalized, null, "no invented phone");
-  assertEquals(parsed.receiver.phone.last4, "7667", "visible last four");
+  assertEquals(parsed.receiver.phone.last4, "4567", "visible last four");
   assertEquals(comparison.phone, "last4_only", "partial phone comparison");
 });
 

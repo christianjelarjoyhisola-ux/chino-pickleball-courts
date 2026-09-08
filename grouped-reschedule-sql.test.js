@@ -28,7 +28,7 @@ test('every selected child has a bounded, typed schedule with its complete origi
   assert.match(sql, /'expectedCourtId' is distinct from booking\.court_id/);
   assert.match(sql, /expected_slots is distinct from original_slots/);
   assert.match(sql, /duration_hours := cardinality\(original_slots\)/);
-  assert.match(sql, /date '2026-09-19'/);
+  assert.match(sql, /public\.court_opening_date\(\)/);
   assert.match(sql, /statement_timestamp\(\)\)::date \+ 366/);
   assert.match(sql, /requested_start \+ duration_hours > 24/);
 });

@@ -114,7 +114,7 @@ begin
        or new.forfeiture_reason is distinct from old.forfeiture_reason
        or new.status = 'forfeited'
        or new.payment_status = 'deposit_retained' then
-      raise exception 'Balance deadlines and forfeiture records are managed by Paddle Rage Pickleball.'
+      raise exception 'Balance deadlines and forfeiture records are managed by CHINO Pickleball.'
         using errcode = '42501';
     end if;
   end if;
@@ -248,11 +248,11 @@ begin
     'process-host-balance-deadlines',
     '*/15 * * * *',
     $job$select net.http_post(
-      -- Dedicated Paddle Rage Supabase project.
-      url := 'https://qhvrowoqeyeypmefwkha.supabase.co/functions/v1/process-host-balance-deadlines',
+      -- Dedicated CHINO Supabase project.
+      url := public.chino_project_url() || '/functions/v1/process-host-balance-deadlines',
       headers := '{"Content-Type":"application/json"}'::jsonb,
       body := '{"source":"database-cron"}'::jsonb
-    );$job$
+    ) where public.chino_project_url() is not null;$job$
   );
 end;
 $$;

@@ -59,11 +59,12 @@ test('database settlement contracts explicitly allow the dedicated BPI parser', 
   assert.match(migration, /when ''bpi'' then ''bpi_to_gcash_v1''/);
   assert.match(
     migration,
-    /values \('bpi_receipt_recipient_name', 'PaddleRage'\)[\s\S]*?on conflict \(key\) do nothing/,
+    /values \('bpi_receipt_recipient_name', ''\)[\s\S]*?on conflict \(key\) do nothing/,
   );
   assert.match(sharedIdentityMigration, /'gcash_qr_receipt_recipient_name'/);
   assert.match(sharedIdentityMigration, /'gcash_qr_receipt_destination_token'/);
-  assert.match(sharedIdentityMigration, /'DWQM4TK3JDO9O0NS8'/);
+  assert.doesNotMatch(sharedIdentityMigration, /DWQM4TK3JDO9O0NS8/);
+  assert.match(sharedIdentityMigration, /'gcash_qr_receipt_destination_token',[\s\S]*?coalesce\([\s\S]*?'bdopay_receipt_destination_token'[\s\S]*?,\s*''\s*\)/);
 });
 
 test('staff audit modal identifies and explains dedicated BPI verification', () => {

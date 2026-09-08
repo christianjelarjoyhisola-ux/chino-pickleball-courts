@@ -54,7 +54,7 @@ begin
           and account.status = 'active'
           and account.role in ('owner', 'court_owner')
      ) then
-    raise exception 'An active Paddle Rage owner account is required.'
+    raise exception 'An active CHINO owner account is required.'
       using errcode = '42501';
   end if;
 
@@ -152,7 +152,7 @@ begin
       slot_reason := null;
       slot_label := 'Available';
 
-      if p_date < date '2026-09-19' then
+      if p_date < public.court_opening_date() then
         slot_state := 'unavailable';
         slot_reason := 'pre_opening';
         slot_label := 'Not open yet';

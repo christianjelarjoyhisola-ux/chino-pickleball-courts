@@ -1,3 +1,6 @@
+[CmdletBinding()]
+param([switch]$PrepareOnly)
+
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
@@ -34,8 +37,13 @@ if (-not $env:CLOUDFLARE_API_TOKEN) {
   Write-Host "No Cloudflare API token supplied; using the existing Wrangler OAuth session."
 }
 
-$projectName = if ($envMap["CLOUDFLARE_PAGES_PROJECT"]) { $envMap["CLOUDFLARE_PAGES_PROJECT"] } else { "paddle-rage-pickleball" }
+$projectName = if ($envMap["CLOUDFLARE_PAGES_PROJECT"]) { $envMap["CLOUDFLARE_PAGES_PROJECT"] } else { "chinopickleball" }
 $branchName = if ($envMap["CLOUDFLARE_PAGES_BRANCH"]) { $envMap["CLOUDFLARE_PAGES_BRANCH"] } else { "main" }
+$browserConfig = Get-Content -LiteralPath (Join-Path $repoRoot 'supabase-config.js') -Raw
+if ($browserConfig -notmatch "const SUPABASE_URL = 'https://mtomskztsvljvzgmewav.supabase.co'" -or
+    $browserConfig -match "const SUPABASE_ANON_KEY = 'YOUR_") {
+  throw 'CHINO deployment requires its dedicated Supabase project and configured public key.'
+}
 
 $publicFiles = @(
   "_headers",
@@ -62,12 +70,9 @@ $publicFiles = @(
   "chart.min.js",
   "host.html",
   "index.html",
-  "linkimage.jpg",
-  "paddleragelogo.jpg",
-  "paddleragelogo-transparent.png",
-  "paddle-rage-grunge-edge.png",
-  "paddle-rage-word-paddle.png",
-  "paddle-rage-word-rage.png",
+  "assets/chino-courts.png",
+  "assets/chino-mark.svg",
+  "assets/chino-wordmark.svg",
   "login.html",
   "manage-booking.html",
   "manage-booking.css",
@@ -86,7 +91,9 @@ $publicFiles = @(
   "splash-music.mp3"
 )
 
-$stagingDir = Join-Path $repoRoot ".cf-pages-deploy"
+$stagingDir = [IO.Path]::GetFullPath((Join-Path $repoRoot ".cf-pages-deploy"))
+if ($stagingDir -ne [IO.Path]::GetFullPath((Join-Path $repoRoot ".cf-pages-deploy"))) { throw "Unsafe staging path." }
+if ($projectName -ne "chinopickleball") { throw "This release is restricted to the CHINO Pages project." }
 if (Test-Path -LiteralPath $stagingDir) {
   Remove-Item -LiteralPath $stagingDir -Recurse -Force
 }
@@ -103,6 +110,11 @@ foreach ($file in $publicFiles) {
     New-Item -ItemType Directory -Path $destinationDir -Force | Out-Null
   }
   Copy-Item -LiteralPath $source -Destination $destination -Force
+}
+
+if ($PrepareOnly) {
+  Write-Host "CHINO public release prepared: $stagingDir"
+  return
 }
 
 $wranglerCli = Get-Command "wrangler.cmd" -CommandType Application -ErrorAction SilentlyContinue

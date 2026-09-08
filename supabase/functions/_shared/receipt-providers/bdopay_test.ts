@@ -17,9 +17,9 @@ Service Fee
 PHP 0.00
 Send Money via InstaPay
 To
-PaddleRage
+CHINO
 G-XCHANGE, INC. / GCASH
-DWQM4TK3JDO9O0NS8
+CHINOTEST0000NS8
 From
 Meriam Plaza
 •••• •••• 5751
@@ -34,8 +34,8 @@ const CONTEXT = {
   expectedAmount: 1600,
   pricingAvailable: true,
   amountTolerance: 0.01,
-  expectedRecipientName: "PaddleRage",
-  expectedRecipientAccount: "DWQM4TK3JDO9O0NS8",
+  expectedRecipientName: "CHINO",
+  expectedRecipientAccount: "CHINOTEST0000NS8",
   bookingStartedAt: "2026-09-02T11:05:00.000Z",
   bookingStartedDate: "2026-09-02",
   paymentWindowMinutes: 15,
@@ -77,9 +77,9 @@ Deno.test("BDO Pay parser verifies the supplied live receipt layout", () => {
     parsed.timestamp.instant === "2026-09-02T11:07:00.000Z",
     `Manila timestamp: ${parsed.timestamp.instant}`,
   );
-  assert(parsed.recipient.nameNormalized === "PADDLERAGE", "recipient name");
+  assert(parsed.recipient.nameNormalized === "CHINO", "recipient name");
   assert(
-    parsed.recipient.accountNormalized === "DWQM4TK3JDO9O0NS8",
+    parsed.recipient.accountNormalized === "CHINOTEST0000NS8",
     "destination token",
   );
   assert(evidence.flags.length === 0, JSON.stringify(evidence.flags));
@@ -146,11 +146,11 @@ Deno.test("BDO Pay reference date must corroborate the receipt timestamp", () =>
 
 Deno.test("BDO Pay requires the exact receipt identity and GCash destination", () => {
   assertFlag(
-    RECEIPT.replace("PaddleRage", "Different Merchant"),
+    RECEIPT.replace("CHINO", "Different Merchant"),
     "RECEIVER_NAME_MISMATCH",
   );
   assertFlag(
-    RECEIPT.replace("DWQM4TK3JDO9O0NS8", "OTHER1DESTINATION99"),
+    RECEIPT.replace("CHINOTEST0000NS8", "OTHER1DESTINATION99"),
     "RECEIVER_ACCOUNT_MISMATCH",
   );
   assertFlag(

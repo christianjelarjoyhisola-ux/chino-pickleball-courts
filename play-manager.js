@@ -28,7 +28,7 @@
     clockTimer: null,
   };
 
-  const SHARE_TOKEN_STORE = "paddle_rage_play_manager_share_tokens_v1";
+  const SHARE_TOKEN_STORE = "chino_play_manager_share_tokens_v1";
   const DEFAULT_SKILL_LEVEL = 3;
   const PERFORMANCE = window.PBOpenPlayRating;
   const RANKING_MODE_PERFORMANCE = PERFORMANCE?.RANKING_MODE_PERFORMANCE || "performance";
@@ -878,14 +878,14 @@
       <section
         class="pm2 ${state.displayMode ? "pm2-display" : ""}"
         data-pm-scroll-context="${escapeHtml(scrollContext)}"
-        aria-label="Paddle Rage Play Manager"
+        aria-label="CHINO Play Manager"
       >
         <header class="pm2-header">
           <div class="pm2-brand">
-            <img class="pm2-brand-mark" src="paddleragelogo-transparent.png" alt="">
+            <img class="pm2-brand-mark" src="assets/chino-mark.svg" alt="">
             <div class="pm2-brand-copy">
               <span class="pm2-brand-kicker">Open Play</span>
-              <h2>Paddle Rage Play Manager</h2>
+              <h2>CHINO Play Manager</h2>
             </div>
           </div>
           <div class="pm2-header-stats" aria-label="${completed ? "Completed session totals" : "Live session totals"}">
@@ -1342,7 +1342,7 @@
         <div>
           <span class="pm2-eyebrow">Session setup</span>
           <h1>Build today’s open play.</h1>
-          <p>Choose the courts, load the roster, and launch a balanced rotation. Results and queue changes save to the existing Paddle Rage game-manager records.</p>
+          <p>Choose the courts, load the roster, and launch a balanced rotation. Results and queue changes save to the existing CHINO game-manager records.</p>
         </div>
         ${state.session ? `<button class="pm2-btn pm2-btn-light" type="button" data-pm-action="continue-live" ${state.rounds.length ? "" : "disabled"}>Continue Live</button>` : ""}
       </div>
@@ -1907,7 +1907,7 @@
       .slice(0, 2)
       .map(part => part.charAt(0))
       .join("")
-      .toUpperCase() || "PR";
+      .toUpperCase() || "C";
   }
 
   function finalPodiumMarkup(rows) {
@@ -3541,7 +3541,7 @@
     }
     try {
       await navigator.share({
-        title: "Paddle Rage Live Board",
+        title: "CHINO Live Board",
         text: `Follow live courts and the queue for ${sessionTitle()}.`,
         url,
       });
@@ -3572,7 +3572,7 @@
     const round = lastRound();
     if (!round) return;
     const lines = [
-      `Paddle Rage Open Play · ${sessionTitle()}`,
+      `CHINO Open Play · ${sessionTitle()}`,
       `Round ${round.round_no || state.rounds.length}`,
       ...liveAssignments(round).map(game =>
         game.winner
@@ -3645,7 +3645,7 @@
       const image = new Image();
       image.onload = () => resolve(image);
       image.onerror = () => resolve(null);
-      image.src = "paddleragelogo-transparent.png";
+      image.src = "assets/chino-mark.svg";
     });
   }
 
@@ -3808,7 +3808,7 @@
 
     context.beginPath();
     context.arc(1320, 20, 210, 0, Math.PI * 2);
-    context.strokeStyle = "rgba(201,243,29,.12)";
+    context.strokeStyle = "rgba(71, 136, 201,.12)";
     context.lineWidth = 48;
     context.stroke();
 
@@ -3818,21 +3818,21 @@
     } else {
       context.beginPath();
       context.arc(126, 102, 52, 0, Math.PI * 2);
-      context.fillStyle = "#c9f31d";
+      context.fillStyle = "#4788c9";
       context.fill();
       context.textAlign = "center";
       context.textBaseline = "middle";
       context.fillStyle = "#111827";
       context.font = '950 24px "DM Sans", "Segoe UI", sans-serif';
-      context.fillText("PR", 126, 103);
+      context.fillText("C", 126, 103);
     }
 
     context.textAlign = "left";
     context.textBaseline = "alphabetic";
     context.fillStyle = "#ffffff";
     context.font = '950 31px "DM Sans", "Segoe UI", sans-serif';
-    context.fillText("PADDLE RAGE PICKLEBALL", 205, 91);
-    context.fillStyle = "#c9f31d";
+    context.fillText("CHINO PICKLEBALL COURTS", 205, 91);
+    context.fillStyle = "#4788c9";
     context.font = '900 20px "DM Sans", "Segoe UI", sans-serif';
     context.fillText("OFFICIAL OPEN PLAY RESULTS", 207, 124);
 
@@ -3856,7 +3856,7 @@
     resultCanvasWrapText(context, sessionTitle(), 1250, 2).forEach((line, index) => {
       context.fillText(line, 72, 294 + index * 34);
     });
-    context.fillStyle = "#dfff73";
+    context.fillStyle = "#93b9e0";
     context.font = '850 24px "DM Sans", "Segoe UI", sans-serif';
     context.fillText(
       isCompetitiveMode()
@@ -3874,7 +3874,7 @@
     context.fillStyle = "#718096";
     context.font = '750 21px "DM Sans", "Segoe UI", sans-serif';
     context.fillText(
-      hasPodiumDecider ? "Official places remain TBD until one separating result is recorded." : "Paddle Rage podium",
+      hasPodiumDecider ? "Official places remain TBD until one separating result is recorded." : "CHINO podium",
       72,
       480
     );
@@ -3964,14 +3964,14 @@
     context.fillStyle = "#111827";
     context.fillRect(0, footerY, canvasWidth, footerHeight);
     context.textAlign = "left";
-    context.fillStyle = "#c9f31d";
+    context.fillStyle = "#4788c9";
     context.font = '900 22px "DM Sans", "Segoe UI", sans-serif';
-    context.fillText("PADDLE RAGE PICKLEBALL", 72, footerY + 40);
+    context.fillText("CHINO PICKLEBALL COURTS", 72, footerY + 40);
     context.fillStyle = "#91a0b4";
     context.font = '700 20px "DM Sans", "Segoe UI", sans-serif';
     context.fillText(hasPodiumDecider ? "Podium pending • Decider required" : "Official session result", 72, footerY + 68);
     const poweredLabel = "Powered by ";
-    const poweredBrand = "Paddle Rage Pickleball CDO";
+    const poweredBrand = "CHINO Pickleball Courts";
     context.font = '700 18px "DM Sans", "Segoe UI", sans-serif';
     const poweredLabelWidth = context.measureText(poweredLabel).width;
     context.font = '850 18px "DM Sans", "Segoe UI", sans-serif';
@@ -3982,7 +3982,7 @@
     context.font = '700 18px "DM Sans", "Segoe UI", sans-serif';
     context.fillText(poweredLabel, poweredX, footerY + 56);
     poweredX += poweredLabelWidth;
-    context.fillStyle = "#c9f31d";
+    context.fillStyle = "#4788c9";
     context.font = '850 18px "DM Sans", "Segoe UI", sans-serif';
     context.fillText(poweredBrand, poweredX, footerY + 56);
     context.textAlign = "right";
@@ -3995,12 +3995,12 @@
     const resultUrl = URL.createObjectURL(resultBlob);
     const link = document.createElement("a");
     link.href = resultUrl;
-    link.download = `paddle-rage-results-${state.session?.date || localDateValue()}.png`;
+    link.download = `chino-results-${state.session?.date || localDateValue()}.png`;
     document.body.appendChild(link);
     link.click();
     link.remove();
     setTimeout(() => URL.revokeObjectURL(resultUrl), 0);
-    notify("Branded Paddle Rage result downloaded.");
+    notify("Branded CHINO result downloaded.");
   }
 
   function exportCsv() {
@@ -4069,7 +4069,7 @@
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = `paddle-rage-play-manager-${state.session?.date || localDateValue()}.csv`;
+    link.download = `chino-play-manager-${state.session?.date || localDateValue()}.csv`;
     link.click();
     URL.revokeObjectURL(link.href);
     notify("Standings CSV exported.");

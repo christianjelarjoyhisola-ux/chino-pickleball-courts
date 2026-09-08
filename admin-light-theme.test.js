@@ -120,7 +120,7 @@ test('mobile WebKit uses a low-compositing admin shell while scrolling', () => {
 });
 
 test('live dashboard refreshes are serialized and mobile charts reuse capped canvases', () => {
-  const realtime = sourceBetween('let _admRtDebounce=null;', '   PADDLE RAGE INSIGHTS');
+  const realtime = sourceBetween('let _admRtDebounce=null;', '   CHINO INSIGHTS');
   const charts = sourceBetween('function renderDashCharts(', '   BOOKINGS');
 
   assert.match(realtime, /_admRtRefreshInFlight/);

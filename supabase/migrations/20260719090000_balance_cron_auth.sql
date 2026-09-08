@@ -20,7 +20,7 @@ begin
     perform vault.create_secret(
       encode(extensions.gen_random_bytes(32), 'hex'),
       'paddle_rage_balance_cron_secret',
-      'Authenticates the Paddle Rage host-balance pg_cron request.'
+      'Authenticates the CHINO host-balance pg_cron request.'
     );
   end if;
 end;
@@ -66,7 +66,7 @@ begin
     '*/15 * * * *',
     $job$
       select net.http_post(
-        url := 'https://qhvrowoqeyeypmefwkha.supabase.co/functions/v1/process-host-balance-deadlines',
+        url := public.chino_project_url() || '/functions/v1/process-host-balance-deadlines',
         headers := jsonb_build_object(
           'Content-Type', 'application/json',
           'x-cron-secret', (
@@ -77,7 +77,7 @@ begin
           )
         ),
         body := '{"source":"database-cron"}'::jsonb
-      );
+      ) where public.chino_project_url() is not null;
     $job$
   );
 end;

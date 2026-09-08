@@ -3,12 +3,12 @@
   --navy-900: #0b2d4d;
   --navy-800: #143d63;
   --navy-700: #1d527f;
-  --lime: #cbdc48;
-  --lime-bright: #dff567;
-  --lime-soft: #f4f8d9;
+  --lime: #b9d2e8;
+  --lime-bright: #d6e7f4;
+  --lime-soft: #edf4fa;
   --orange: #c95c3f;
-  --canvas: #f6f3ec;
-  --surface: #fffdfa;
+  --canvas: #f2f5f7;
+  --surface: #ffffff;
   --surface-soft: #f5f7f7;
   --text: #102a43;
   --muted: #52677a;
@@ -43,7 +43,7 @@ body {
   min-height: 100vh;
   margin: 0;
   background:
-    radial-gradient(circle at 10% 8%, rgba(203, 220, 72, 0.12), transparent 25rem),
+    radial-gradient(circle at 10% 8%, rgba(62, 121, 181, 0.12), transparent 25rem),
     radial-gradient(circle at 96% 82%, rgba(20, 61, 99, 0.09), transparent 31rem),
     var(--canvas);
   color: var(--text);
@@ -131,7 +131,7 @@ input {
   width: 48px;
   height: 48px;
   border: 1px solid rgba(20, 61, 99, 0.18);
-  border-radius: 50%;
+  border-radius: 12px;
   background: #fff;
   object-fit: contain;
   padding: 2px;
@@ -207,10 +207,10 @@ input {
 .page-heading h1 {
   margin: 0;
   color: var(--navy-900);
-  font-family: "Bebas Neue", Impact, sans-serif;
+  font-family: "Outfit", system-ui, sans-serif;
   font-size: clamp(2.35rem, 4vw, 3.35rem);
   font-weight: 400;
-  letter-spacing: 0.025em;
+  letter-spacing: -0.04em;
   line-height: 0.98;
 }
 
@@ -295,10 +295,10 @@ input {
 .brand-panel h2 {
   max-width: 350px;
   margin: 12px 0 13px;
-  font-family: "Bebas Neue", Impact, sans-serif;
+  font-family: "Outfit", system-ui, sans-serif;
   font-size: clamp(2rem, 3.2vw, 3rem);
   font-weight: 400;
-  letter-spacing: 0.025em;
+  letter-spacing: -0.035em;
   line-height: 1.02;
 }
 
@@ -333,7 +333,7 @@ input {
   height: 22px;
   place-items: center;
   border-radius: 50%;
-  background: rgba(203, 220, 72, 0.16);
+  background: rgba(62, 121, 181, 0.16);
   color: var(--lime-bright);
   font-size: 0.72rem;
 }
@@ -350,7 +350,7 @@ input {
 .brand-orbit {
   top: -86px;
   right: -90px;
-  border: 1px solid rgba(203, 220, 72, 0.34);
+  border: 1px solid rgba(62, 121, 181, 0.34);
 }
 
 .brand-orbit-one {
@@ -371,7 +371,7 @@ input {
   width: 95px;
   height: 95px;
   background: var(--lime-bright);
-  box-shadow: inset -12px -14px 0 rgba(77, 99, 14, 0.09);
+  box-shadow: inset -12px -14px 0 rgba(25, 57, 88, 0.09);
 }
 
 .brand-dot {
@@ -422,10 +422,10 @@ input {
   margin-top: 22px;
   padding: 16px;
   overflow: hidden;
-  border: 1px solid rgba(203, 220, 72, 0.42);
+  border: 1px solid rgba(62, 121, 181, 0.42);
   border-radius: 16px;
   background:
-    radial-gradient(circle at 92% 0%, rgba(223, 245, 103, 0.15), transparent 11rem),
+    radial-gradient(circle at 92% 0%, rgba(129, 174, 219, 0.15), transparent 11rem),
     linear-gradient(135deg, var(--navy-950), var(--navy-800));
   color: #fff;
   box-shadow: 0 14px 30px rgba(6, 26, 44, 0.16);
@@ -447,7 +447,7 @@ input {
   width: 46px;
   height: 46px;
   place-items: center;
-  border: 1px solid rgba(223, 245, 103, 0.42);
+  border: 1px solid rgba(129, 174, 219, 0.42);
   border-radius: 14px;
   background: linear-gradient(145deg, var(--lime-bright), var(--lime));
   color: var(--navy-950);
@@ -494,10 +494,10 @@ input {
   align-items: center;
   min-height: 23px;
   padding: 4px 8px;
-  border: 1px solid rgba(223, 245, 103, 0.36);
+  border: 1px solid rgba(129, 174, 219, 0.36);
   border-radius: 999px;
-  background: rgba(223, 245, 103, 0.1);
-  color: #f4ffc1;
+  background: rgba(129, 174, 219, 0.1);
+  color: #cfe0f1;
   letter-spacing: 0.07em;
 }
 
@@ -726,7 +726,7 @@ input {
   padding: 12px 14px;
   border: 1px solid rgba(20, 122, 73, 0.2);
   border-radius: 12px;
-  background: linear-gradient(135deg, var(--success-soft), #f7fbe7);
+  background: linear-gradient(135deg, var(--success-soft), #e9f1f9);
   color: var(--text);
   box-shadow: 0 5px 16px rgba(8, 33, 54, 0.045);
 }
@@ -807,11 +807,11 @@ input {
 body.owner-preview-active .lookup-button {
   background: linear-gradient(145deg, var(--lime-bright), var(--lime));
   color: var(--navy-950);
-  box-shadow: 0 10px 24px rgba(124, 148, 28, 0.23);
+  box-shadow: 0 10px 24px rgba(40, 88, 136, 0.23);
 }
 
 body.owner-preview-active .lookup-button:hover:not(:disabled) {
-  box-shadow: 0 13px 28px rgba(124, 148, 28, 0.31);
+  box-shadow: 0 13px 28px rgba(40, 88, 136, 0.31);
 }
 
 body.owner-preview-active .lookup-button.is-loading .button-arrow {
@@ -826,7 +826,7 @@ body.owner-preview-active .lookup-button.is-loading .button-arrow {
 }
 
 .result-region:focus-visible {
-  box-shadow: 0 0 0 4px rgba(203, 220, 72, 0.36);
+  box-shadow: 0 0 0 4px rgba(62, 121, 181, 0.36);
 }
 
 .empty-state {
@@ -1383,7 +1383,7 @@ body.has-reschedule-dialog {
   padding: 24px 25px 21px;
   overflow: hidden;
   background:
-    radial-gradient(circle at 88% -40%, rgba(223, 245, 103, 0.26), transparent 16rem),
+    radial-gradient(circle at 88% -40%, rgba(129, 174, 219, 0.26), transparent 16rem),
     linear-gradient(135deg, var(--navy-950), var(--navy-800));
   color: #fff;
 }
@@ -1394,7 +1394,7 @@ body.has-reschedule-dialog {
   bottom: -68px;
   width: 160px;
   height: 160px;
-  border: 1px solid rgba(223, 245, 103, 0.24);
+  border: 1px solid rgba(129, 174, 219, 0.24);
   border-radius: 50%;
   content: "";
   pointer-events: none;
@@ -1456,7 +1456,7 @@ body.has-reschedule-dialog {
   gap: 9px;
   align-items: center;
   padding: 10px 25px;
-  border-bottom: 1px solid rgba(203, 220, 72, 0.3);
+  border-bottom: 1px solid rgba(62, 121, 181, 0.3);
   background: var(--lime-soft);
   color: var(--navy-800);
   font-size: 0.75rem;
@@ -1619,7 +1619,7 @@ body.has-reschedule-dialog {
 .reschedule-field input:focus,
 .reschedule-field textarea:focus {
   border-color: var(--navy-700);
-  outline: 3px solid rgba(203, 220, 72, 0.45);
+  outline: 3px solid rgba(62, 121, 181, 0.45);
   outline-offset: 1px;
 }
 
@@ -1735,8 +1735,8 @@ body.has-reschedule-dialog {
 }
 
 .reschedule-comparison-card.is-new {
-  border-color: rgba(203, 220, 72, 0.75);
-  background: linear-gradient(145deg, #fbffe9, #fff);
+  border-color: rgba(62, 121, 181, 0.75);
+  background: linear-gradient(145deg, #eef4fa, #fff);
 }
 
 .reschedule-comparison-label {

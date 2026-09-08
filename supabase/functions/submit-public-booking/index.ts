@@ -6,7 +6,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
-const PUBLIC_COURT_OPENING_DATE = "2026-09-19";
+const PUBLIC_COURT_OPENING_DATE = "2026-01-01";
 
 function manilaToday(): string {
   const parts = Object.fromEntries(
@@ -81,7 +81,7 @@ function newBookingMessage(rows: Record<string, unknown>[]): string {
       timeZone: "Asia/Manila",
     });
   const adminUrl = Deno.env.get("APP_ADMIN_URL") ||
-    "https://paddleragecdo.ph/admin.html";
+    "https://chinopickleball.pages.dev/admin.html";
   return (
     `<b>NEW BOOKING</b>\n------------------\n` +
     `<b>${esc(primary.full_name)}</b>\n${
@@ -95,7 +95,7 @@ function newBookingMessage(rows: Record<string, unknown>[]): string {
     }</b>` +
     `\nTotal: ${fmtPHP(total)}` +
     `\nBooking ref: <code>${esc(displayRef)}</code>\n` +
-    `------------------\n<a href="${adminUrl}">Open the Paddle Rage dashboard.</a>`
+    `------------------\n<a href="${adminUrl}">Open the CHINO dashboard.</a>`
   );
 }
 

@@ -21,6 +21,9 @@ const mimeTypes = {
 function resolveRequestPath(requestUrl) {
   const pathname = decodeURIComponent(new URL(requestUrl, `http://${host}:${port}`).pathname);
   const relative = pathname === '/' ? 'index.html' : pathname.replace(/^\/+/, '');
+  const segments = relative.split(/[\\/]/);
+  if (segments.some(segment => segment.startsWith('.')) ||
+      ['node_modules', 'supabase', 'tools'].includes(segments[0])) return null;
   let candidate = path.resolve(root, relative);
 
   if (!candidate.startsWith(root + path.sep)) return null;
@@ -65,7 +68,7 @@ const server = http.createServer((request, response) => {
 });
 
 server.listen(port, host, () => {
-  console.log(`Paddle Rage local server: http://${host}:${port}/?localData=1`);
+  console.log(`CHINO local server: http://${host}:${port}/?localData=1`);
 });
 
 function shutdown() {

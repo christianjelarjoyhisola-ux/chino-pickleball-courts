@@ -12,7 +12,7 @@ Transaction Ref. No. 099408
 Sent via BPI
 Transfer to
 GCash/G-Xchange
-PaddleRage (QR Code)
+CHINO (QR Code)
 XXXXXXXXXXXXNS8
 Transfer amount
 PHP 3,600.00
@@ -30,8 +30,8 @@ const CONTEXT = {
   expectedAmount: 3600,
   pricingAvailable: true,
   amountTolerance: 0.01,
-  expectedRecipientName: "PaddleRage",
-  expectedRecipientAccount: "DWQM4TK3JDO9O0NS8",
+  expectedRecipientName: "CHINO",
+  expectedRecipientAccount: "CHINOTEST0000NS8",
   bookingStartedAt: "2026-09-01T23:06:00.000Z",
   bookingStartedDate: "2026-09-02",
   paymentWindowMinutes: 15,
@@ -77,7 +77,7 @@ Deno.test("BPI parser preserves the visible QR account suffix for audit", () => 
 
 Deno.test("BPI verifier fails closed for the wrong recipient or destination", () => {
   assertFlag(
-    RECEIPT.replace("PaddleRage (QR Code)", "Different Merchant (QR Code)"),
+    RECEIPT.replace("CHINO (QR Code)", "Different Merchant (QR Code)"),
     "RECEIVER_NAME_MISMATCH",
   );
   assertFlag(

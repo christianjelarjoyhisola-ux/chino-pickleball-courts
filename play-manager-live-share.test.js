@@ -346,10 +346,10 @@ test("player view ships with private caching headers and the QR license", () => 
 test("player live board uses the transparent system logo without a badge background", () => {
   assert.match(
     playerPage,
-    /<img class="plb-brand-mark" src="paddleragelogo-transparent\.png" alt="" width="48" height="48" aria-hidden="true">/i
+    /<img class="plb-brand-mark" src="assets\/chino-mark\.svg" alt="" width="48" height="48" aria-hidden="true">/i
   );
   assert.doesNotMatch(playerPage, /class="plb-brand-mark"[^>]*>PR<\/span>/i);
-  assert.match(playerPage, /player-live\.css\?v=20260729-readable-type-v1/i);
+  assert.match(playerPage, /player-live\.css\?v=20260908-chino-v1/i);
   assert.match(
     playerCss,
     /\.plb-brand-mark\s*\{[\s\S]*?width:\s*48px[\s\S]*?height:\s*48px[\s\S]*?border:\s*0[\s\S]*?background:\s*transparent[\s\S]*?object-fit:\s*contain/i
@@ -796,7 +796,7 @@ test("Competitive decider notices, rows, and podium cards have dedicated visual 
   });
 });
 
-test("completed sessions download a branded Paddle Rage result image", () => {
+test("completed sessions download a branded CHINO result image", () => {
   const brandedDownload = manager.match(
     /async function downloadBrandedResult\(\) \{[\s\S]*?\r?\n  \}\r?\n\r?\n  function exportCsv/i
   )?.[0] || "";
@@ -805,8 +805,8 @@ test("completed sessions download a branded Paddle Rage result image", () => {
   assert.match(brandedDownload, /state\.session\?\.status[\s\S]*?completed/i);
   assert.match(brandedDownload, /document\.createElement\("canvas"\)/i);
   assert.match(brandedDownload, /loadResultBrandLogo\(\)/i);
-  assert.match(manager, /image\.src = "paddleragelogo-transparent\.png"/i);
-  assert.match(brandedDownload, /PADDLE RAGE PICKLEBALL/i);
+  assert.match(manager, /image\.src = "assets\/chino-mark\.svg"/i);
+  assert.match(brandedDownload, /CHINO PICKLEBALL COURTS/i);
   assert.match(
     brandedDownload,
     /SESSION COMPETITIVE PODIUM[\s\S]*?SESSION WIN % PODIUM[\s\S]*?SESSION PERFORMANCE PODIUM/i
@@ -838,7 +838,7 @@ test("completed sessions download a branded Paddle Rage result image", () => {
     /const isPrimaryCard = height >= 350[\s\S]*?const placeY = avatarY \+ avatarRadius \+ 30[\s\S]*?const nameY = placeY \+ 40[\s\S]*?const recordY = nameY \+ \(isPrimaryCard \? 72 : 62\)[\s\S]*?const metaY = y \+ height - \(isPrimaryCard \? 28 : 18\)/i
   );
   assert.match(brandedDownload, /canvas\.toBlob\(resolve, "image\/png"\)/i);
-  assert.match(brandedDownload, /paddle-rage-results-\$\{state\.session\?\.date \|\| localDateValue\(\)\}\.png/i);
+  assert.match(brandedDownload, /chino-results-\$\{state\.session\?\.date \|\| localDateValue\(\)\}\.png/i);
   assert.match(manager, /action === "download-result"[\s\S]*?withBusy\(downloadBrandedResult\)/i);
   assert.match(
     managerCss,
@@ -911,7 +911,7 @@ test("saved branded-results PNG keeps enlarged type readable in a compact dynami
   );
   assert.match(
     brandedDownload,
-    /const footerY = canvasHeight - footerHeight;[\s\S]*?const poweredLabel = "Powered by ";[\s\S]*?const poweredBrand = "Paddle Rage Pickleball CDO";[\s\S]*?context\.measureText\(poweredLabel\)[\s\S]*?context\.measureText\(poweredBrand\)[\s\S]*?context\.fillText\(poweredLabel, poweredX, footerY \+ 56\);[\s\S]*?context\.fillStyle = "#c9f31d";[\s\S]*?context\.fillText\(poweredBrand, poweredX, footerY \+ 56\);[\s\S]*?footerY \+ 54/i
+    /const footerY = canvasHeight - footerHeight;[\s\S]*?const poweredLabel = "Powered by ";[\s\S]*?const poweredBrand = "CHINO Pickleball Courts";[\s\S]*?context\.measureText\(poweredLabel\)[\s\S]*?context\.measureText\(poweredBrand\)[\s\S]*?context\.fillText\(poweredLabel, poweredX, footerY \+ 56\);[\s\S]*?context\.fillStyle = "#4788c9";[\s\S]*?context\.fillText\(poweredBrand, poweredX, footerY \+ 56\);[\s\S]*?footerY \+ 54/i
   );
 });
 
@@ -1299,7 +1299,7 @@ test("LIVE court card mirrors the READY card system with a cyan state treatment"
   assert.match(admin, /play-manager\.css\?v=20260729-dispatch-type-v2/i);
 });
 
-test("court cards share one compact height and use the modern indigo-coral team palette", () => {
+test("court cards share one compact height and use the modern court-blue and coral team palette", () => {
   const courtsRule = managerCss.match(/\.pm2-courts\s*\{([^}]*)\}/i)?.[1] || "";
   const cardRule = managerCss.match(/\.pm2-court-card\s*\{([^}]*)\}/i)?.[1] || "";
   const readyCourtRule = managerCss.match(/\.pm2-ready-court\s*\{([^}]*)\}/i)?.[1] || "";
@@ -1313,9 +1313,9 @@ test("court cards share one compact height and use the modern indigo-coral team 
   assert.match(readyCourtRule, /flex:\s*1 1 auto/i);
   assert.match(managerCss, /\.pm2-result-actions\s*\{[^}]*margin-top:\s*0/is);
 
-  assert.match(managerCss, /--pm2-blue:\s*#4f46e5/i);
+  assert.match(managerCss, /--pm2-blue:\s*#3e79b5/i);
   assert.match(managerCss, /--pm2-orange:\s*#e11d48/i);
-  assert.match(playerCss, /--plb-blue:\s*#4f46e5/i);
+  assert.match(playerCss, /--plb-blue:\s*#3e79b5/i);
   assert.match(playerCss, /--plb-orange:\s*#e11d48/i);
   assert.doesNotMatch(managerCss, /#1976d2|#ef6c00/i);
   assert.doesNotMatch(playerCss, /#1976d2|#ef6c00/i);
@@ -1895,7 +1895,7 @@ test("Play Manager dialogs share a modern, clean visual and copy system", () => 
   );
   assert.match(
     managerCss,
-    /\.pm2-choice:has\(input:checked\)\s*\{[\s\S]*?background:\s*#f8fce9/i
+    /\.pm2-choice:has\(input:checked\)\s*\{[\s\S]*?background:\s*#ecf3f9/i
   );
   assert.match(
     managerCss,
@@ -2025,7 +2025,7 @@ test("replacement dialog recommends the next queued player without auto-submitti
   assert.match(manager, /setTimeout\(\(\) => \(queue\.length \? select : nameInput\)\?\.focus\(\), 0\)/i);
   assert.match(
     managerCss,
-    /\.pm2-replace-next-badge\s*\{[\s\S]*?border-radius:\s*999px[\s\S]*?background:\s*#f3fbd7/i
+    /\.pm2-replace-next-badge\s*\{[\s\S]*?border-radius:\s*999px[\s\S]*?background:\s*#dde9f5/i
   );
   assert.match(
     managerCss,
@@ -2087,7 +2087,7 @@ test("admin hides the default dashboard until the restored section is ready", ()
   assert.match(admin, /id="adminBootSplash" role="status" aria-live="polite"/i);
   assert.match(
     admin,
-    /<img class="admin-boot-logo" src="paddleragelogo-transparent\.png" alt="Paddle Rage Pickleball">/i
+    /<img class="admin-boot-logo" src="assets\/chino-mark\.svg" alt="CHINO Pickleball Courts">/i
   );
   assert.doesNotMatch(admin, /class="admin-boot-mark"[^>]*>PR</i);
   assert.match(admin, /<div id="adminShell" inert aria-hidden="true">/i);
@@ -2148,7 +2148,7 @@ test("all same-context Play Manager rerenders preserve main and panel scroll", (
 test("Play Manager uses the system logo without a badge background", () => {
   assert.match(
     manager,
-    /<img class="pm2-brand-mark" src="paddleragelogo-transparent\.png" alt="">/i
+    /<img class="pm2-brand-mark" src="assets\/chino-mark\.svg" alt="">/i
   );
   assert.doesNotMatch(manager, /<div class="pm2-brand-mark"[^>]*>PR<\/div>/i);
   assert.match(

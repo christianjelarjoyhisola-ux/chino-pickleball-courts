@@ -27,7 +27,7 @@ payment
 Account type
 G-Xchange Inc. / GCash
 Account number
-09455107667
+09981234567
 Account name
 J..KE....H M.
 Transfer Fee
@@ -45,7 +45,7 @@ const CONTEXT = {
   expectedAmount: 800,
   pricingAvailable: true,
   amountTolerance: 0.01,
-  expectedRecipientNumber: "09455107667",
+  expectedRecipientNumber: "09981234567",
   expectedRecipientName: "Jan Kennith Magallano",
   bookingStartedAt: "2026-09-05T03:58:00.000Z",
   bookingStartedDate: "2026-09-05",
@@ -102,7 +102,7 @@ Deno.test("Maya parser verifies the supplied live Maya-to-GCash layout", () => {
   );
   assertEquals(
     parsed.recipient.phoneNormalized,
-    "9455107667",
+    "9981234567",
     "full destination mobile",
   );
   assertEquals(parsed.recipient.nameRaw, "J..KE....H M.", "masked name");
@@ -144,8 +144,8 @@ Deno.test("receipt registry dispatches Maya to its dedicated parser and verifier
 Deno.test("Maya parser handles flattened two-column Vision text", () => {
   const flattened = RECEIPT
     .replace(
-      "Account type\nG-Xchange Inc. / GCash\nAccount number\n09455107667\nAccount name\nJ..KE....H M.",
-      "Account type\nAccount number\nAccount name\nG-Xchange Inc. / GCash\n09455107667\nJ..KE....H M.",
+      "Account type\nG-Xchange Inc. / GCash\nAccount number\n09981234567\nAccount name\nJ..KE....H M.",
+      "Account type\nAccount number\nAccount name\nG-Xchange Inc. / GCash\n09981234567\nJ..KE....H M.",
     )
     .replace(
       "Reference ID\nB794 2F55 EC99\nInstaPay Ref. No\n797289",
@@ -162,7 +162,7 @@ Deno.test("Maya parser handles flattened two-column Vision text", () => {
   );
   assertEquals(
     parsed.recipient.phoneNormalized,
-    "9455107667",
+    "9981234567",
     "flattened phone",
   );
   assertEquals(parsed.recipient.nameRaw, "J..KE....H M.", "flattened name");
@@ -267,7 +267,7 @@ Deno.test("Maya auto-verification requires both transaction date and time", () =
 
 Deno.test("Maya verifier binds the exact GCash account and masked recipient name", () => {
   assertFlag(
-    RECEIPT.replace("09455107667", "09171234567"),
+    RECEIPT.replace("09981234567", "09171234567"),
     "WRONG_GCASH_NUMBER",
   );
   assertFlag(
@@ -296,8 +296,8 @@ Deno.test("Maya verifier binds the exact GCash account and masked recipient name
     "contradictory account types must remain ambiguous",
   );
   const conflictingAccount = RECEIPT.replace(
-    "Account number\n09455107667",
-    "Account number NOT READABLE\nAccount number\n09455107667",
+    "Account number\n09981234567",
+    "Account number NOT READABLE\nAccount number\n09981234567",
   );
   assertFlag(conflictingAccount, "NUMBER_UNREADABLE");
   assert(

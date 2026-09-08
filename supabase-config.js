@@ -3,10 +3,10 @@
 // Replace these with your actual project credentials.
 // Find them at: Supabase Dashboard → Project Settings → API
 // =============================================
-// Dedicated Paddle Rage project. The anon key is safe for browser use because
+// Dedicated CHINO project. The anon key is safe for browser use because
 // database access is enforced by the project's Row Level Security policies.
-const SUPABASE_URL = 'https://qhvrowoqeyeypmefwkha.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFodnJvd29xZXlleXBtZWZ3a2hhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQzNzk3ODUsImV4cCI6MjA5OTk1NTc4NX0.hXwxcD6O4tebgJXHf0uxnjcr8-hkEnGCNOeC3dl39Mo';
+const SUPABASE_URL = 'https://mtomskztsvljvzgmewav.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10b21za3p0c3ZsanZ6Z21ld2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg4MzkyNDAsImV4cCI6MjEwNDQxNTI0MH0.z1QJhM0ziEcGmHuGL7m7vZO3fsrBxKaLl7BZPjgN80c';
 
 const PB_REQUEST_TIMEOUT_MS = 45000;
 const PB_RECEIPT_TIMEOUT_MS = 90000;
@@ -69,11 +69,11 @@ const _sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 window._supabase = _sb;
 
 const PB_IS_LOCAL_HOST = ['localhost', '127.0.0.1', '::1'].includes(location.hostname);
-const PB_DATA_MODE_KEY = 'pb_data_mode';
+const PB_DATA_MODE_KEY = 'chino_data_mode';
 const PB_HAS_PLACEHOLDER_BACKEND = SUPABASE_URL.includes('YOUR_PROJECT_REF') || SUPABASE_ANON_KEY.includes('YOUR_SUPABASE');
-const PB_IS_PADDLE_RAGE_PAGES = location.hostname === 'paddle-rage-pickleball.pages.dev'
-  || location.hostname.endsWith('.paddle-rage-pickleball.pages.dev');
-const PB_IS_CLOUDFLARE_DEMO = PB_HAS_PLACEHOLDER_BACKEND && PB_IS_PADDLE_RAGE_PAGES;
+const PB_IS_CHINO_PAGES = location.hostname === 'chinopickleball.pages.dev'
+  || location.hostname.endsWith('.chinopickleball.pages.dev');
+const PB_IS_CLOUDFLARE_DEMO = PB_HAS_PLACEHOLDER_BACKEND && PB_IS_CHINO_PAGES;
 
 if (PB_IS_LOCAL_HOST) {
   const params = new URLSearchParams(location.search);
@@ -85,7 +85,7 @@ if (PB_IS_LOCAL_HOST) {
   }
 }
 
-// The isolated Paddle Rage Pages site automatically uses browser-only demo data
+// The isolated CHINO Pages site automatically uses browser-only demo data
 // until a dedicated Supabase project replaces the placeholders above.
 window.PB_USE_LOCAL_DATA = PB_IS_CLOUDFLARE_DEMO
   || (PB_IS_LOCAL_HOST && localStorage.getItem(PB_DATA_MODE_KEY) === 'local');
@@ -97,7 +97,7 @@ const PB_FAST_CACHE_MS = {
   bookings: 3500,
   openPlay: 3500,
 };
-const PB_BOOKING_ACCESS_TOKENS_KEY = 'pb_booking_access_tokens_v1';
+const PB_BOOKING_ACCESS_TOKENS_KEY = 'chino_booking_access_tokens_v1';
 const PB_BOOKING_ACCESS_TOKEN_LEGACY_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const PB_BOOKING_ACCESS_TOKEN_HARD_MAX_AGE_MS = 400 * 24 * 60 * 60 * 1000;
 const _pbFastCache = new Map();
@@ -747,7 +747,7 @@ function rowToDeletedBookingArchive(r) {
 }
 
 const PB_RESERVATION_HOLD_MINUTES = 15;
-const PB_PUBLIC_COURT_OPENING_DATE = '2026-09-19';
+const PB_PUBLIC_COURT_OPENING_DATE = '2026-01-01';
 
 function _pbManilaToday() {
   const parts = Object.fromEntries(
@@ -850,7 +850,7 @@ function _pbNormalizeAvailabilityGraphicSnapshot(payload, requestedDate, request
 function _pbAssertPublicBookingDate(date) {
   const value = String(date || '');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || value < _pbMinimumPublicBookingDate()) {
-    throw new Error('Advance booking is available from September 19, 2026.');
+    throw new Error('Choose today or a future available booking date.');
   }
 }
 
@@ -1225,7 +1225,7 @@ window.DB = {
     return _pbCached('bookings', { view: 'insights' }, PB_FAST_CACHE_MS.bookings, async () => {
       const accountRole = await _pbCurrentAccountRole();
       if (!PB_PRIVATE_DATA_SURFACE || !['owner', 'court_owner'].includes(accountRole)) {
-        throw new Error('An active owner session is required to load Paddle Rage Insights.');
+        throw new Error('An active owner session is required to load CHINO Insights.');
       }
       const pageSize = 1000;
       const rows = [];
@@ -3279,15 +3279,15 @@ window.DB = {
 // =============================================
 // =============================================
 // LOCAL DATA MODE
-// Enable only on localhost with localStorage.setItem('pb_data_mode', 'local')
+// Enable only on localhost with localStorage.setItem('chino_data_mode', 'local')
 // or by opening a local page with ?localData=1. Disable with ?remoteData=1.
 // =============================================
 (function installLocalDataMode() {
   if (!window.PB_USE_LOCAL_DATA) return;
 
   // Brand-specific key prevents copied/demo browser data from another venue
-  // appearing inside a Paddle Rage local preview.
-  const STORE_KEY = 'paddle_rage_local_db_v1';
+  // appearing inside a CHINO local preview.
+  const STORE_KEY = 'chino_local_db_v1';
   const nowIso = () => new Date().toISOString();
   const localRef = prefix => `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`.toUpperCase();
   const localShareToken = () => {
@@ -3310,7 +3310,7 @@ window.DB = {
     const n = i + 1;
     return {
       id: `c${n}`,
-      name: `Paddle Rage Court ${n}`,
+      name: `CHINO Court ${n}`,
       desc: 'Outdoor',
       rate: n <= 5 ? 60 : 90,
       blocked: false,
@@ -3393,7 +3393,7 @@ window.DB = {
       role: 'owner',
       status: 'active',
       fullName: 'System Owner',
-      email: 'owner@paddlerage.local',
+      email: 'owner@chino.local',
       createdAt: nowIso(),
     },
     {
@@ -3403,7 +3403,7 @@ window.DB = {
       role: 'host',
       status: 'active',
       fullName: 'Open Play Test Host',
-      email: 'host.test@paddlerage.local',
+      email: 'host.test@chino.local',
       createdAt: nowIso(),
     },
   ]);
@@ -3422,7 +3422,7 @@ window.DB = {
         groupRef,
         fullName: 'Open Play Test Host',
         contactNumber: '09171234567',
-        email: 'host.test@paddlerage.local',
+        email: 'host.test@chino.local',
         courtId,
         courtName,
         date,
@@ -3446,7 +3446,7 @@ window.DB = {
         hostBooking: true,
         hostUserId: 'host_test_001',
         hostName: 'Open Play Test Host',
-        hostEmail: 'host.test@paddlerage.local',
+        hostEmail: 'host.test@chino.local',
         paymentStatus,
         status,
         bookingFeeEarnedAt: ['confirmed', 'completed'].includes(status)
@@ -3457,15 +3457,15 @@ window.DB = {
       };
     };
     return [
-      makeHostBooking({ ref: 'HOST-DEMO-001', courtId: 'c1', courtName: 'Paddle Rage Court 1', date: '2026-07-12', slots: [14, 15], rate: 60, gcashRef: '1234567890123', createdDaysAgo: 1 }),
-      makeHostBooking({ ref: 'HOST-DEMO-002', courtId: 'c2', courtName: 'Paddle Rage Court 2', date: '2026-07-14', slots: [18, 19, 20], rate: 90, gcashRef: '9876543210123', createdDaysAgo: 2 }),
-      makeHostBooking({ ref: 'HOST-DEMO-003', courtId: 'c3', courtName: 'Paddle Rage Court 3', date: '2026-07-18', slots: [8, 9], rate: 60, method: 'cash', paymentStatus: 'unpaid', status: 'pending', createdDaysAgo: 0 }),
-      makeHostBooking({ ref: 'HOST-DEMO-004', courtId: 'c4', courtName: 'Paddle Rage Court 4', date: '2026-07-04', slots: [16, 17], rate: 60, gcashRef: '2223334445556', paymentStatus: 'paid', createdDaysAgo: 6 }),
-      makeHostBooking({ ref: 'HOST-DEMO-005', courtId: 'c5', courtName: 'Paddle Rage Court 5', date: '2026-06-29', slots: [19, 20, 21], rate: 90, gcashRef: '3334445556667', paymentStatus: 'downpayment_paid', createdDaysAgo: 12 }),
-      makeHostBooking({ ref: 'HOST-DEMO-006', courtId: 'c6', courtName: 'Paddle Rage Court 6', date: '2026-07-20', slots: [10, 11, 12], rate: 90, gcashRef: '4445556667778', paymentStatus: 'for_verification', status: 'verifying', createdDaysAgo: 0 }),
-      makeHostBooking({ ref: 'HOST-DEMO-MULTI-001-A', groupRef: 'HOST-DEMO-MULTI-001', courtId: 'c7', courtName: 'Paddle Rage Court 7', date: '2026-07-25', slots: [17, 18, 19, 20], rate: 90, gcashRef: '5556667778889', createdDaysAgo: 0 }),
-      makeHostBooking({ ref: 'HOST-DEMO-MULTI-001-B', groupRef: 'HOST-DEMO-MULTI-001', courtId: 'c8', courtName: 'Paddle Rage Court 8', date: '2026-07-25', slots: [17, 18, 19, 20], rate: 90, gcashRef: '5556667778889', createdDaysAgo: 0 }),
-      makeHostBooking({ ref: 'HOST-DEMO-MULTI-001-C', groupRef: 'HOST-DEMO-MULTI-001', courtId: 'c9', courtName: 'Paddle Rage Court 9', date: '2026-07-25', slots: [17, 18, 19, 20], rate: 90, gcashRef: '5556667778889', createdDaysAgo: 0 }),
+      makeHostBooking({ ref: 'HOST-DEMO-001', courtId: 'c1', courtName: 'CHINO Court 1', date: '2026-07-12', slots: [14, 15], rate: 60, gcashRef: '1234567890123', createdDaysAgo: 1 }),
+      makeHostBooking({ ref: 'HOST-DEMO-002', courtId: 'c2', courtName: 'CHINO Court 2', date: '2026-07-14', slots: [18, 19, 20], rate: 90, gcashRef: '9876543210123', createdDaysAgo: 2 }),
+      makeHostBooking({ ref: 'HOST-DEMO-003', courtId: 'c3', courtName: 'CHINO Court 3', date: '2026-07-18', slots: [8, 9], rate: 60, method: 'cash', paymentStatus: 'unpaid', status: 'pending', createdDaysAgo: 0 }),
+      makeHostBooking({ ref: 'HOST-DEMO-004', courtId: 'c4', courtName: 'CHINO Court 4', date: '2026-07-04', slots: [16, 17], rate: 60, gcashRef: '2223334445556', paymentStatus: 'paid', createdDaysAgo: 6 }),
+      makeHostBooking({ ref: 'HOST-DEMO-005', courtId: 'c5', courtName: 'CHINO Court 5', date: '2026-06-29', slots: [19, 20, 21], rate: 90, gcashRef: '3334445556667', paymentStatus: 'downpayment_paid', createdDaysAgo: 12 }),
+      makeHostBooking({ ref: 'HOST-DEMO-006', courtId: 'c6', courtName: 'CHINO Court 6', date: '2026-07-20', slots: [10, 11, 12], rate: 90, gcashRef: '4445556667778', paymentStatus: 'for_verification', status: 'verifying', createdDaysAgo: 0 }),
+      makeHostBooking({ ref: 'HOST-DEMO-MULTI-001-A', groupRef: 'HOST-DEMO-MULTI-001', courtId: 'c7', courtName: 'CHINO Court 7', date: '2026-07-25', slots: [17, 18, 19, 20], rate: 90, gcashRef: '5556667778889', createdDaysAgo: 0 }),
+      makeHostBooking({ ref: 'HOST-DEMO-MULTI-001-B', groupRef: 'HOST-DEMO-MULTI-001', courtId: 'c8', courtName: 'CHINO Court 8', date: '2026-07-25', slots: [17, 18, 19, 20], rate: 90, gcashRef: '5556667778889', createdDaysAgo: 0 }),
+      makeHostBooking({ ref: 'HOST-DEMO-MULTI-001-C', groupRef: 'HOST-DEMO-MULTI-001', courtId: 'c9', courtName: 'CHINO Court 9', date: '2026-07-25', slots: [17, 18, 19, 20], rate: 90, gcashRef: '5556667778889', createdDaysAgo: 0 }),
     ];
   };
 
@@ -3887,7 +3887,7 @@ window.DB = {
     const guestSafe = options?.guestSafe === true;
     if (!guestSafe && (!['owner', 'court_owner'].includes(role)
         || (session?.status && session.status !== 'active'))) {
-      throw new Error('An active Paddle Rage owner account is required.');
+      throw new Error('An active CHINO owner account is required.');
     }
 
     const requestedDate = String(date || '').trim();
@@ -4291,7 +4291,7 @@ window.DB = {
     async getInsightBookings() {
       const session = window.Auth?.getSession?.();
       if (!session || !['owner', 'court_owner'].includes(session.role)) {
-        throw new Error('An active owner session is required to load Paddle Rage Insights.');
+        throw new Error('An active owner session is required to load CHINO Insights.');
       }
       return readDb().bookings.map(booking => ({
         ref: booking.ref,
@@ -5022,7 +5022,7 @@ window.DB = {
       if (normalizedDecision === 'approved') request.approvedAt = request.updatedAt;
       else request.rejectedAt = request.updatedAt;
       request.decision = {
-        reason:note || (normalizedDecision === 'approved' ? 'Approved by Paddle Rage.' : null),
+        reason:note || (normalizedDecision === 'approved' ? 'Approved by CHINO.' : null),
         reviewedAt:request.updatedAt,
         reviewedByRole:session.role,
       };
@@ -7341,7 +7341,7 @@ window.DB = {
     return readDb();
   };
 
-  console.info('[Paddle Rage Pickleball] Local data mode enabled. Supabase writes are bypassed in this browser.');
+  console.info('[CHINO Pickleball Courts] Local data mode enabled. Supabase writes are bypassed in this browser.');
 })();
 
 window.Auth = {

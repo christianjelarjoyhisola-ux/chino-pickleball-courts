@@ -293,7 +293,7 @@ Deno.serve(async (req) => {
           : event === "payment_reassigned"
           ? "Payment moved to your new booking"
           : "Booking cancelled"
-      }: ${displayRef} | Paddle Rage Pickleball`,
+      }: ${displayRef} | CHINO Pickleball Courts`,
       html: content.html,
       plain: content.plain,
       tags: {

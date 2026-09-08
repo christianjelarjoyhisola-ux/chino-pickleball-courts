@@ -479,7 +479,8 @@ test('admin accounting uses immutable fee snapshots and net court revenue', () =
     /DB\.getBookingFeeRemittanceDashboard\(\)/,
     'the dashboard must use the authoritative server ledger instead of recalculating fees from mutable bookings',
   );
-  assert.match(adminSite, /const PLATFORM_ALLOCATION_RATE = 10/);
+  assert.match(adminSite, /const allocationConfig = allocationSettings \? getPlatformFeeConfig\(allocationSettings\) : null/);
+  assert.doesNotMatch(adminSite, /const PLATFORM_ALLOCATION_RATE\s*=\s*10/);
   assert.match(adminSite, /Net Court Revenue/);
   assert.match(
     adminSite,

@@ -21,7 +21,7 @@ InstaPay QRPh
 Jul 13, 2026, 08:03 pm
 Account type G-Xchange Inc. / GCash
 Account number DWQM4TK496R3UA1BS
-Account name Paddle Rage Pickleball
+Account name CHINO Pickleball Courts
 Transfer Fee
 P10.00
 Reference ID A7B9 7F99 B743
@@ -226,7 +226,7 @@ Deno.test("recovers two concordant GCash displays from reordered Vision text", (
 Amount
 Express Send
 J•• KE••••H M.
-+63 945 510 7667
++63 998 123 4567
 Sent via GCash
 Total Amount Sent
 55

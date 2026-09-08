@@ -1,4 +1,4 @@
-# Maya to GCash receipt verification
+# CHINO Maya to GCash receipt verification
 
 Maya uses a dedicated parser and verifier (`maya_to_gcash_v1`) through the existing `verify-gcash-receipt` Edge Function. This checks uploaded receipt evidence; it does not query Maya or GCash to confirm that funds were credited.
 
@@ -27,7 +27,7 @@ Apply `supabase/migrations/20260905130000_maya_dedicated_receipt_verifier.sql`, 
 
 Verify a new controlled payment end to end after deployment. Check the stored parser version, amount, account comparison, both references, OCR confidence, and final booking payment state. Historical manually confirmed receipts retain their original audit result.
 
-The sample provided for development shows an 800-peso payment and a separate 10-peso transfer fee. Its transaction timestamp is four minutes after the displayed booking start. Parser fixtures transcribe the screenshot; a fixture passing does not establish a live OCR or settlement result.
+Parser fixtures cover payment amounts, separate transfer fees, recipient matching, reference IDs, and timestamps. Fixture success verifies parser behavior; test a configured CHINO payment flow separately to verify live OCR and review routing.
 
 ## Provider-confirmed payments
 

@@ -119,7 +119,7 @@ test('caption contains only court availability, booking CTA, and freshness discl
   });
   assert.match(caption, /Court One: 6–8 PM/);
   assert.match(caption, /Slots may change/);
-  assert.match(caption, /paddleragecdo\.ph/);
+  assert.match(caption, /chinopickleball\.pages\.dev/);
   assert.doesNotMatch(caption, /Hidden Customer/);
 });
 
@@ -291,7 +291,7 @@ test('carousel filenames are numbered and every rendered page carries its marker
     assert.ok(canvas.calls.some(call => call.value === `PAGE ${index + 1} / ${pages.length}`));
     assert.equal(
       graphic.outputFileName(snapshot.date, 'feed', index, pages.length),
-      `paddle-rage-availability-2026-09-20-feed-0${index + 1}-of-03.png`,
+      `chino-availability-2026-09-20-feed-0${index + 1}-of-03.png`,
     );
   }
 });
@@ -310,7 +310,7 @@ test('footer keeps a large crisp QR and readable booking copy inside safe bounds
     size: 231,
     margin: 4,
     errorCorrectionLevel: 'M',
-    dark: '#050706',
+    dark: '#111b24',
     light: '#ffffff',
   });
   for (const format of ['feed', 'story']) {
@@ -334,7 +334,7 @@ test('footer keeps a large crisp QR and readable booking copy inside safe bounds
 });
 
 test('opening date and Web Share fallback are explicit', () => {
-  assert.equal(graphic.constants.OPENING_DATE, '2026-09-19');
+  assert.equal(graphic.constants.OPENING_DATE, '2026-01-01');
   assert.match(graphic.shareErrorMessage({ name: 'NotAllowedError' }), /Download PNG/);
   assert.match(graphic.shareErrorMessage({ name: 'NotAllowedError' }), /upload.*Facebook/i);
   assert.equal(graphic.shareErrorMessage({ name: 'AbortError' }), '');
@@ -349,7 +349,7 @@ test('every output path is guarded by a forced serialized live refresh', () => {
   assert.match(source, /const \{ items \} = await prepareOutputSet\('download'\)/);
   assert.match(source, /await ensureFreshForExport\('caption copy'\)/);
   assert.match(source, /const \{ items, snapshot \} = await prepareOutputSet\('share'\)/);
-  assert.match(source, /navigator\.share\(\{ title: 'Paddle Rage court availability', text: caption, files \}\)/);
+  assert.match(source, /navigator\.share\(\{ title: 'CHINO court availability', text: caption, files \}\)/);
   assert.doesNotMatch(source, /if \(state\.busy\) return currentSnapshot\(\)/);
 });
 

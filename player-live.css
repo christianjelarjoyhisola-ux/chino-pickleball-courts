@@ -6,9 +6,9 @@
   --plb-line: #dfe4ea;
   --plb-canvas: #f1f3f6;
   --plb-card: #ffffff;
-  --plb-lime: #c9f31d;
-  --plb-blue: #4f46e5;
-  --plb-blue-soft: #eef2ff;
+  --plb-lime: #b9d2e8;
+  --plb-blue: #3e79b5;
+  --plb-blue-soft: #eaf2f8;
   --plb-orange: #e11d48;
   --plb-orange-soft: #fff1f2;
   --plb-live: #06b6d4;
@@ -417,7 +417,7 @@ a:focus-visible {
 
 .plb-refresh.is-primary {
   margin-top: 8px;
-  color: #172100;
+  color: #07111a;
   border: 0;
   background: var(--plb-lime);
 }
@@ -534,11 +534,11 @@ a:focus-visible {
   display: grid;
   gap: 3px;
   padding: 14px 15px;
-  border: 2px solid #a9d305;
+  border: 2px solid #316ca7;
   border-radius: 14px;
-  color: #172100;
-  background: #efffb1;
-  box-shadow: 0 8px 22px rgba(143, 180, 0, .13);
+  color: #07111a;
+  background: #c3d8ed;
+  box-shadow: 0 8px 22px rgba(41, 90, 140, .13);
 }
 
 .plb-my-card.is-playing {
@@ -733,7 +733,7 @@ a:focus-visible {
 }
 
 .plb-court-card.has-mine {
-  outline: 3px solid rgba(169, 211, 5, .75);
+  outline: 3px solid rgba(49, 108, 167, .75);
   outline-offset: 2px;
 }
 
@@ -922,7 +922,7 @@ a:focus-visible {
 .plb-team-label b {
   padding: 2px 4px;
   border-radius: 4px;
-  color: #172100;
+  color: #07111a;
   background: var(--plb-lime);
   font-size: .47rem;
 }
@@ -971,7 +971,7 @@ a:focus-visible {
   flex: 0 0 auto;
   padding: 3px 5px;
   border-radius: 5px;
-  color: #172100;
+  color: #07111a;
   background: var(--plb-lime);
   font-size: .48rem;
   font-weight: 950;
@@ -979,8 +979,8 @@ a:focus-visible {
 }
 
 .plb-player.is-mine {
-  color: #162100;
-  background: rgba(201, 243, 29, .36);
+  color: #07111a;
+  background: rgba(71, 136, 201, .36);
 }
 
 .plb-vs {
@@ -994,8 +994,8 @@ a:focus-visible {
   margin: 0 14px 14px;
   padding: 9px 11px;
   border-radius: 11px;
-  color: #405900;
-  background: #efffb1;
+  color: #142d45;
+  background: #c3d8ed;
   font-size: .68rem;
   font-weight: 850;
   text-align: center;
@@ -1023,8 +1023,8 @@ a:focus-visible {
 
 .plb-winner-reveal.team-one {
   background:
-    radial-gradient(circle at 16% 15%, rgba(217, 255, 121, .24), transparent 32%),
-    linear-gradient(135deg, #27206b, #4f46e5 54%, #087f73);
+    radial-gradient(circle at 16% 15%, rgba(151, 188, 225, .24), transparent 32%),
+    linear-gradient(135deg, #27206b, #3e79b5 54%, #087f73);
 }
 
 .plb-winner-reveal.team-two {
@@ -1100,9 +1100,9 @@ a:focus-visible {
   margin-top: 2px;
   padding: 5px 11px 5px 6px;
   border-radius: 999px;
-  color: #254400;
-  background: #d9ff79;
-  box-shadow: 0 8px 22px rgba(10, 35, 0, .28);
+  color: #0f2235;
+  background: #97bce1;
+  box-shadow: 0 8px 22px rgba(8, 18, 27, .28);
   font-size: .62rem;
   font-weight: 950;
   letter-spacing: .8px;
@@ -1142,12 +1142,12 @@ a:focus-visible {
 }
 
 .plb-winner-reveal-sparks::before {
-  background: #d9ff79;
+  background: #97bce1;
   box-shadow:
-    -112px -47px 0 -1px #d9ff79,
+    -112px -47px 0 -1px #97bce1,
     -91px 54px 0 -1px #ffd35a,
     98px -52px 0 -1px #ffd35a,
-    116px 43px 0 -1px #d9ff79;
+    116px 43px 0 -1px #97bce1;
   animation: plb-winner-sparks-a .82s cubic-bezier(.18, .8, .35, 1) .14s both;
 }
 
@@ -1156,7 +1156,7 @@ a:focus-visible {
   box-shadow:
     -55px -76px 0 -1px #ffd35a,
     -126px 1px 0 -1px #fff5c2,
-    57px 76px 0 -1px #d9ff79,
+    57px 76px 0 -1px #97bce1,
     127px -2px 0 -1px #fff5c2;
   animation: plb-winner-sparks-b .82s cubic-bezier(.18, .8, .35, 1) .2s both;
 }
@@ -1349,7 +1349,7 @@ a:focus-visible {
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  color: #152000;
+  color: #071019;
   background: var(--plb-lime);
   font-size: .62rem;
   font-weight: 950;
@@ -1364,8 +1364,8 @@ a:focus-visible {
 }
 
 .plb-next-player.is-mine {
-  background: #f5ffcc;
-  box-shadow: inset 0 0 0 1px #a9d305;
+  background: #d7e5f4;
+  box-shadow: inset 0 0 0 1px #316ca7;
 }
 
 .plb-next-waiting {
@@ -1409,7 +1409,7 @@ a:focus-visible {
   margin: 0;
   padding: 0 4px;
   border-radius: 9px;
-  background: rgba(201, 243, 29, .09);
+  background: rgba(71, 136, 201, .09);
 }
 
 .plb-queue-number {
@@ -1472,7 +1472,7 @@ a:focus-visible {
 }
 
 .plb-queue-panel .plb-you-badge {
-  color: #172100;
+  color: #07111a;
   background: var(--plb-lime);
 }
 
@@ -1566,7 +1566,7 @@ a:focus-visible {
 }
 
 .plb-standings tbody tr.is-mine {
-  background: #f5ffcc;
+  background: #d7e5f4;
 }
 
 .plb-standings tbody td:first-child {
@@ -1622,7 +1622,7 @@ a:focus-visible {
     box-shadow: 0 8px 23px rgba(15, 23, 42, .08);
   }
   32% {
-    box-shadow: 0 18px 42px rgba(8, 127, 115, .28), 0 0 0 4px rgba(217, 255, 121, .2);
+    box-shadow: 0 18px 42px rgba(8, 127, 115, .28), 0 0 0 4px rgba(151, 188, 225, .2);
   }
 }
 
@@ -1939,7 +1939,7 @@ body {
   overflow-x: clip;
   background:
     radial-gradient(circle at 8% 0, rgba(34, 211, 238, .07), transparent 28rem),
-    radial-gradient(circle at 94% 15%, rgba(201, 243, 29, .055), transparent 24rem),
+    radial-gradient(circle at 94% 15%, rgba(71, 136, 201, .055), transparent 24rem),
     #f3f6f9;
 }
 
@@ -2114,14 +2114,14 @@ body {
   right: -70px;
   width: 250px;
   height: 250px;
-  border: 34px solid rgba(201, 243, 29, .08);
+  border: 34px solid rgba(71, 136, 201, .08);
   border-radius: 50%;
 }
 
 .plb-session-hero .plb-eyebrow {
-  color: #d8ff59;
-  background: rgba(201, 243, 29, .1);
-  box-shadow: inset 0 0 0 1px rgba(201, 243, 29, .18);
+  color: #7eacda;
+  background: rgba(71, 136, 201, .1);
+  box-shadow: inset 0 0 0 1px rgba(71, 136, 201, .18);
 }
 
 .plb-session-hero h1 {
@@ -2252,7 +2252,7 @@ body {
 }
 
 .plb-court-card.has-mine {
-  outline: 3px solid rgba(176, 214, 22, .82);
+  outline: 3px solid rgba(53, 118, 183, .82);
   outline-offset: 2px;
 }
 
@@ -2375,7 +2375,7 @@ body {
 
 .plb-dispatch-card.has-mine {
   box-shadow:
-    0 0 0 3px rgba(201, 243, 29, .42),
+    0 0 0 3px rgba(71, 136, 201, .42),
     0 12px 30px rgba(15, 23, 42, .08);
 }
 
@@ -2534,7 +2534,7 @@ body {
   flex: 0 0 auto;
   padding: 2px 4px;
   border-radius: 5px;
-  color: #293300;
+  color: #0b1a28;
   background: var(--plb-lime);
   font-size: .44rem;
   font-weight: 950;
@@ -2544,7 +2544,7 @@ body {
   margin-inline: -4px;
   padding-inline: 4px;
   border-radius: 6px;
-  background: rgba(201, 243, 29, .2);
+  background: rgba(71, 136, 201, .2);
 }
 
 .plb-dispatch-player.is-empty {
@@ -2696,7 +2696,7 @@ body {
 .plb-standings tbody tr.is-mine,
 .plb-final-list li.is-mine,
 .plb-podium-card.is-mine {
-  background: #f7ffd8;
+  background: #e1ecf6;
 }
 
 /* Share Live readability: keep the venue board easy to scan from a distance. */
@@ -2912,7 +2912,7 @@ body {
   height: 48px;
   border-radius: 50%;
   color: #fff;
-  background: linear-gradient(135deg, #4f46e5, #e11d48);
+  background: linear-gradient(135deg, #3e79b5, #e11d48);
   font-size: 1rem;
   font-weight: 950;
 }
@@ -3319,7 +3319,7 @@ body {
   }
 
   .plb-mobile-nav a[aria-current="location"] {
-    color: #172100;
+    color: #07111a;
     background: var(--plb-lime);
   }
 

@@ -1,302 +1,148 @@
-// Run: node setup-db.js
-// Sets up the full Paddle Rage Pickleball schema in the new Supabase project
-// For existing databases, apply supabase/migrations instead of rerunning setup.
+// Fresh CHINO database bootstrap. Existing deployments use normal migrations.
+// node setup-db.js --dry-run lists the exact plan without accessing Supabase.
+// node setup-db.js applies it to the dedicated CHINO project in .env.local.
+const fs = require('node:fs');
+const path = require('node:path');
+const os = require('node:os');
+const { execFileSync } = require('node:child_process');
 
-const fs = require('fs');
+const repoRoot = __dirname;
+const firstForwardVersion = '20260713213000';
+const migrations = fs.readdirSync(path.join(repoRoot, 'supabase', 'migrations'))
+  .filter(name => /^\d+_.+\.sql$/.test(name))
+  .sort()
+  .map(name => ({
+    name,
+    version: name.split('_')[0],
+    file: path.join(repoRoot, 'supabase', 'migrations', name),
+  }));
+const forwardMigrations = migrations.filter(item => item.version >= firstForwardVersion);
 
 function loadLocalEnv() {
-  if (!fs.existsSync('.env.local')) return {};
-  return Object.fromEntries(fs.readFileSync('.env.local', 'utf8')
-    .split(/\r?\n/)
-    .filter(Boolean)
-    .filter(line => !line.trim().startsWith('#'))
+  const file = path.join(repoRoot, '.env.local');
+  if (!fs.existsSync(file)) return {};
+  return Object.fromEntries(fs.readFileSync(file, 'utf8').split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(line => line && !line.startsWith('#') && line.includes('='))
     .map(line => {
-      const i = line.indexOf('=');
-      return [line.slice(0, i), line.slice(i + 1)];
+      const at = line.indexOf('=');
+      return [line.slice(0, at).trim(), line.slice(at + 1).trim().replace(/^(['"])(.*)\1$/, '$2')];
     }));
 }
 
-const env = loadLocalEnv();
-const SERVICE_KEY = env.SUPABASE_SERVICE_ROLE_KEY || '';
-const SUPABASE_URL = env.SUPABASE_URL || '';
+function literal(value) { return "'" + String(value).replace(/'/g, "''") + "'"; }
 
-if (!SUPABASE_URL || !SERVICE_KEY) {
-  throw new Error('Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env.local before running database setup.');
+const migrationHistorySchema = `
+create schema if not exists supabase_migrations;
+create table if not exists supabase_migrations.schema_migrations (
+  version text primary key,
+  statements text[],
+  name text
+);`;
+
+function recordMigration(item) {
+  return `insert into supabase_migrations.schema_migrations (version, name)
+values (${literal(item.version)}, ${literal(item.name.replace(/^\d+_/, '').replace(/\.sql$/, ''))})
+on conflict (version) do nothing;`;
 }
-
-const { createClient } = require('@supabase/supabase-js');
-const sb = createClient(SUPABASE_URL, SERVICE_KEY, {
-  auth: { autoRefreshToken: false, persistSession: false }
-});
 
 async function run() {
-  console.log('Connecting to:', SUPABASE_URL);
-
-  // ── 1. CREATE TABLES ──────────────────────────────────────────────────────
-  const tables = [
-    {
-      name: 'courts',
-      sql: `CREATE TABLE IF NOT EXISTS public.courts (
-        id text PRIMARY KEY,
-        name text NOT NULL,
-        description text,
-        rate numeric NOT NULL DEFAULT 300,
-        blocked boolean NOT NULL DEFAULT false,
-        feats text[] DEFAULT '{}',
-        photo text,
-        rate_schedule jsonb,
-        created_at timestamptz NOT NULL DEFAULT now()
-      );`
-    },
-    {
-      name: 'bookings',
-      sql: `CREATE TABLE IF NOT EXISTS public.bookings (
-        ref text PRIMARY KEY,
-        full_name text NOT NULL,
-        contact_number text,
-        email text,
-        court_id text NOT NULL,
-        court_name text,
-        date date NOT NULL,
-        slots text[] NOT NULL DEFAULT '{}',
-        start_time text,
-        end_time text,
-        duration numeric,
-        rate numeric,
-        total numeric,
-        payment_method text,
-        payment_flow text,
-        payment_status text NOT NULL DEFAULT 'unpaid'
-          CHECK (payment_status IN ('unpaid','pending','for_verification','downpayment_paid','paid','failed')),
-        payment_provider text,
-        payment_session_id text,
-        payment_checkout_url text,
-        paid_at timestamptz,
-        gcash_ref text,
-        downpayment numeric,
-        status text NOT NULL DEFAULT 'pending'
-          CHECK (status IN ('pending','confirmed','cancelled','completed')),
-        created_at timestamptz NOT NULL DEFAULT now()
-      );`
-    },
-    {
-      name: 'settings',
-      sql: `CREATE TABLE IF NOT EXISTS public.settings (
-        key text PRIMARY KEY,
-        value text,
-        updated_at timestamptz NOT NULL DEFAULT now()
-      );`
-    },
-    {
-      name: 'accounts',
-      sql: `CREATE TABLE IF NOT EXISTS public.accounts (
-        id uuid PRIMARY KEY,
-        username text UNIQUE NOT NULL,
-        full_name text,
-        email text UNIQUE,
-        role text NOT NULL DEFAULT 'manager'
-          CHECK (role IN ('developer','admin','manager')),
-        created_at timestamptz NOT NULL DEFAULT now()
-      );`
-    },
-    {
-      name: 'blocked_dates',
-      sql: `CREATE TABLE IF NOT EXISTS public.blocked_dates (
-        date date PRIMARY KEY,
-        created_at timestamptz NOT NULL DEFAULT now()
-      );`
-    },
-    {
-      name: 'open_play_registrations',
-      sql: `CREATE TABLE IF NOT EXISTS public.open_play_registrations (
-        id bigserial PRIMARY KEY,
-        full_name text NOT NULL,
-        court_id text,
-        court_name text,
-        date date NOT NULL,
-        hour integer,
-        time_label text,
-        payment_type text,
-        amount numeric,
-        created_at timestamptz NOT NULL DEFAULT now()
-      );`
-    },
-    {
-      name: 'payment_sessions',
-      sql: `CREATE TABLE IF NOT EXISTS public.payment_sessions (
-        id text PRIMARY KEY,
-        booking_ref text NOT NULL,
-        provider text NOT NULL,
-        provider_reference text,
-        amount_php numeric NOT NULL,
-        status text NOT NULL DEFAULT 'pending',
-        checkout_url text,
-        raw_request jsonb,
-        raw_webhook jsonb,
-        created_at timestamptz NOT NULL DEFAULT now(),
-        updated_at timestamptz NOT NULL DEFAULT now(),
-        paid_at timestamptz
-      );`
-    },
-  ];
-
-  for (const t of tables) {
-    const { error } = await sb.rpc('exec_sql', { sql: t.sql }).catch(() => ({ error: 'rpc not available' }));
-    // rpc exec_sql won't exist on fresh project — use REST SQL endpoint instead
-    await runSQL(t.sql, t.name);
+  console.log('CHINO fresh installation: consolidated baseline, then ' + forwardMigrations.length + ' forward migrations.');
+  if (process.argv.includes('--dry-run')) {
+    console.log('SETUP_NEW_SUPABASE.sql');
+    forwardMigrations.forEach(item => console.log('supabase/migrations/' + item.name));
+    return;
   }
 
-  // ── 2. INDEXES ────────────────────────────────────────────────────────────
-  const indexes = [
-    'CREATE INDEX IF NOT EXISTS idx_bookings_court_date ON public.bookings (court_id, date);',
-    'CREATE INDEX IF NOT EXISTS idx_bookings_status ON public.bookings (status);',
-    'CREATE INDEX IF NOT EXISTS idx_payment_sessions_booking_ref ON public.payment_sessions (booking_ref);',
-    'CREATE INDEX IF NOT EXISTS idx_payment_sessions_status ON public.payment_sessions (status);',
-    'CREATE INDEX IF NOT EXISTS idx_payment_sessions_provider_reference ON public.payment_sessions (provider_reference);',
-  ];
-  for (const sql of indexes) await runSQL(sql, 'index');
-
-  // ── 3. TRIGGERS ───────────────────────────────────────────────────────────
-  await runSQL(`
-    CREATE OR REPLACE FUNCTION public.touch_updated_at()
-    RETURNS TRIGGER LANGUAGE plpgsql AS $$
-    BEGIN NEW.updated_at = now(); RETURN NEW; END; $$;
-  `, 'trigger:touch_updated_at fn');
-
-  await runSQL(`
-    DROP TRIGGER IF EXISTS trg_payment_sessions_touch_updated_at ON public.payment_sessions;
-    CREATE TRIGGER trg_payment_sessions_touch_updated_at
-      BEFORE UPDATE ON public.payment_sessions
-      FOR EACH ROW EXECUTE FUNCTION public.touch_updated_at();
-  `, 'trigger:payment_sessions_updated_at');
-
-  await runSQL(`
-    CREATE OR REPLACE FUNCTION public.prevent_double_booking()
-    RETURNS TRIGGER LANGUAGE plpgsql AS $$
-    BEGIN
-      IF TG_OP = 'UPDATE'
-         AND NEW.court_id IS NOT DISTINCT FROM OLD.court_id
-         AND NEW.date IS NOT DISTINCT FROM OLD.date
-         AND NEW.status IS NOT DISTINCT FROM OLD.status
-         AND NEW.ref IS NOT DISTINCT FROM OLD.ref
-         AND NEW.slots IS NOT DISTINCT FROM OLD.slots THEN
-        RETURN NEW;
-      END IF;
-      IF NEW.status = 'cancelled' THEN RETURN NEW; END IF;
-      IF EXISTS (
-        SELECT 1 FROM public.bookings b
-        WHERE b.court_id = NEW.court_id AND b.date = NEW.date
-          AND b.status != 'cancelled' AND b.ref != NEW.ref
-          AND b.slots && NEW.slots
-          AND (
-            b.status != 'verifying'
-            OR b.created_at IS NULL
-            OR b.created_at > (now() - interval '15 minutes')
-          )
-      ) THEN
-        RAISE EXCEPTION 'One or more time slots are already booked for this court and date.';
-      END IF;
-      RETURN NEW;
-    END; $$;
-  `, 'trigger:prevent_double_booking fn');
-
-  await runSQL(`
-    DROP TRIGGER IF EXISTS check_booking_conflict ON public.bookings;
-    CREATE TRIGGER check_booking_conflict
-      BEFORE INSERT OR UPDATE ON public.bookings
-      FOR EACH ROW EXECUTE FUNCTION public.prevent_double_booking();
-  `, 'trigger:check_booking_conflict');
-
-  // ── 4. RLS ────────────────────────────────────────────────────────────────
-  const rlsStatements = `
-    ALTER TABLE public.bookings ENABLE ROW LEVEL SECURITY;
-    ALTER TABLE public.courts ENABLE ROW LEVEL SECURITY;
-    ALTER TABLE public.settings ENABLE ROW LEVEL SECURITY;
-    ALTER TABLE public.accounts ENABLE ROW LEVEL SECURITY;
-    ALTER TABLE public.blocked_dates ENABLE ROW LEVEL SECURITY;
-    ALTER TABLE public.open_play_registrations ENABLE ROW LEVEL SECURITY;
-    ALTER TABLE public.payment_sessions ENABLE ROW LEVEL SECURITY;
-  `;
-  for (const stmt of rlsStatements.trim().split(';').filter(s => s.trim())) {
-    await runSQL(stmt + ';', 'RLS enable');
+  const localEnv = loadLocalEnv();
+  const env = { ...process.env, ...localEnv };
+  const useCli = process.argv.includes('--cli') || !localEnv.SUPABASE_ACCESS_TOKEN;
+  const ref = String(env.SUPABASE_PROJECT_REF || '').trim();
+  const token = String(localEnv.SUPABASE_ACCESS_TOKEN || '').trim();
+  if (!/^[a-z0-9]{20}$/.test(ref) || (!useCli && !token)) {
+    throw new Error('Set the new SUPABASE_PROJECT_REF, then use --cli with an authenticated CLI or supply SUPABASE_ACCESS_TOKEN in .env.local.');
+  }
+  const expectedUrl = `https://${ref}.supabase.co`;
+  if (env.SUPABASE_URL && env.SUPABASE_URL.replace(/\/+$/, '') !== expectedUrl) {
+    throw new Error('SUPABASE_URL and SUPABASE_PROJECT_REF identify different projects.');
   }
 
-  // ── 5. RLS POLICIES ───────────────────────────────────────────────────────
-  const policies = [
-    // bookings
-    "DROP POLICY IF EXISTS bookings_select_public ON public.bookings; CREATE POLICY bookings_select_public ON public.bookings FOR SELECT USING (true);",
-    "DROP POLICY IF EXISTS bookings_insert_public ON public.bookings; CREATE POLICY bookings_insert_public ON public.bookings FOR INSERT WITH CHECK (true);",
-    "DROP POLICY IF EXISTS bookings_update_admin ON public.bookings; CREATE POLICY bookings_update_admin ON public.bookings FOR UPDATE USING (auth.uid() IS NOT NULL);",
-    "DROP POLICY IF EXISTS bookings_delete_admin ON public.bookings; CREATE POLICY bookings_delete_admin ON public.bookings FOR DELETE USING (auth.uid() IS NOT NULL);",
-    // courts
-    "DROP POLICY IF EXISTS courts_select_public ON public.courts; CREATE POLICY courts_select_public ON public.courts FOR SELECT USING (true);",
-    "DROP POLICY IF EXISTS courts_insert_admin ON public.courts; CREATE POLICY courts_insert_admin ON public.courts FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);",
-    "DROP POLICY IF EXISTS courts_update_admin ON public.courts; CREATE POLICY courts_update_admin ON public.courts FOR UPDATE USING (auth.uid() IS NOT NULL);",
-    "DROP POLICY IF EXISTS courts_delete_admin ON public.courts; CREATE POLICY courts_delete_admin ON public.courts FOR DELETE USING (auth.uid() IS NOT NULL);",
-    // settings
-    "DROP POLICY IF EXISTS settings_select_public ON public.settings; CREATE POLICY settings_select_public ON public.settings FOR SELECT USING (true);",
-    "DROP POLICY IF EXISTS settings_insert_admin ON public.settings; CREATE POLICY settings_insert_admin ON public.settings FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);",
-    "DROP POLICY IF EXISTS settings_update_admin ON public.settings; CREATE POLICY settings_update_admin ON public.settings FOR UPDATE USING (auth.uid() IS NOT NULL);",
-    "DROP POLICY IF EXISTS settings_delete_admin ON public.settings; CREATE POLICY settings_delete_admin ON public.settings FOR DELETE USING (auth.uid() IS NOT NULL);",
-    // accounts
-    "DROP POLICY IF EXISTS accounts_select_admin ON public.accounts; CREATE POLICY accounts_select_admin ON public.accounts FOR SELECT USING (auth.uid() IS NOT NULL);",
-    "DROP POLICY IF EXISTS accounts_insert_admin ON public.accounts; CREATE POLICY accounts_insert_admin ON public.accounts FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);",
-    "DROP POLICY IF EXISTS accounts_update_admin ON public.accounts; CREATE POLICY accounts_update_admin ON public.accounts FOR UPDATE USING (auth.uid() IS NOT NULL);",
-    "DROP POLICY IF EXISTS accounts_delete_admin ON public.accounts; CREATE POLICY accounts_delete_admin ON public.accounts FOR DELETE USING (auth.uid() IS NOT NULL);",
-    // blocked_dates
-    "DROP POLICY IF EXISTS blocked_dates_select_public ON public.blocked_dates; CREATE POLICY blocked_dates_select_public ON public.blocked_dates FOR SELECT USING (true);",
-    "DROP POLICY IF EXISTS blocked_dates_insert_admin ON public.blocked_dates; CREATE POLICY blocked_dates_insert_admin ON public.blocked_dates FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);",
-    "DROP POLICY IF EXISTS blocked_dates_delete_admin ON public.blocked_dates; CREATE POLICY blocked_dates_delete_admin ON public.blocked_dates FOR DELETE USING (auth.uid() IS NOT NULL);",
-    // open_play
-    "DROP POLICY IF EXISTS open_play_select_public ON public.open_play_registrations; CREATE POLICY open_play_select_public ON public.open_play_registrations FOR SELECT USING (true);",
-    "DROP POLICY IF EXISTS open_play_insert_public ON public.open_play_registrations; CREATE POLICY open_play_insert_public ON public.open_play_registrations FOR INSERT WITH CHECK (true);",
-    "DROP POLICY IF EXISTS open_play_delete_admin ON public.open_play_registrations; CREATE POLICY open_play_delete_admin ON public.open_play_registrations FOR DELETE USING (auth.uid() IS NOT NULL);",
-    // payment_sessions (service-role only)
-    "DROP POLICY IF EXISTS payment_sessions_no_direct ON public.payment_sessions; CREATE POLICY payment_sessions_no_direct ON public.payment_sessions FOR ALL TO authenticated USING (false);",
-  ];
-  for (const p of policies) await runSQL(p, 'RLS policy');
+  function cli(args) {
+    const cliEnv = { ...process.env };
+    // --cli explicitly chooses the current CLI login, never an unrelated
+    // token inherited from another project or an old shell session.
+    delete cliEnv.SUPABASE_ACCESS_TOKEN;
+    const output = execFileSync(env.SUPABASE_CLI || 'supabase', [...args, '--output', 'json'], {
+      cwd: repoRoot, env: cliEnv, encoding: 'utf8', timeout: 180000,
+      maxBuffer: 4 * 1024 * 1024, stdio: ['ignore', 'pipe', 'inherit'],
+    });
+    const parsed = JSON.parse(output);
+    return parsed.rows || parsed;
+  }
 
-  // ── 6. DEFAULT SETTINGS ───────────────────────────────────────────────────
-  // Courts are managed by admins. Never restore sample courts during setup.
-
-  const { error: settErr } = await sb.from('settings').upsert([
-    { key: 'venue_name',    value: 'Paddle Rage Pickleball' },
-    { key: 'open_time',     value: '6' },
-    { key: 'close_time',    value: '22' },
-    { key: 'booking_fee',   value: '5' },
-    { key: 'open_play_fee', value: '100' },
-  ], { onConflict: 'key' });
-  console.log(settErr ? `  ✗ seed settings: ${settErr.message}` : '  ✓ seed settings');
-
-  console.log('\nDone!');
-}
-
-async function runSQL(sql, label) {
-  // Use Supabase's pg REST endpoint via RPC — only works with service_role
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/`, {
-    method: 'GET',
-    headers: {
-      'apikey': SERVICE_KEY,
-      'Authorization': 'Bearer ' + SERVICE_KEY,
+  async function management(endpoint, payload) {
+    if (useCli) {
+      if (endpoint === 'projects') return cli(['projects', 'list']);
+      if (endpoint !== `projects/${ref}/database/query` || !payload?.query) {
+        throw new Error('Unsupported CLI bootstrap operation.');
+      }
+      const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'chino-bootstrap-'));
+      const file = path.join(directory, 'migration.sql');
+      try {
+        fs.writeFileSync(file, payload.query);
+        return cli(['db', 'query', '--linked', '--project-ref', ref, '--file', file]);
+      } finally {
+        if (fs.existsSync(file)) fs.unlinkSync(file);
+        fs.rmdirSync(directory);
+      }
     }
-  });
-  // Actually use the postgres endpoint directly via the Supabase management API
-  // Since we can't call raw SQL via REST v1 on a new project, use the pg endpoint
-  const r = await fetch(`${SUPABASE_URL}/pg/query`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'apikey': SERVICE_KEY,
-      'Authorization': 'Bearer ' + SERVICE_KEY,
-    },
-    body: JSON.stringify({ query: sql })
-  });
-  if (r.ok) {
-    console.log(`  ✓ ${label}`);
-  } else {
-    const body = await r.text();
-    console.log(`  ✗ ${label} (${r.status}): ${body.substring(0, 120)}`);
+    const response = await fetch('https://api.supabase.com/v1/' + endpoint, {
+      method: payload ? 'POST' : 'GET',
+      headers: { authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+      ...(payload ? { body: JSON.stringify(payload) } : {}),
+      signal: AbortSignal.timeout(180000),
+    });
+    const raw = await response.text();
+    if (!response.ok) throw new Error('Supabase management request failed (' + response.status + '): ' + raw.slice(0, 500));
+    return raw ? JSON.parse(raw) : null;
   }
+  async function query(sql) {
+    return management(`projects/${ref}/database/query`, { query: sql });
+  }
+
+  const projects = await management('projects');
+  const project = projects.find(item => item.id === ref);
+  if (!project || !/chino/i.test(project.name || '')) {
+    throw new Error('Refusing bootstrap: the selected project is not an accessible CHINO project.');
+  }
+  console.log('Verified dedicated project: ' + project.name + ' (' + ref + ')');
+  await query(`do $$ begin
+    if to_regclass('public.bookings') is not null
+       or to_regclass('public.courts') is not null
+       or to_regclass('public.accounts') is not null then
+      raise exception 'Fresh bootstrap refused: application tables already exist. Apply normal migrations instead.';
+    end if;
+  end $$;`);
+
+  await query(fs.readFileSync(path.join(repoRoot, 'SETUP_NEW_SUPABASE.sql'), 'utf8'));
+  // Only the bootstrap/service role can configure maintenance routing.
+  await query(`insert into public.chino_backend_config (id, project_url)
+values (true, ${literal(expectedUrl)})
+on conflict (id) do update set project_url = excluded.project_url;`);
+  await query(migrationHistorySchema + '\n' + migrations
+    .filter(item => item.version < firstForwardVersion)
+    .map(recordMigration).join('\n'));
+  console.log('Consolidated baseline installed and prior migration history recorded.');
+
+  for (const item of forwardMigrations) {
+    await query(fs.readFileSync(item.file, 'utf8') + '\n' + recordMigration(item));
+    console.log('Applied ' + item.name);
+  }
+  console.log('CHINO schema, private storage, Realtime and isolated maintenance jobs are ready.');
+  console.log('No venue courts, users, payment recipients or business details were copied.');
 }
 
-run().catch(e => console.error('Fatal:', e.message));
+run().catch(error => {
+  console.error('Database setup stopped: ' + error.message);
+  process.exitCode = 1;
+});

@@ -1,20 +1,24 @@
 const BRAND = {
-  black: "#050706",
-  surface: "#0b0f0c",
-  surfaceRaised: "#111712",
-  input: "#151d17",
-  border: "#29362c",
-  neon: "#b6f000",
-  neonBright: "#d7ff3f",
-  neonDark: "#82ad00",
-  text: "#f6f8f2",
-  muted: "#b7c0b5",
+  black: "#0a1422",
+  surface: "#101e30",
+  surfaceRaised: "#17283d",
+  input: "#1b2d43",
+  border: "#31465e",
+  neon: "#83b8ee",
+  neonBright: "#b5d7f5",
+  neonDark: "#427eba",
+  text: "#f4f7fb",
+  muted: "#b7c7d8",
   danger: "#ff5a5f",
   warning: "#ffcc4d",
-  neonTint: "#172006",
+  neonTint: "#142c47",
   dangerTint: "#241012",
   warningTint: "#211b08",
 } as const;
+
+function venueLocation(): string {
+  return (Deno.env.get("APP_VENUE_LOCATION") || "").trim();
+}
 
 export type ConfirmationPayload = {
   bookingRef: string;
@@ -192,13 +196,13 @@ export function formatDeadline(value?: string | null): string {
 }
 
 function publicUrl(): string {
-  return (Deno.env.get("APP_PUBLIC_URL") || "https://paddleragecdo.ph").trim()
+  return (Deno.env.get("APP_PUBLIC_URL") || "https://chinopickleball.pages.dev").trim()
     .replace(/\/+$/, "");
 }
 
 function logoUrl(): string {
   return (Deno.env.get("PUBLIC_LOGO_URL") ||
-    `${publicUrl()}/paddleragelogo.jpg`).trim();
+    `${publicUrl()}/assets/chino-courts.png`).trim();
 }
 
 function layout(options: LayoutOptions): string {
@@ -211,7 +215,7 @@ function layout(options: LayoutOptions): string {
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="light">
   <meta name="supported-color-schemes" content="light">
-  <title>${escapeHtml(options.title)} | Paddle Rage Pickleball</title>
+  <title>${escapeHtml(options.title)} | CHINO Pickleball Courts</title>
   <style>
     body,table,td,a{-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}
     table,td{mso-table-lspace:0pt;mso-table-rspace:0pt}
@@ -240,12 +244,12 @@ function layout(options: LayoutOptions): string {
         <tr><td class="mobile-pad" style="padding:25px 34px;background:${BRAND.black};border-bottom:1px solid ${BRAND.border};">
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
             <td width="72" style="width:72px;vertical-align:middle;">
-              <img src="${logo}" width="58" height="58" alt="Paddle Rage Pickleball" style="display:block;width:58px;height:58px;border-radius:13px;object-fit:contain;background:#ffffff;padding:3px;border:1px solid ${BRAND.neon};">
+              <img src="${logo}" width="58" height="58" alt="CHINO Pickleball Courts" style="display:block;width:58px;height:58px;border-radius:13px;object-fit:contain;background:#ffffff;padding:3px;border:1px solid ${BRAND.neon};">
             </td>
             <td style="vertical-align:middle;">
-              <div class="brand-name" style="font-size:22px;line-height:1.15;font-weight:900;letter-spacing:1.8px;color:#ffffff;">PADDLE RAGE</div>
-              <div style="margin-top:3px;font-size:12px;line-height:1.3;font-weight:700;letter-spacing:2.1px;color:${BRAND.neon};">PICKLEBALL</div>
-              <div style="margin-top:5px;font-size:11px;line-height:1.3;color:${BRAND.muted};">Iponan, Cagayan de Oro</div>
+              <div class="brand-name" style="font-size:22px;line-height:1.15;font-weight:900;letter-spacing:1.8px;color:#ffffff;">CHINO</div>
+              <div style="margin-top:3px;font-size:12px;line-height:1.3;font-weight:700;letter-spacing:2.1px;color:${BRAND.neon};">PICKLEBALL COURTS</div>
+              ${venueLocation() ? `<div style="margin-top:5px;font-size:11px;line-height:1.3;color:${BRAND.muted};">${escapeHtml(venueLocation())}</div>` : ""}
             </td>
           </tr></table>
         </td></tr>
@@ -263,8 +267,8 @@ function layout(options: LayoutOptions): string {
           <div style="font-size:13px;line-height:1.6;color:${BRAND.muted};">${
     escapeHtml(options.footerText)
   }</div>
-          <div style="margin-top:12px;"><a href="${siteUrl}" style="color:${BRAND.neon};font-size:12px;font-weight:800;text-decoration:none;letter-spacing:.4px;">paddleragecdo.ph</a></div>
-          <div style="margin-top:8px;font-size:11px;line-height:1.5;color:#879085;">Automated transactional email &middot; Paddle Rage Pickleball</div>
+          <div style="margin-top:12px;"><a href="${siteUrl}" style="color:${BRAND.neon};font-size:12px;font-weight:800;text-decoration:none;letter-spacing:.4px;">chinopickleball.pages.dev</a></div>
+          <div style="margin-top:8px;font-size:11px;line-height:1.5;color:#879085;">Automated transactional email &middot; CHINO Pickleball Courts</div>
         </td></tr>
       </table>
     </td></tr>
@@ -294,7 +298,7 @@ export function renderHostVerificationEmail(
   const verificationUrl = plain(payload.verificationUrl);
   const html = layout({
     preheader:
-      "Verify your email to complete your Paddle Rage host application.",
+      "Verify your email to complete your CHINO host application.",
     status: "HOST APPLICATION · EMAIL VERIFICATION",
     statusBackground: BRAND.neonTint,
     statusColor: BRAND.neon,
@@ -320,7 +324,7 @@ export function renderHostVerificationEmail(
       "You received this because a host application was submitted with this email. If that was not you, you can safely ignore this message.",
   });
   const text = [
-    "PADDLE RAGE PICKLEBALL",
+    "CHINO PICKLEBALL COURTS",
     "Host application email verification",
     "",
     `Hi ${fullName},`,
@@ -362,10 +366,10 @@ export function renderConfirmationEmail(
     : 0;
   const paidInFull = remaining < 1;
   const confirmationIntro = paidInFull
-    ? "we received your full payment, and your Paddle Rage booking is confirmed. Everything you need is below."
+    ? "we received your full payment, and your CHINO booking is confirmed. Everything you need is below."
     : paid > 0
-    ? "we received your downpayment, and your Paddle Rage booking is confirmed. Everything you need is below."
-    : "your Paddle Rage booking is confirmed. No payment has been recorded yet, so please review the payment details below.";
+    ? "we received your downpayment, and your CHINO booking is confirmed. Everything you need is below."
+    : "your CHINO booking is confirmed. No payment has been recorded yet, so please review the payment details below.";
   const confirmationPlain = paidInFull
     ? "We received your full payment, and your booking is confirmed."
     : paid > 0
@@ -410,7 +414,7 @@ export function renderConfirmationEmail(
   const bodyHtml = `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:20px;background:${BRAND.surfaceRaised};border:1px solid ${BRAND.border};border-radius:13px;">
       <tr><td style="padding:18px 20px;">
-        <div style="font-size:11px;line-height:1.3;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:${BRAND.muted};">Paddle Rage booking reference</div>
+        <div style="font-size:11px;line-height:1.3;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:${BRAND.muted};">CHINO booking reference</div>
         <div style="margin-top:5px;font-family:Consolas,'Courier New',monospace;font-size:19px;line-height:1.35;font-weight:900;letter-spacing:.8px;color:${BRAND.neon};overflow-wrap:anywhere;">${ref}</div>
         <div style="margin-top:8px;font-size:12px;line-height:1.55;color:${BRAND.muted};">This <strong style="color:${BRAND.text};">PB-...</strong> number is not your GCash, Maya, BDO Pay, BPI, bank, or e-wallet payment reference.</div>
         <div style="margin-top:16px;">
@@ -505,9 +509,9 @@ export function renderConfirmationEmail(
         `<p style="margin:0 0 10px;">Hi <strong>${name}</strong>,</p><p style="margin:0;">Great news&mdash;${confirmationIntro}</p>`,
       bodyHtml,
       footerText:
-        "Need to view your status or request a reschedule? Use Manage booking on the device used to reserve, or contact Paddle Rage for help.",
+        "Need to view your status or request a reschedule? Use Manage booking on the device used to reserve, or contact CHINO for help.",
     }),
-    plain: `PADDLE RAGE PICKLEBALL\nBOOKING CONFIRMED\n\nHi ${
+    plain: `CHINO PICKLEBALL COURTS\nBOOKING CONFIRMED\n\nHi ${
       plain(payload.fullName || "Player")
     },\n\n${confirmationPlain}\n\nBooking reference: ${
       plain(payload.bookingRef)
@@ -515,7 +519,7 @@ export function renderConfirmationEmail(
       duration !== 1 ? "s" : ""
     }\nTotal: ${formatPhpPlain(total)}\nPaid: ${
       formatPhpPlain(paid)
-    }\n${plainPayment}\n\nPlease arrive 10 minutes early and keep your booking reference ready.\nThis PB- number is your Paddle Rage booking reference, not your bank or e-wallet payment reference.\nView booking status: ${manageUrl}\n\nPaddle Rage Pickleball\nIponan, Cagayan de Oro\n${publicUrl()}`,
+    }\n${plainPayment}\n\nPlease arrive 10 minutes early and keep your booking reference ready.\nThis PB- number is your CHINO booking reference, not your bank or e-wallet payment reference.\nView booking status: ${manageUrl}\n\nCHINO Pickleball Courts\n${plain(venueLocation())}\n${publicUrl()}`,
   };
 }
 
@@ -589,12 +593,12 @@ export function renderRescheduleEmail(
       statusColor: "#ffffff",
       title: "Your booking has a new schedule.",
       introHtml:
-        `<p style="margin:0 0 10px;">Hi <strong>${name}</strong>,</p><p style="margin:0;">Your Paddle Rage booking has been moved to the new date and time shown below. Your slot remains secure.</p>`,
+        `<p style="margin:0 0 10px;">Hi <strong>${name}</strong>,</p><p style="margin:0;">Your CHINO booking has been moved to the new date and time shown below. Your slot remains secure.</p>`,
       bodyHtml,
       footerText:
-        "Need help with the new schedule? Contact the Paddle Rage team and include your booking reference.",
+        "Need help with the new schedule? Contact the CHINO team and include your booking reference.",
     }),
-    plain: `PADDLE RAGE PICKLEBALL\nBOOKING RESCHEDULED\n\nHi ${
+    plain: `CHINO PICKLEBALL COURTS\nBOOKING RESCHEDULED\n\nHi ${
       plain(payload.fullName || "Player")
     },\n\nYour booking has been moved. Your slot remains secure.\n\nBooking reference: ${
       plain(payload.bookingRef)
@@ -606,7 +610,7 @@ export function renderRescheduleEmail(
       Number(payload.newDuration || 0)
     } hour${Number(payload.newDuration || 0) !== 1 ? "s" : ""}${
       note ? `\n\nMessage from our team: ${note}` : ""
-    }\n\nPaddle Rage Pickleball\nIponan, Cagayan de Oro\n${publicUrl()}`,
+    }\n\nCHINO Pickleball Courts\n${plain(venueLocation())}\n${publicUrl()}`,
   };
 }
 
@@ -654,11 +658,11 @@ export function renderGroupedRescheduleEmail(
       statusBackground: BRAND.danger,
       statusColor: "#ffffff",
       title: "Your booking has a new schedule.",
-      introHtml: `<p style="margin:0 0 10px;">Hi <strong>${escapeHtml(payload.fullName || "Player")}</strong>,</p><p style="margin:0;">We updated ${count} ${itemLabel} in your Paddle Rage booking. Review each new schedule below.</p>`,
+      introHtml: `<p style="margin:0 0 10px;">Hi <strong>${escapeHtml(payload.fullName || "Player")}</strong>,</p><p style="margin:0;">We updated ${count} ${itemLabel} in your CHINO booking. Review each new schedule below.</p>`,
       bodyHtml: `${noteHtml}<div style="margin-bottom:18px;font-size:13px;line-height:1.5;color:${BRAND.muted};">Booking reference: <strong style="color:${BRAND.neon};overflow-wrap:anywhere;">${escapeHtml(payload.bookingRef)}</strong></div>${scheduleCards}<p style="margin:0 0 18px;font-size:14px;line-height:1.65;color:${BRAND.muted};">${unchangedCopy}</p><a href="${escapeHtml(manageUrl)}" style="display:inline-block;padding:13px 20px;border-radius:10px;background:${BRAND.neon};color:${BRAND.black};font-size:14px;line-height:1.3;font-weight:900;text-decoration:none;">Manage booking</a>`,
-      footerText: "Need help with the new schedule? Contact the Paddle Rage team and include your booking reference.",
+      footerText: "Need help with the new schedule? Contact the CHINO team and include your booking reference.",
     }),
-    plain: `PADDLE RAGE PICKLEBALL\nBOOKING RESCHEDULED\n\nHi ${plain(payload.fullName || "Player")},\n\nWe updated ${count} ${itemLabel} in your booking.\nBooking reference: ${plain(payload.bookingRef)}\n\n${schedulesPlain}${note ? `\n\nMessage from our team: ${note}` : ""}\n\n${unchangedCopy}\nManage booking: ${manageUrl}\n\nPaddle Rage Pickleball\nIponan, Cagayan de Oro\n${publicUrl()}`,
+    plain: `CHINO PICKLEBALL COURTS\nBOOKING RESCHEDULED\n\nHi ${plain(payload.fullName || "Player")},\n\nWe updated ${count} ${itemLabel} in your booking.\nBooking reference: ${plain(payload.bookingRef)}\n\n${schedulesPlain}${note ? `\n\nMessage from our team: ${note}` : ""}\n\n${unchangedCopy}\nManage booking: ${manageUrl}\n\nCHINO Pickleball Courts\n${plain(venueLocation())}\n${publicUrl()}`,
   };
 }
 
@@ -670,7 +674,7 @@ export function renderBookingCancellationEmail(
   const reason = plain(payload.reason) ||
     (rejected
       ? "The submitted payment could not be verified."
-      : "The booking was cancelled by the Paddle Rage team.");
+      : "The booking was cancelled by the CHINO team.");
   const paid = Math.max(0, Number(payload.paid || 0));
   const title = rejected
     ? "Your payment could not be verified."
@@ -681,7 +685,7 @@ export function renderBookingCancellationEmail(
   const paymentNote = paid > 0
     ? `Our records show ${
       formatPhp(paid)
-    } received. Contact the Paddle Rage team and include your booking reference if you need the payment reviewed.`
+    } received. Contact the CHINO team and include your booking reference if you need the payment reviewed.`
     : "No settled payment is recorded for this booking.";
   const bodyHtml = `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:20px;background:${BRAND.dangerTint};border:1px solid ${BRAND.danger};border-radius:13px;">
@@ -722,10 +726,10 @@ export function renderBookingCancellationEmail(
       }</strong>,</p><p style="margin:0;">This message confirms that the reservation below is no longer active.</p>`,
       bodyHtml,
       footerText:
-        "Questions about this cancellation? Reply to this email or contact the Paddle Rage team with your booking reference.",
+        "Questions about this cancellation? Reply to this email or contact the CHINO team with your booking reference.",
     }),
     plain:
-      `PADDLE RAGE PICKLEBALL\n${status}\n\nHi ${name},\n\n${reason}\n\nBooking reference: ${
+      `CHINO PICKLEBALL COURTS\n${status}\n\nHi ${name},\n\n${reason}\n\nBooking reference: ${
         plain(payload.bookingRef)
       }\nCourt: ${plain(payload.courtName)}\nReleased schedule: ${
         formatDate(payload.date)
@@ -733,9 +737,9 @@ export function renderBookingCancellationEmail(
         formatPhpPlain(payload.total)
       }\nRecorded paid amount: ${formatPhpPlain(paid)}\n\n${
         paid > 0
-          ? "Contact the Paddle Rage team with your booking reference if you need the payment reviewed."
+          ? "Contact the CHINO team with your booking reference if you need the payment reviewed."
           : "No settled payment is recorded for this booking."
-      }\nThe court slot has been released. Create a new booking if you still want to play.\n\nPaddle Rage Pickleball\nIponan, Cagayan de Oro\n${publicUrl()}`,
+      }\nThe court slot has been released. Create a new booking if you still want to play.\n\nCHINO Pickleball Courts\n${plain(venueLocation())}\n${publicUrl()}`,
   };
 }
 
@@ -787,12 +791,12 @@ export function renderBookingPaymentTransferEmail(
       statusBackground: BRAND.neon,
       statusColor: BRAND.black,
       title: "Your payment is now on the correct booking.",
-      introHtml: `<p style="margin:0 0 10px;">Hi <strong>${escapeHtml(name)}</strong>,</p><p style="margin:0;">We corrected your Paddle Rage reservation and moved the existing payment to your new booking.</p>`,
+      introHtml: `<p style="margin:0 0 10px;">Hi <strong>${escapeHtml(name)}</strong>,</p><p style="margin:0;">We corrected your CHINO reservation and moved the existing payment to your new booking.</p>`,
       bodyHtml,
       footerText:
-        "Questions about this correction? Reply to this email or contact the Paddle Rage team with your new booking reference.",
+        "Questions about this correction? Reply to this email or contact the CHINO team with your new booking reference.",
     }),
-    plain: `PADDLE RAGE PICKLEBALL\nPAYMENT MOVED - BOOKING CONFIRMED\n\nHi ${name},\n\nWe corrected your reservation and moved the existing payment to your new booking.\n\nCancelled booking: ${sourceRef}\nConfirmed booking: ${targetRef}\nCourt: ${plain(payload.courtName)}\nNew schedule: ${scheduleDate}, ${plain(payload.startTime)} - ${plain(payload.endTime)}\nPayment moved: ${formatPhpPlain(payload.amount)}\n\nCorrection note: ${reason}\n\nThe original booking remains cancelled and its slots stay released. No new charge was made.\n\nPaddle Rage Pickleball\nIponan, Cagayan de Oro\n${publicUrl()}`,
+    plain: `CHINO PICKLEBALL COURTS\nPAYMENT MOVED - BOOKING CONFIRMED\n\nHi ${name},\n\nWe corrected your reservation and moved the existing payment to your new booking.\n\nCancelled booking: ${sourceRef}\nConfirmed booking: ${targetRef}\nCourt: ${plain(payload.courtName)}\nNew schedule: ${scheduleDate}, ${plain(payload.startTime)} - ${plain(payload.endTime)}\nPayment moved: ${formatPhpPlain(payload.amount)}\n\nCorrection note: ${reason}\n\nThe original booking remains cancelled and its slots stay released. No new charge was made.\n\nCHINO Pickleball Courts\n${plain(venueLocation())}\n${publicUrl()}`,
   };
 }
 
@@ -856,7 +860,7 @@ export function renderBalanceNoticeEmail(
       ? ""
       : `<div style="padding:15px 17px;background:${BRAND.warningTint};border-left:4px solid ${BRAND.warning};border-radius:8px;font-size:13px;line-height:1.65;color:${BRAND.text};">Deadline: <strong>${
         escapeHtml(deadline)
-      }</strong><br>Use the payment instructions from your original confirmation or contact the Paddle Rage team before the deadline.</div>`
+      }</strong><br>Use the payment instructions from your original confirmation or contact the CHINO team before the deadline.</div>`
   }`;
   const plainSchedules = payload.schedules.map((item) =>
     `- ${formatDate(item.date)} | ${plain(item.startTime)} - ${
@@ -886,9 +890,9 @@ export function renderBalanceNoticeEmail(
       }</strong>,</p>`,
       bodyHtml,
       footerText:
-        "This is an automated reservation notice. Contact the Paddle Rage team with your booking reference if you need help.",
+        "This is an automated reservation notice. Contact the CHINO team with your booking reference if you need help.",
     }),
-    plain: `PADDLE RAGE PICKLEBALL\n${heading}\n\nHi ${
+    plain: `CHINO PICKLEBALL COURTS\n${heading}\n\nHi ${
       plain(payload.fullName || "Host")
     },\n\n${action}\n\nBooking reference: ${
       plain(payload.bookingRef)
@@ -896,7 +900,7 @@ export function renderBalanceNoticeEmail(
       formatPhpPlain(payload.paid)
     }\nRemaining balance: ${
       formatPhpPlain(payload.remainingBalance)
-    }\n\nPaddle Rage Pickleball\nIponan, Cagayan de Oro\n${publicUrl()}`,
+    }\n\nCHINO Pickleball Courts\n${plain(venueLocation())}\n${publicUrl()}`,
   };
 }
 
@@ -909,7 +913,7 @@ export function renderHostDecisionEmail(
   const hostUrl = `${publicUrl()}/host.html`;
   const nextStep = approved
     ? `Your host access is active. Sign in using the email and password from your application.`
-    : `Host access was not activated. You may contact the Paddle Rage team if you need clarification or want to submit updated information.`;
+    : `Host access was not activated. You may contact the CHINO team if you need clarification or want to submit updated information.`;
   const bodyHtml = `
     ${
     note
@@ -933,7 +937,7 @@ export function renderHostDecisionEmail(
 
   return {
     html: layout({
-      preheader: `Your Paddle Rage host application was ${payload.status}.`,
+      preheader: `Your CHINO host application was ${payload.status}.`,
       status: `HOST APPLICATION ${payload.status.toUpperCase()}`,
       statusBackground: approved ? BRAND.neon : BRAND.danger,
       statusColor: approved ? BRAND.black : "#ffffff",
@@ -945,13 +949,13 @@ export function renderHostDecisionEmail(
       }</strong>, your Open Play host application has been reviewed.</p>`,
       bodyHtml,
       footerText:
-        "Questions about this decision? Reply to this email or contact the Paddle Rage team.",
+        "Questions about this decision? Reply to this email or contact the CHINO team.",
     }),
     plain:
-      `PADDLE RAGE PICKLEBALL\nHOST APPLICATION ${payload.status.toUpperCase()}\n\nHi ${name},\n\nYour Open Play host application was ${payload.status}.\n${
+      `CHINO PICKLEBALL COURTS\nHOST APPLICATION ${payload.status.toUpperCase()}\n\nHi ${name},\n\nYour Open Play host application was ${payload.status}.\n${
         note ? `Review note: ${note}\n` : ""
       }${nextStep}${
         approved ? `\nHost dashboard: ${hostUrl}` : ""
-      }\n\nPaddle Rage Pickleball\nIponan, Cagayan de Oro\n${publicUrl()}`,
+      }\n\nCHINO Pickleball Courts\n${plain(venueLocation())}\n${publicUrl()}`,
   };
 }

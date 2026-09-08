@@ -2,7 +2,7 @@
   "use strict";
 
   const MAX_RESULT_ROWS = 8;
-  const DEFAULT_CONTACT_EMAIL = "bookings@paddleragecdo.ph";
+  const DEFAULT_CONTACT_EMAIL = "";
   const currencyFormatter = new Intl.NumberFormat("en-PH", {
     style: "currency",
     currency: "PHP",
@@ -45,7 +45,7 @@
     forfeited: {
       label: "Forfeited",
       tone: "danger",
-      message: "This reservation is no longer active. Contact Paddle Rage if you need help understanding its status.",
+      message: "This reservation is no longer active. Contact CHINO if you need help understanding its status.",
     },
   };
 
@@ -199,7 +199,7 @@
   function contactEmail() {
     const configured = String(
       window.PB_MANAGE_BOOKING_CONTACT_EMAIL
-      || document.querySelector('meta[name="paddle-rage-contact-email"]')?.content
+      || document.querySelector('meta[name="chino-contact-email"]')?.content
       || DEFAULT_CONTACT_EMAIL,
     ).trim();
     return emailLooksValid(configured) ? configured : DEFAULT_CONTACT_EMAIL;
@@ -207,11 +207,12 @@
 
   function contactHref(reference, subjectPrefix) {
     const subject = `${subjectPrefix || "Booking help"}${reference ? ` — ${reference}` : ""}`;
-    return `mailto:${encodeURIComponent(contactEmail())}?subject=${encodeURIComponent(subject)}`;
+    const email = contactEmail();
+    return email ? `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}` : "index.html#venueContact";
   }
 
   function makeContactButton(reference, label, subjectPrefix, className) {
-    const link = element("a", className || "contact-button", label || "Contact Paddle Rage");
+    const link = element("a", className || "contact-button", label || "Contact CHINO");
     link.href = contactHref(reference, subjectPrefix);
     return link;
   }
@@ -297,7 +298,7 @@
     if (options.contact) {
       actions.push(makeContactButton(
         options.reference,
-        "Contact Paddle Rage",
+        "Contact CHINO",
         "Booking access help",
         "owner-state-action",
       ));
@@ -322,7 +323,7 @@
     return {
       label: "Status update",
       tone: "neutral",
-      message: "This booking contains items at different stages. Review each schedule below or contact Paddle Rage for help.",
+      message: "This booking contains items at different stages. Review each schedule below or contact CHINO for help.",
     };
   }
 
@@ -444,7 +445,7 @@
       rescheduleRequestButton.disabled = true;
       rescheduleRequestButton.textContent = "Online request unavailable";
       reschedulePolicyHeading.textContent = "Schedule requests are temporarily unavailable";
-      reschedulePolicyCopy.textContent = "We couldn’t verify online reschedule eligibility right now. Your booking is unchanged; contact Paddle Rage if you need help.";
+      reschedulePolicyCopy.textContent = "We couldn’t verify online reschedule eligibility right now. Your booking is unchanged; contact CHINO if you need help.";
       return;
     }
 
@@ -480,7 +481,7 @@
     rescheduleRequestButton.disabled = false;
     rescheduleRequestButton.textContent = "Request a schedule change";
     reschedulePolicyHeading.textContent = "Need to change your schedule?";
-    reschedulePolicyCopy.textContent = "Choose an exact available time here. This page does not change your booking automatically; your current schedule stays confirmed until Paddle Rage reviews and approves your request.";
+    reschedulePolicyCopy.textContent = "Choose an exact available time here. This page does not change your booking automatically; your current schedule stays confirmed until CHINO reviews and approves your request.";
   }
 
   function requestStatus(request) {
@@ -534,14 +535,14 @@
       pending: {
         badge: "Pending review",
         title: "Your reschedule request was sent",
-        message: "Your original schedule stays confirmed until Paddle Rage approves the requested change.",
+        message: "Your original schedule stays confirmed until CHINO approves the requested change.",
         icon: "↻",
         action: "Review or update",
       },
       approved: {
         badge: "Approved",
         title: "Your new schedule is confirmed",
-        message: "Paddle Rage approved this schedule change. Your booking details now reflect the confirmed schedule.",
+        message: "CHINO approved this schedule change. Your booking details now reflect the confirmed schedule.",
         icon: "✓",
         action: "View request",
       },
@@ -666,7 +667,7 @@
 
   function minimumRescheduleDate() {
     const today = todayInManila();
-    const openingDate = String(document.querySelector('meta[name="paddle-rage-booking-opening-date"]')?.content || "").trim();
+    const openingDate = String(document.querySelector('meta[name="chino-booking-opening-date"]')?.content || "").trim();
     return /^\d{4}-\d{2}-\d{2}$/.test(openingDate) && openingDate > today ? openingDate : today;
   }
 
@@ -867,7 +868,7 @@
       return "That time is no longer available. Choose another live option and try again.";
     }
     if (message.includes("eligible") || message.includes("cutoff") || message.includes("too late")) {
-      return "This booking is not currently eligible for an online schedule change. Contact Paddle Rage for help.";
+      return "This booking is not currently eligible for an online schedule change. Contact CHINO for help.";
     }
     return fallback;
   }
@@ -1028,7 +1029,7 @@
       void loadRescheduleOptions();
     });
     dateField.append(dateLabel, dateInput);
-    dateWrap.append(dateField, element("div", "reschedule-availability-hint", "Availability is checked live. A requested time is not held until Paddle Rage approves it."));
+    dateWrap.append(dateField, element("div", "reschedule-availability-hint", "Availability is checked live. A requested time is not held until CHINO approves it."));
     availability.append(dateWrap);
     const slotGrid = element("div", "reschedule-slot-grid");
     slotGrid.id = "rescheduleSlotGrid";
@@ -1050,7 +1051,7 @@
     comparison.id = "rescheduleComparison";
     review.append(comparison);
     const noteField = element("div", "reschedule-field");
-    const noteLabel = element("label", "", "Note for Paddle Rage (optional)");
+    const noteLabel = element("label", "", "Note for CHINO (optional)");
     noteLabel.htmlFor = "rescheduleNote";
     const note = document.createElement("textarea");
     note.id = "rescheduleNote";
@@ -1066,7 +1067,7 @@
     checkbox.type = "checkbox";
     checkbox.id = "rescheduleAcknowledge";
     checkbox.required = true;
-    acknowledge.append(checkbox, element("span", "", "I understand that payments are final and non-refundable, and that this requested schedule is not reserved until Paddle Rage approves it."));
+    acknowledge.append(checkbox, element("span", "", "I understand that payments are final and non-refundable, and that this requested schedule is not reserved until CHINO approves it."));
     review.append(acknowledge);
 
     if (request && status === "pending") {
@@ -1340,7 +1341,7 @@
     root.append(scheduleSection);
 
     if (wasLimited) {
-      root.append(element("p", "status-message", `Showing the first ${MAX_RESULT_ROWS} schedule items. Contact Paddle Rage for help with the complete booking group.`));
+      root.append(element("p", "status-message", `Showing the first ${MAX_RESULT_ROWS} schedule items. Contact CHINO for help with the complete booking group.`));
     }
 
     const rescheduleStatusMount = element("div", "reschedule-status-mount");
@@ -1351,8 +1352,8 @@
     if (isInactive) {
       policy.append(
         element("h3", "", "Need help with this booking?"),
-        element("p", "", "Paid booking payments are final and non-refundable. This page is view-only; contact Paddle Rage if the status shown does not match your records."),
-        makeContactButton(reference, "Contact Paddle Rage", "Booking status help", "reschedule-button"),
+        element("p", "", "Paid booking payments are final and non-refundable. This page is view-only; contact CHINO if the status shown does not match your records."),
+        makeContactButton(reference, "Contact CHINO", "Booking status help", "reschedule-button"),
       );
     } else {
       const requestButton = element(
@@ -1368,7 +1369,7 @@
       const policyCopy = element("p", "", isOwnerResult
         ? "Owner preview is read-only. Guest submissions and owner decisions remain separate and securely verified."
         : "Securely checking your booking’s schedule-change options.");
-      const policyContact = makeContactButton(reference, "Contact Paddle Rage", "Schedule change help", "contact-button");
+      const policyContact = makeContactButton(reference, "Contact CHINO", "Schedule change help", "contact-button");
       policyContact.hidden = true;
       policy.append(
         policyHeading,
@@ -1514,7 +1515,7 @@
     refInput.value = reference;
 
     if (!referenceLooksValid(reference)) {
-      validationError(refInput, "Enter a Paddle Rage booking reference that starts with PB-.");
+      validationError(refInput, "Enter a CHINO booking reference that starts with PB-.");
       return;
     }
     if (!emailLooksValid(email)) {
@@ -1551,7 +1552,7 @@
         renderMessageState({
           tone: "warning",
           title: "Open this on the original browser or device",
-          message: "For privacy, this booking can only be viewed in the browser and device used to complete checkout. If you changed device, changed browser, or cleared browser data, contact Paddle Rage and include your PB booking reference.",
+          message: "For privacy, this booking can only be viewed in the browser and device used to complete checkout. If you changed device, changed browser, or cleared browser data, contact CHINO and include your PB booking reference.",
           contact: true,
           reference,
           actions: [makeOwnerSignInButton("System owner? Sign in to preview")],
@@ -1572,7 +1573,7 @@
 
       renderMessageState({
         title: "Booking lookup is temporarily unavailable",
-        message: "We couldn’t securely check your booking right now. Please try again in a moment or contact Paddle Rage if you still need help.",
+        message: "We couldn’t securely check your booking right now. Please try again in a moment or contact CHINO if you still need help.",
         contact: true,
         reference,
       });

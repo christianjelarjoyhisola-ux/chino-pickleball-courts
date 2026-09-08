@@ -221,7 +221,7 @@ async function sendNotice(
     sent = await sendMailerooEmail({
       to: info.email,
       toName: info.name,
-      subject: `${content.subject} | Paddle Rage Pickleball`,
+      subject: `${content.subject} | CHINO Pickleball Courts`,
       html: content.html,
       plain: content.plain,
       tags: {

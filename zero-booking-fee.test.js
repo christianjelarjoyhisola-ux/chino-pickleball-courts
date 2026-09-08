@@ -134,7 +134,7 @@ test('premium price promise sits beside each court rate without exposing the pri
   assert.match(splashOffer, /role="note"/);
   assert.equal(splashOffer.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim(), 'NO BOOKING FEES');
   assert.doesNotMatch(splashOffer, /aria-live|₱\s*10|\/hr\s*[×x]/i);
-  assert.match(brandTheme, /\.pr-splash-offer\s*\{[^}]*animation:\s*pr-offer-in\s+0\.55s/s);
+  assert.match(brandTheme, /\.pr-splash-offer\s*\{[^}]*color:\s*#b9ccd9/s);
   assert.doesNotMatch(brandTheme, /\.pr-splash-offer\s*\{[^}]*(?:border|background|box-shadow):/s);
   assert.match(page, /<button class="pr-splash-enter"[\s\S]*?<\/button>\s*<p class="pr-splash-offer"/);
 });

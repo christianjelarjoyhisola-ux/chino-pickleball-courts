@@ -10,7 +10,7 @@ select
   coalesce(
     nullif((select value from public.settings where key = 'bdopay_receipt_recipient_name'), ''),
     nullif((select value from public.settings where key = 'bpi_receipt_recipient_name'), ''),
-    'PaddleRage'
+    ''
   )
 on conflict (key) do nothing;
 
@@ -19,7 +19,7 @@ select
   'gcash_qr_receipt_destination_token',
   coalesce(
     nullif((select value from public.settings where key = 'bdopay_receipt_destination_token'), ''),
-    'DWQM4TK3JDO9O0NS8'
+    ''
   )
 on conflict (key) do nothing;
 

@@ -1,8 +1,8 @@
-project_id = "paddle-rage-pickleball"
+project_id = "chino-pickleball-courts"
 
 [auth]
-site_url = "https://paddleragecdo.ph"
-additional_redirect_urls = ["https://paddleragecdo.ph/login.html", "https://paddle-rage-pickleball.pages.dev/login.html", "https://paddleragecdo.ph/host.html?email_verified=1"]
+site_url = "https://chinopickleball.pages.dev"
+additional_redirect_urls = ["https://chinopickleball.pages.dev/login", "https://chinopickleball.pages.dev/login.html", "https://chinopickleball.pages.dev/host.html?email_verified=1"]
 enable_signup = false
 
 [functions.create-payment-session]

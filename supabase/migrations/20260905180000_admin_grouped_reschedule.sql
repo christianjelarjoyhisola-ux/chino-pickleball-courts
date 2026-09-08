@@ -123,7 +123,7 @@ begin
     requested_date := (requested_change->>'date')::date;
     requested_start := (requested_change->>'startHour')::integer;
     duration_hours := cardinality(original_slots);
-    if requested_date < greatest(date '2026-09-19', timezone('Asia/Manila', statement_timestamp())::date)
+    if requested_date < greatest(public.court_opening_date(), timezone('Asia/Manila', statement_timestamp())::date)
        or requested_date > timezone('Asia/Manila', statement_timestamp())::date + 366
        or requested_start + duration_hours > 24 then
       raise exception 'Choose a complete available time slot within the booking calendar.' using errcode = '22023';

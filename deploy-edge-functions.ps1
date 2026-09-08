@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param()
+param([switch]$AllowUnconfiguredIntegrations)
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
@@ -27,8 +27,8 @@ function Read-EnvFile($Path) {
 }
 
 function Resolve-ConfigValue($Name, $EnvMap, [switch]$Required) {
-  $value = [Environment]::GetEnvironmentVariable($Name)
-  if (-not $value -and $EnvMap.ContainsKey($Name)) { $value = $EnvMap[$Name] }
+  $secretNames = @("SUPABASE_ACCESS_TOKEN", "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_DB_PASSWORD", "GOOGLE_VISION_API_KEY", "MAILEROO_API_KEY", "MAILEROO_FROM_ADDRESS", "MAILEROO_REPLY_TO", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "PAYMONGO_SECRET_KEY", "PAYMENT_WEBHOOK_SECRET")
+  $value = if ($EnvMap.ContainsKey($Name)) { $EnvMap[$Name] } elseif ($secretNames -contains $Name) { "" } else { [Environment]::GetEnvironmentVariable($Name) }
   $value = [string]$value
   if ($Required -and [string]::IsNullOrWhiteSpace($value)) {
     throw "Set $Name in the environment or $envFile."
@@ -37,13 +37,13 @@ function Resolve-ConfigValue($Name, $EnvMap, [switch]$Required) {
 }
 
 $envMap = Read-EnvFile $envFile
-$accessToken = Resolve-ConfigValue "SUPABASE_ACCESS_TOKEN" $envMap -Required
+$accessToken = if ($envMap.ContainsKey("SUPABASE_ACCESS_TOKEN")) { [string]$envMap["SUPABASE_ACCESS_TOKEN"] } else { "" }
 $projectRef = Resolve-ConfigValue "SUPABASE_PROJECT_REF" $envMap -Required
 $serviceRoleKey = Resolve-ConfigValue "SUPABASE_SERVICE_ROLE_KEY" $envMap -Required
 $databasePassword = Resolve-ConfigValue "SUPABASE_DB_PASSWORD" $envMap
 $googleVisionKey = Resolve-ConfigValue "GOOGLE_VISION_API_KEY" $envMap
 $paymentProvider = Resolve-ConfigValue "PAYMENT_PROVIDER" $envMap
-if (-not $paymentProvider) { $paymentProvider = "template" }
+if (-not $paymentProvider) { $paymentProvider = "disabled" }
 $paymentWebhookSecret = Resolve-ConfigValue "PAYMENT_WEBHOOK_SECRET" $envMap
 $publicLogoUrl = Resolve-ConfigValue "PUBLIC_LOGO_URL" $envMap
 $appAdminUrl = Resolve-ConfigValue "APP_ADMIN_URL" $envMap
@@ -55,6 +55,21 @@ $mailerooFromName = Resolve-ConfigValue "MAILEROO_FROM_NAME" $envMap
 $mailerooReplyTo = Resolve-ConfigValue "MAILEROO_REPLY_TO" $envMap
 $telegramBotToken = Resolve-ConfigValue "TELEGRAM_BOT_TOKEN" $envMap
 $telegramChatId = Resolve-ConfigValue "TELEGRAM_CHAT_ID" $envMap
+
+if ($projectRef -ne "mtomskztsvljvzgmewav") {
+  throw "This deployment is restricted to CHINO project mtomskztsvljvzgmewav."
+}
+if ($serviceRoleKey.Split('.').Count -eq 3) {
+  $keyPayload = $serviceRoleKey.Split('.')[1].Replace('-', '+').Replace('_', '/')
+  $keyPayload = $keyPayload.PadRight($keyPayload.Length + ((4 - $keyPayload.Length % 4) % 4), '=')
+  $keyClaims = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($keyPayload)) | ConvertFrom-Json
+  if ($keyClaims.ref -ne $projectRef -or $keyClaims.role -ne 'service_role') { throw "The server key is not CHINO's service-role key." }
+}
+if (-not $appPublicUrl) { $appPublicUrl = "https://chinopickleball.pages.dev" }
+if (-not $appAdminUrl) { $appAdminUrl = "$appPublicUrl/admin.html" }
+if (-not $publicLogoUrl) { $publicLogoUrl = "$appPublicUrl/assets/chino-courts.png" }
+if (-not $emailAllowedOrigins) { $emailAllowedOrigins = $appPublicUrl }
+if (-not $mailerooFromName) { $mailerooFromName = "CHINO Pickleball Courts" }
 
 if ($paymentProvider -eq "paymongo" -and -not $paymentWebhookSecret) {
   throw "PAYMENT_WEBHOOK_SECRET is required when PAYMENT_PROVIDER=paymongo."
@@ -73,10 +88,11 @@ if ($projectRef -notmatch '^[a-z0-9]{20}$') {
 }
 
 # The CLI reads this variable directly. Never print token or secret values.
-$env:SUPABASE_ACCESS_TOKEN = $accessToken
+if ($accessToken) { $env:SUPABASE_ACCESS_TOKEN = $accessToken } else { Remove-Item Env:SUPABASE_ACCESS_TOKEN -ErrorAction SilentlyContinue }
 if ($databasePassword) { $env:SUPABASE_DB_PASSWORD = $databasePassword }
 
-$script:SupabaseCli = Get-Command "supabase" -ErrorAction SilentlyContinue
+$configuredCli = Resolve-ConfigValue "SUPABASE_CLI" $envMap
+$script:SupabaseCli = if ($configuredCli) { Get-Command $configuredCli -ErrorAction Stop } else { Get-Command "supabase" -ErrorAction SilentlyContinue }
 $script:NpxCli = Get-Command "npx.cmd" -CommandType Application -ErrorAction SilentlyContinue
 if (-not $script:SupabaseCli -and -not $script:NpxCli) {
   throw "Supabase CLI is unavailable. Install supabase or Node.js/npx first."
@@ -113,8 +129,7 @@ try {
     Invoke-Supabase init
   }
 
-  Write-Host "Target Supabase project: $projectRef"
-  Invoke-Supabase link --project-ref $projectRef
+  Write-Host "Target Supabase project: CHINO Pickleball Courts ($projectRef)"
 
   # A deploy may intentionally rely on encrypted secrets that are already in
   # Supabase instead of copying them into .env.local. Fail closed unless every
@@ -144,9 +159,14 @@ try {
     @{ Name = "TELEGRAM_BOT_TOKEN"; Value = $telegramBotToken },
     @{ Name = "TELEGRAM_CHAT_ID"; Value = $telegramChatId }
   )
+  $optionalInitialSecrets = @("GOOGLE_VISION_API_KEY", "MAILEROO_API_KEY", "MAILEROO_FROM_ADDRESS", "MAILEROO_FROM_NAME", "MAILEROO_REPLY_TO", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID")
   foreach ($requiredSecret in $requiredIntegrationSecrets) {
     if ([string]::IsNullOrWhiteSpace([string]$requiredSecret.Value) -and
         $remoteSecretNames -notcontains [string]$requiredSecret.Name) {
+      if ($AllowUnconfiguredIntegrations -and $optionalInitialSecrets -contains [string]$requiredSecret.Name) {
+        Write-Warning "Integration remains unconfigured: $($requiredSecret.Name)."
+        continue
+      }
       throw "Required production secret $($requiredSecret.Name) is neither configured remotely nor supplied locally."
     }
   }
@@ -154,12 +174,24 @@ try {
   # Functions in this repository depend on the newest booking/host columns and
   # RLS policies. Stop immediately if migrations fail; deploying functions
   # against an older schema can break approvals and host reservations.
-  Write-Host "Applying database migrations before Edge Functions..."
-  Invoke-Supabase db push --dry-run
-  Invoke-Supabase db push
+  Write-Host "Checking CHINO database migration history before Edge Functions..."
+  $historyJson = Invoke-SupabaseCapture db query --linked --project-ref $projectRef --output json "select version from supabase_migrations.schema_migrations order by version;"
+  $historyResult = $historyJson | ConvertFrom-Json
+  $historyRows = if ($historyResult.PSObject.Properties.Name -contains "rows") { @($historyResult.rows) } else { @($historyResult) }
+  $appliedVersions = @($historyRows | ForEach-Object { [string]$_.version })
+  if ($appliedVersions -notcontains "20260713162000") { throw "Run the fresh CHINO bootstrap before deploying functions." }
+  $migrationFiles = Get-ChildItem -LiteralPath (Join-Path $repoRoot "supabase\migrations") -Filter "*.sql" | Sort-Object Name
+  foreach ($migrationFile in $migrationFiles) {
+    $version = $migrationFile.Name.Split('_')[0]
+    if ($appliedVersions -contains $version) { continue }
+    if ($version -lt "20260713213000") { throw "Consolidated baseline tracking is incomplete. Review the CHINO bootstrap." }
+    Invoke-Supabase db query --linked --project-ref $projectRef --file $migrationFile.FullName --output json
+    $migrationName = $migrationFile.BaseName.Substring($version.Length + 1).Replace("'", "''")
+    Invoke-Supabase db query --linked --project-ref $projectRef --output json "insert into supabase_migrations.schema_migrations (version,name) values ('$version','$migrationName') on conflict (version) do nothing;"
+  }
 
   $secretArgs = @(
-    "secrets", "set",
+    "secrets", "set", "--project-ref", $projectRef,
     "SERVICE_ROLE_KEY=$serviceRoleKey",
     "PAYMENT_PROVIDER=$paymentProvider"
   )
@@ -203,13 +235,9 @@ try {
     "process-host-balance-deadlines"
   )
 
-  foreach ($functionName in $functions) {
-    if ($noJwtFunctions -contains $functionName) {
-      Invoke-Supabase functions deploy $functionName --no-verify-jwt
-    } else {
-      Invoke-Supabase functions deploy $functionName
-    }
-  }
+  $protectedFunctions = @($functions | Where-Object { $noJwtFunctions -notcontains $_ })
+  Invoke-Supabase functions deploy @protectedFunctions --project-ref $projectRef --use-api --jobs 4
+  Invoke-Supabase functions deploy @noJwtFunctions --project-ref $projectRef --use-api --jobs 2 --no-verify-jwt
 
   Write-Host "Database migrations and Edge Functions deployed successfully."
 } finally {

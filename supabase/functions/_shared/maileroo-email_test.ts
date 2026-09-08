@@ -16,9 +16,9 @@ function assert(condition: unknown, message: string): asserts condition {
 
 Deno.test("Maileroo transport sends the documented API shape without exposing its key", async () => {
   Deno.env.set("MAILEROO_API_KEY", "test-secret-key");
-  Deno.env.set("MAILEROO_FROM_ADDRESS", "bookings@paddleragecdo.ph");
-  Deno.env.set("MAILEROO_FROM_NAME", "Paddle Rage Pickleball");
-  Deno.env.set("MAILEROO_REPLY_TO", "support@paddleragecdo.ph");
+  Deno.env.set("MAILEROO_FROM_ADDRESS", "bookings@example.com");
+  Deno.env.set("MAILEROO_FROM_NAME", "CHINO Pickleball Courts");
+  Deno.env.set("MAILEROO_REPLY_TO", "support@example.com");
   let requestUrl = "";
   let requestInit: RequestInit | undefined;
   const fetcher =
@@ -53,12 +53,12 @@ Deno.test("Maileroo transport sends the documented API shape without exposing it
   );
   const payload = JSON.parse(String(requestInit?.body || "{}"));
   assert(
-    payload.from.address === "bookings@paddleragecdo.ph",
+    payload.from.address === "bookings@example.com",
     "wrong sender address",
   );
   assert(payload.to[0].address === "player@example.com", "wrong recipient");
   assert(
-    payload.reply_to.address === "support@paddleragecdo.ph",
+    payload.reply_to.address === "support@example.com",
     "wrong reply-to",
   );
   assert(payload.plain === "Confirmed", "plain-text fallback missing");
@@ -98,8 +98,8 @@ Deno.test("confirmation email is responsive, readable, branded, and escapes cust
     "mobile styles missing",
   );
   assert(
-    email.html.includes("#050706") && email.html.includes("#b6f000") &&
-      email.html.includes("#f6f8f2"),
+    email.html.includes("#0a1422") && email.html.includes("#83b8ee") &&
+      email.html.includes("#f4f7fb"),
     "site palette missing",
   );
   assert(
@@ -141,8 +141,8 @@ Deno.test("host verification email is branded, readable, and keeps approval sepa
     "verification heading or call-to-action missing",
   );
   assert(
-    email.html.includes("#050706") && email.html.includes("#b6f000") &&
-      email.html.includes("#f6f8f2"),
+    email.html.includes("#0a1422") && email.html.includes("#83b8ee") &&
+      email.html.includes("#f4f7fb"),
     "site palette missing",
   );
   assert(
@@ -357,7 +357,7 @@ Deno.test("balance reminders and host decisions use the shared dark neon layout"
     reviewNote: "Approved for host access.",
   });
   assert(
-    balance.html.includes("#050706") && balance.html.includes("#b6f000"),
+    balance.html.includes("#0a1422") && balance.html.includes("#83b8ee"),
     "balance email theme mismatch",
   );
   assert(

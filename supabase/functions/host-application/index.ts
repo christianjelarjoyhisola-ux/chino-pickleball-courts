@@ -268,7 +268,7 @@ function manilaDateTime(value: unknown): string {
 
 function hostAdminUrl(): string {
   const base = (Deno.env.get("APP_ADMIN_URL") ||
-    "https://paddleragecdo.ph/admin.html").replace(/#.*$/, "");
+    "https://chinopickleball.pages.dev/admin.html").replace(/#.*$/, "");
   return `${base}#hosts`;
 }
 
@@ -917,7 +917,7 @@ Deno.serve(async (req): Promise<Response> => {
 
   function hostVerificationRedirectUrl() {
     const appPublicUrl = (Deno.env.get("APP_PUBLIC_URL") ||
-      "https://paddleragecdo.ph").replace(/\/+$/, "");
+      "https://chinopickleball.pages.dev").replace(/\/+$/, "");
     return `${appPublicUrl}/host.html?email_verified=1`;
   }
 
@@ -934,7 +934,7 @@ Deno.serve(async (req): Promise<Response> => {
     await sendMailerooEmail({
       to: recipientEmail,
       toName: recipientName,
-      subject: "Verify your Paddle Rage host application",
+      subject: "Verify your CHINO host application",
       html: emailContent.html,
       plain: emailContent.plain,
       tags: { category },
@@ -958,7 +958,7 @@ Deno.serve(async (req): Promise<Response> => {
       await sendMailerooEmail({
         to: recipientEmail,
         toName: recipientName,
-        subject: `Host application ${status} | Paddle Rage Pickleball`,
+        subject: `Host application ${status} | CHINO Pickleball Courts`,
         html: emailContent.html,
         plain: emailContent.plain,
         tags: { category: `host_application_${status}` },
@@ -1118,7 +1118,7 @@ Deno.serve(async (req): Promise<Response> => {
     const reviewer = await requireReviewer(req, db);
     if ("error" in reviewer) return reviewer.error;
     const delivery = await sendTelegramHtml(
-      `🧪 <b>PADDLE RAGE TELEGRAM TEST</b>\n\n` +
+      `🧪 <b>CHINO TELEGRAM TEST</b>\n\n` +
         `✅ Host application approval alerts are connected.\n` +
         `🕒 ${telegramEsc(manilaDateTime(new Date().toISOString()))}\n\n` +
         `This is a test only. No host application was created.`,

@@ -95,7 +95,7 @@ Deno.test("sends the Vision key in a header and builds one OCR request", async (
       JSON.stringify({
         responses: [{
           fullTextAnnotation: {
-            text: "Paddle Rage receipt",
+            text: "CHINO receipt",
             pages: [{ confidence: 0.97 }],
           },
         }],
@@ -133,7 +133,7 @@ Deno.test("sends the Vision key in a header and builds one OCR request", async (
     "OCR feature",
   );
   assertEquals(requestBody.requests[0].image.content, "QUJD", "base64 content");
-  assertEquals(result.text, "Paddle Rage receipt", "OCR text");
+  assertEquals(result.text, "CHINO receipt", "OCR text");
   assertEquals(result.confidence, 0.97, "OCR confidence");
   assertEquals(result.confidenceSource, "native", "OCR confidence source");
 });

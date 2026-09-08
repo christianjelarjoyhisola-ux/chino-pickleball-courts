@@ -5,7 +5,7 @@
 begin;
 
 insert into public.settings (key, value)
-values ('bdopay_receipt_recipient_name', 'PaddleRage')
+values ('bdopay_receipt_recipient_name', '')
 on conflict (key) do nothing;
 
 do $$

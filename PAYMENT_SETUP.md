@@ -1,87 +1,44 @@
-# Secure GCash Payment Setup (Dynamic Amount + Auto Sync)
+# CHINO payment setup
 
-This project now supports:
-- Dynamic downpayment amount from booking form
-- Server-created payment session (no raw gateway URL logic in browser)
-- Webhook-based auto update of booking payment status
+CHINO includes receipt-based payment review and optional server-created PayMongo checkout. A fresh installation has all payment methods disabled and contains no merchant account or QR code. The owner chooses which methods to enable after entering the correct recipient information.
 
-## 1) Run DB Migration
+## Receipt-based payments
 
-Apply:
+1. Open the dashboard's payment settings.
+2. Enter CHINO's recipient name, account or mobile number, and QR image for the relevant method.
+3. Enable only the methods the venue accepts.
+4. Configure `GOOGLE_VISION_API_KEY` in the dedicated Supabase project if automatic receipt OCR is desired.
+5. Verify a controlled booking and receipt through the final payment review state.
 
-`supabase/migrations/20260227_payment_security.sql`
+GCash, BDO Pay, Maya, BPI, GoTyme, MariBank, and PNB share the existing receipt workflow with provider-specific checks where implemented. An unavailable OCR provider leaves the receipt for manual review. Cash can be enabled separately for the venue's approved cash-booking process.
 
-It adds:
-- New payment columns on `bookings`
-- `payment_sessions` table for checkout tracking
+See [Google Vision setup](GOOGLE_VISION_SETUP.md) and [Maya receipt verification](MAYA_RECEIPT_VERIFICATION.md).
 
-## 2) Deploy Supabase Edge Functions
+## Database and Edge Functions
 
-Deploy:
-- `supabase/functions/create-payment-session`
-- `supabase/functions/payment-webhook`
+Use CHINO's dedicated project `mtomskztsvljvzgmewav`. Apply the consolidated setup and every required forward migration; payment functionality depends on the full schema, authorization rules, and receipt audit tables.
 
-Example:
+The deployment script publishes the relevant functions, including `verify-gcash-receipt`, `host-booking-balance-payment`, `create-payment-session`, and `payment-webhook`. Functions use server-held service credentials; those credentials never belong in browser code.
 
-```bash
-supabase functions deploy create-payment-session
-supabase functions deploy payment-webhook
-```
+## Optional PayMongo checkout
 
-## 3) Set Function Environment Variables
+The checkout function supports `PAYMENT_PROVIDER=paymongo`. Static URL templates are not implemented. Configure these server secrets for CHINO:
 
-Required:
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `PAYMENT_PROVIDER`
+- `PAYMONGO_SECRET_KEY`
+- `PAYMENT_WEBHOOK_SECRET`
+- `PAYMENT_SUCCESS_URL=https://chinopickleball.pages.dev/?payment=success`
+- `PAYMENT_CANCEL_URL=https://chinopickleball.pages.dev/?payment=cancelled`
 
-Recommended (dynamic amount with PayMongo):
-- `PAYMENT_PROVIDER=paymongo`
-- `PAYMONGO_SECRET_KEY=sk_live_...` (or `sk_test_...`)
-- `PAYMENT_SUCCESS_URL=https://your-domain/success`
-- `PAYMENT_CANCEL_URL=https://your-domain/cancel`
+A successful session response contains a newly created provider checkout URL and a canonical booking amount. Merely visiting the return URL does not prove payment.
 
-Template fallback mode (legacy/static-link style):
-- `PAYMENT_PROVIDER=template`
-- `PAYMENT_CHECKOUT_URL_TEMPLATE=https://your-gateway-link?...`
+## Current webhook contract
 
-Optional security:
-- `PAYMENT_WEBHOOK_SECRET` (used by `payment-webhook` via `x-payment-signature` HMAC SHA-256)
+The endpoint is `https://mtomskztsvljvzgmewav.supabase.co/functions/v1/payment-webhook`.
 
-## 4) Configure Gateway Webhook
+It accepts a POST body with `session_id` or `booking_ref`, `status`, and optional `provider_reference` and `paid_at` fields. It also parses PayMongo-shaped event data. Authentication currently requires an `x-payment-signature` header containing the lowercase hexadecimal HMAC-SHA256 of the exact raw request body, using `PAYMENT_WEBHOOK_SECRET`.
 
-Point your gateway webhook to:
+Native PayMongo webhook signature authentication is not implemented in this handler. Before enabling provider checkout, either implement and verify native signature validation or connect a trusted server adapter that validates the provider event and signs this endpoint's exact contract. Unsigned requests and requests without a configured secret are rejected.
 
-`https://<project-ref>.functions.supabase.co/payment-webhook`
+## Verification
 
-Send payload fields:
-- `session_id` (preferred) or `booking_ref`
-- `status` (`paid`, `failed`, etc.)
-- `provider_reference` (optional)
-- `paid_at` (optional)
-
-## 5) Configure App Admin Settings
-
-In Admin panel:
-- Go to `Courts` -> `GCash Payment Settings`
-- Enable checkout mode
-- Set merchant name and number
-- Save
-
-The booking page will:
-- Save booking
-- Create secure payment session
-- Open checkout URL returned by function
-- Auto-sync payment status and confirm booking when webhook marks paid
-
-## PayMongo-specific notes
-
-- The function now creates a **new PayMongo Checkout Session per booking**, so amount is dynamic.
-- Webhook handler supports PayMongo event payload parsing and maps provider session IDs back to your booking.
-
-## 6) Security Notes
-
-- Keep provider secrets only in Edge Function env vars.
-- Do not expose service-role keys in frontend.
-- Keep `payment_sessions` RLS locked (already included in migration).
-- Use webhook signature validation (`PAYMENT_WEBHOOK_SECRET`) in production.
+Verify the configured flow with a controlled transaction: session amount, signed callback acceptance, invalid-signature rejection, correct booking-group update, duplicate callback behavior, and the final displayed payment state. Maileroo notifications require their own configured CHINO sender credentials.

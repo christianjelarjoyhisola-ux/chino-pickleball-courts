@@ -567,7 +567,7 @@ function selectedMethodMismatch(
 
 function hasExpectedReceiverName(text: string, expectedName: string): boolean {
   const upper = text.toUpperCase().replace(/[^A-Z0-9]/g, "");
-  const expected = (expectedName || "Paddle Rage Pickleball").toUpperCase()
+  const expected = (expectedName || "CHINO Pickleball Courts").toUpperCase()
     .replace(
       /[^A-Z0-9]/g,
       "",
@@ -671,7 +671,7 @@ function expectedMerchantForProvider(
       number: settings.bpi_merchant_number || settings.gcash_merchant_number ||
         "",
       // BPI QR receipts show the configured QR recipient label (for example
-      // "PaddleRage (QR Code)"), not necessarily the personal account name
+      // "CHINO (QR Code)"), not necessarily the personal account name
       // displayed beside the QR on the checkout page. Keep that receipt-only
       // identity explicit so the BPI verifier never accepts an arbitrary
       // GCash/G-Xchange destination.
@@ -1114,7 +1114,7 @@ async function runOCR(
 
 function telegramAdminUrl(): string {
   return Deno.env.get("APP_ADMIN_URL") ||
-    "https://paddleragecdo.ph/admin.html";
+    "https://chinopickleball.pages.dev/admin.html";
 }
 
 function shortTelegramFlags(flags: string[]): string {
@@ -3509,7 +3509,7 @@ Deno.serve(async (req) => {
           (sharedDate ? `📅 ${telegramDate(sharedDate)}\n` : "") +
           `${courtLines}\n` +
           `💰 <b>TOTAL PAYMENT: ${telegramPeso(totalPayment)}</b>\n\n` +
-          `🔗 <a href="${telegramAdminUrl()}">Open the Paddle Rage dashboard</a>`,
+          `🔗 <a href="${telegramAdminUrl()}">Open the CHINO dashboard</a>`,
       );
     }
 

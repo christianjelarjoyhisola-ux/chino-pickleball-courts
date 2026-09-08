@@ -80,7 +80,7 @@ test('database settlement contracts explicitly allow dedicated BDO Pay', () => {
   assert.match(migration, /when ''bdopay'' then ''bdopay_to_gcash_v1''/);
   assert.match(
     migration,
-    /values \('bdopay_receipt_recipient_name', 'PaddleRage'\)/,
+    /values \('bdopay_receipt_recipient_name', ''\)/,
   );
   assert.match(sharedIdentityMigration, /'gcash_qr_receipt_recipient_name'/);
   assert.match(sharedIdentityMigration, /'gcash_qr_receipt_destination_token'/);

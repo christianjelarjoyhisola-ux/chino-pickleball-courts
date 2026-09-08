@@ -86,7 +86,7 @@ test('public creation paths keep configured Edge and database boundaries', () =>
   assert.match(config, /\[functions\.submit-public-registration\]\s*verify_jwt = true/);
   assert.match(config, /\[functions\.host-application\]\s*verify_jwt = true/);
   assert.match(config, /\[auth\][\s\S]*?enable_signup = false/);
-  assert.match(config, /https:\/\/paddleragecdo\.ph\/host\.html\?email_verified=1/);
+  assert.match(config, /https:\/\/chinopickleball\.pages\.dev\/host\.html\?email_verified=1/);
   assert.match(deploy, /"submit-public-booking"/);
   assert.match(deploy, /"submit-public-registration"/);
   assert.match(deploy, /"host-application"/);
@@ -222,7 +222,7 @@ test('Telegram endpoint authorizes active accounts and sends review-only alerts'
     /if \(result === "manual_review" && hasPersistedBooking\) \{[\s\S]*?await sendTelegram/
   );
   assert.match(receiptEdge, /function shortTelegramFlags[\s\S]*?flags\.slice\(0, 2\)/);
-  assert.match(telegramEdge, /Open the Paddle Rage dashboard/);
+  assert.match(telegramEdge, /Open the CHINO dashboard/);
   assert.match(telegramEdge, /date,slots,start_time,end_time/);
   assert.match(telegramEdge, /Submitted: \$\{esc\(fmtDateTime\(primary\.created_at\)\)\}/);
   assert.match(telegramEdge, /COURT SCHEDULE[\s\S]*?courtLines[\s\S]*?TOTAL PAYMENT/);
@@ -302,7 +302,7 @@ test('receipt and confirmation delivery use recoverable single-worker leases', (
     receiptEdge.indexOf('function expectedMerchantForProvider'),
     receiptEdge.indexOf('function expectedOpenPlayAmounts'),
   );
-  assert.doesNotMatch(merchantResolver, /Paddle Rage Pickleball/);
+  assert.doesNotMatch(merchantResolver, /CHINO Pickleball Courts/);
   assert.match(receiptEdge, /const authoritativeProvider = paymentMethodProvider\([\s\S]*?provider = authoritativeProvider/);
   assert.doesNotMatch(receiptEdge, /paymentMethodProvider\([\s\S]{0,160}\)\s*\|\|\s*provider/);
 
@@ -680,7 +680,7 @@ test('verified host applications enqueue one privacy-safe retryable Telegram rev
     hostApplicationEdge.indexOf('if (body.action === "resend-verification")')
   );
   assert.match(testAlert, /requireReviewer\(req, db\)/);
-  assert.match(testAlert, /PADDLE RAGE TELEGRAM TEST/);
+  assert.match(testAlert, /CHINO TELEGRAM TEST/);
   assert.match(testAlert, /No host application was created/);
   assert.match(testAlert, /delivery\.errors/);
   assert.doesNotMatch(testAlert, /body\.(?:message|chatId|botToken)/);
@@ -735,7 +735,7 @@ test('court slot states stay distinct and the public light theme is genuinely li
 
   assert.match(
     brand,
-    /body\.light,[\s\S]*?color-scheme:\s*light;[\s\S]*?--bg:\s*#f4f7f2;[\s\S]*?--card:\s*#ffffff;/
+    /body\.light,[\s\S]*?color-scheme:\s*light;[\s\S]*?--bg:\s*#f2f5f7;[\s\S]*?--card:\s*#ffffff;/
   );
   assert.match(brand, /--slot-available:\s*#143d63/);
   assert.match(brand, /--slot-booked:\s*#b91c1c/);
@@ -744,7 +744,7 @@ test('court slot states stay distinct and the public light theme is genuinely li
   assert.match(brand, /body\.light \.nav,[\s\S]*?background:\s*rgba\(255,\s*255,\s*255,\s*0\.94\) !important/);
   assert.match(brand, /body\.light \.open-play-block,[\s\S]*?var\(--surface2\)/);
   assert.match(brand, /body\.light \.date-day\.selected,[\s\S]*?color:\s*#fff/);
-  assert.match(brand, /body\.light \.cc-photo-avail\.av,[\s\S]*?color:\s*#050706/);
+  assert.match(brand, /body\.light \.cc-photo-avail\.av,[\s\S]*?color:\s*#111b24/);
 
   assert.match(
     page,
@@ -882,7 +882,7 @@ test('Pages worker prevents stale shared runtime and HTML entry responses', asyn
   const { default: worker } = await import(workerUrl);
   const staleAssetPolicy = 'max-age=14400';
   const env = {
-    PRIMARY_HOSTNAME: 'paddleragecdo.ph',
+    PRIMARY_HOSTNAME: 'chinopickleball.pages.dev',
     ASSETS: {
       fetch: async () => new Response('fixture', {
         headers: { 'Cache-Control': staleAssetPolicy },
@@ -904,7 +904,7 @@ test('Pages worker prevents stale shared runtime and HTML entry responses', asyn
   ];
   for (const route of protectedRoutes) {
     const response = await worker.fetch(
-      new Request(`https://paddleragecdo.ph${route}`),
+      new Request(`https://chinopickleball.pages.dev${route}`),
       env,
     );
     assert.equal(
@@ -915,7 +915,7 @@ test('Pages worker prevents stale shared runtime and HTML entry responses', asyn
   }
 
   const staticAsset = await worker.fetch(
-    new Request('https://paddleragecdo.ph/brand-theme.css'),
+    new Request('https://chinopickleball.pages.dev/brand-theme.css'),
     env,
   );
   assert.equal(

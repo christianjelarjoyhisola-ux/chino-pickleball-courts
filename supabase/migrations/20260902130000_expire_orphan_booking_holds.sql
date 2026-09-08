@@ -203,7 +203,7 @@ end;
 $$;
 
 comment on function public.prevent_double_booking() is
-  'Serializes active Paddle Rage booking writes and ignores expired temporary placeholders.';
+  'Serializes active CHINO booking writes and ignores expired temporary placeholders.';
 
 -- Repair only unambiguously abandoned, evidence-free placeholders. Keep all
 -- rows that contain a payment reference or stored receipt for owner review.

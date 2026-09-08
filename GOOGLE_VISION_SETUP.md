@@ -6,11 +6,11 @@ receipt. Receipt bytes are sent as base64; no receipt image is made public.
 
 ## Google Cloud requirements
 
-1. Use a dedicated Google Cloud project for Paddle Rage production OCR and
+1. Use a dedicated Google Cloud project for CHINO Pickleball Courts production OCR and
    attach a billing account.
 2. Enable **Cloud Vision API** (`vision.googleapis.com`).
 3. Create a standard API key named clearly, for example
-   `paddle-rage-supabase-vision-prod`.
+   `chino-supabase-vision-prod`.
 4. Under **API restrictions**, choose **Restrict key** and select only
    **Cloud Vision API**.
    As an optional advanced API Keys API restriction, limit the target further

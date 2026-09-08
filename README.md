@@ -1,53 +1,55 @@
-# Paddle Rage Pickleball
+# CHINO Pickleball Courts
 
-A standalone pickleball court booking and operations platform with public reservations, Open Play hosting, receipt verification, payments, admin reporting, and role-based access. Production is served at `https://paddleragecdo.ph` and uses a dedicated Supabase project.
+CHINO's independent court booking and operations platform, with a court-blue, charcoal, and concrete visual identity inspired by the supplied venue photograph.
 
-Receipt OCR runs server-side through Google Cloud Vision. Customer confirmation and reschedule messages use Maileroo from the verified `paddleragecdo.ph` sending domain; no provider secret is shipped to the browser.
+- Website: [chinopickleball.pages.dev](https://chinopickleball.pages.dev)
+- Private repository: [christianjelarjoyhisola-ux/chino-pickleball-courts](https://github.com/christianjelarjoyhisola-ux/chino-pickleball-courts)
+- Dedicated Supabase project: `mtomskztsvljvzgmewav`
+- Independent Supabase organization: [CHINO Pickleball Courts](https://supabase.com/dashboard/org/xvtjpartlhxcyirwkhgo)
 
-## Brand system
+Adapted from the owner's Paddle Rage Pickleball platform. This project retains its booking and operations features while using independent CHINO data, accounts, configuration, and branding.
 
-- Primary logo: `paddleragelogo.jpg`
-- Primary background: `#050706`
-- Surface: `#0B0F0C`
-- Neon green: `#B6F000`
-- Bright accent: `#D7FF3F`
-- Shared brand overrides: `brand-theme.css`
+## Included features
 
-## Production deployment
+Public court availability and multi-court booking, temporary slot holds, tiered pricing, booking confirmations, private booking management, individual and grouped rescheduling, host applications and reservations, host deposits and balance payments, receipt verification and owner review, Open Play registration, match management and rankings, live spectator links, result and availability graphics, maintenance scheduling, role-based accounts, owner insights, reporting, and remittances.
 
-1. Copy `.env.example` to the ignored `.env.local` and fill in Paddle Rage's deployment credentials. Never commit this file.
-2. Review [GOOGLE_VISION_SETUP.md](GOOGLE_VISION_SETUP.md).
-3. Run `npm test` and `npm run check`.
-4. Run `deploy-edge-functions.ps1`; it applies migrations before publishing functions and fails closed when required remote integration secrets are missing.
-5. Authenticate with `wrangler login` (or set a scoped `CLOUDFLARE_API_TOKEN`), then run `deploy-cloudflare-pages.ps1` to publish the static site.
-6. Verify the custom domain, Edge Function health, one receipt flow, and one delivered confirmation email after release.
+## Venue setup
 
-For a fresh database, follow `SETUP_NEW_SUPABASE.sql` and its migration follow-up instructions. Setup creates no sample courts; add the venue's real courts through the admin dashboard. For an existing database, apply `supabase/migrations` instead of rerunning `SETUP_NEW_SUPABASE.sql` or `setup-db.js`, which also initialize settings and policies. An empty court list is valid and must stay empty until an admin adds a court.
+The owner can configure CHINO's courts, hours, rates, payment recipients, contact details, and policies through the dashboard. A fresh project starts without sample courts. Payment methods remain disabled until configured; setup does not reuse another venue's merchant information. The starting internal allocation rate is zero.
+
+The date fallback `2026-01-01` is an internal lower bound, not an advertised opening date. Public bookings also enforce today's date in Manila time. Set a different launch boundary consistently in the browser, Edge Functions, and database if CHINO later needs an advance-booking restriction.
+
+## Brand assets
+
+- Court photograph: `assets/chino-courts.png`
+- Mark: `assets/chino-mark.svg`
+- Wordmark: `assets/chino-wordmark.svg`
+- Shared theme: `brand-theme.css`
+- Core palette: court blue `#3E79B5`, charcoal `#17222C`, concrete `#DCE2E5`
 
 ## Local preview
 
-Serve the folder over HTTP; do not open the HTML files directly. For example:
+Serve the folder over HTTP:
 
 ```powershell
+npm install
 npm run dev
 ```
 
-Open `http://localhost:8788/?localData=1` to use isolated browser demo data without a Supabase connection.
+Open `http://localhost:8788/?localData=1` for isolated browser demo data. Open `http://localhost:8788/?remoteData=1` to use CHINO's Supabase project. Demo courts and accounts are restricted to the explicit local preview.
 
-Use the explicit `localData=1` mode for sample courts and demos. Keep sample court data out of production; deleting a court must not trigger automatic sample seeding on reload, reconnect, or deployment.
+## Deployment
 
-## Checks
+1. Keep deployment credentials in the ignored `.env.local`, following `.env.example`.
+2. Run `npm test` and `npm run check`.
+3. Apply database migrations and deploy Edge Functions using `deploy-edge-functions.ps1`.
+4. Publish the static application with `deploy-cloudflare-pages.ps1` using CHINO's Pages project.
+5. Verify public availability, login, booking management, and the integrations that have been configured.
 
-```powershell
-npm test
-npm run check
-```
+For a new database, follow `SETUP_NEW_SUPABASE.sql` and its migration instructions. For an existing database, apply `supabase/migrations`; do not rerun initial setup over established venue settings. Deleting all courts must leave the court list empty until an owner adds another court.
 
-## Separation checklist
+## Optional integrations
 
-- Use a new Supabase organization/project and fresh admin accounts.
-- Use a new Cloudflare Pages project, domain, analytics property, and AdSense account if ads are later enabled.
-- Verify Paddle Rage's sending domain in Maileroo and use a new sending key, Telegram bot/chat, PayMongo keys, payment webhook secret, OCR key, and merchant QR images.
-- Review all legal text, operating hours, prices, policies, location, and payment instructions before production. Create only the venue's real courts and keep demo content in local preview.
-- Have qualified Philippine counsel review the included platform agreement and privacy/consumer terms before accepting real bookings.
-- Do not copy `.env.local`, browser local storage, service-role keys, database exports, or deployment caches from another venue.
+Receipt OCR uses server-side Google Cloud Vision. Email notifications use Maileroo with a verified CHINO sending address. Telegram alerts and PayMongo checkout use separately configured credentials. See [Google Vision setup](GOOGLE_VISION_SETUP.md), [payment setup](PAYMENT_SETUP.md), and [Maya receipt verification](MAYA_RECEIPT_VERIFICATION.md).
+
+Integration code is included. Each provider becomes operational after its credentials and venue settings are configured and its end-to-end flow is verified. Provider secrets, service-role keys, customer exports, and local deployment caches do not belong in Git or browser code.

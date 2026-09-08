@@ -9,7 +9,7 @@
   const MINIMUM_RECOMMENDATION_COMPARABLE_DAYS = 8;
   const FORECAST_DAYS = 28;
   const RECENCY_HALF_LIFE_DAYS = 56;
-  const OPENING_DATE = '2026-09-19';
+  const OPENING_DATE = '2026-01-01';
   const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const MANILA_TIME_ZONE = 'Asia/Manila';
 
@@ -428,7 +428,7 @@
       .sort((a, b) => b.opportunity_value - a.opportunity_value || b.open_future_hours - a.open_future_hours || a.utilization_pct - b.utilization_pct) : [];
     const best = candidates[0] || null;
     const recommendation = best ? {
-      id: ['paddle-rage', best.court_id, best.next_open_date, best.start_hour, Math.round(best.utilization_pct * 10)].join(':'),
+      id: ['chino', best.court_id, best.next_open_date, best.start_hour, Math.round(best.utilization_pct * 10)].join(':'),
       court_id: best.court_id,
       court_name: best.court_name,
       date: best.next_open_date,
@@ -473,7 +473,7 @@
       data_quality: {
         successful_reservations: successfulReservations.size,
         successful_booking_rows: eligibleRows.length,
-        current_schedule_note: 'Capacity uses the venue schedule currently saved in Paddle Rage. Open Play, Maintenance, blocked dates, temporary holds, failed payments, and cancelled or forfeited bookings do not teach private-court demand.',
+        current_schedule_note: 'Capacity uses the venue schedule currently saved in CHINO. Open Play, Maintenance, blocked dates, temporary holds, failed payments, and cancelled or forfeited bookings do not teach private-court demand.',
       },
     };
   }

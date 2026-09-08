@@ -1,5 +1,5 @@
 -- ============================================================
--- PADDLE RAGE PICKLEBALL - COMPLETE SUPABASE DATABASE SETUP
+-- CHINO PICKLEBALL COURTS - COMPLETE SUPABASE DATABASE SETUP
 -- Use this on a fresh Supabase project:
 --   Supabase Dashboard -> SQL Editor -> New query -> Run
 --
@@ -16,6 +16,28 @@
 -- ============================================================
 
 create extension if not exists pgcrypto;
+
+-- Server-only routing configuration: the bootstrap stores this new project's
+-- URL here. Browser and dashboard accounts cannot redirect maintenance jobs.
+create table if not exists public.chino_backend_config (
+  id boolean primary key default true check (id),
+  project_url text not null check (project_url ~ '^https://[a-z0-9]{20}[.]supabase[.]co$')
+);
+alter table public.chino_backend_config enable row level security;
+revoke all on public.chino_backend_config from public, anon, authenticated;
+grant all on public.chino_backend_config to service_role;
+
+create or replace function public.chino_project_url()
+returns text
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select project_url from public.chino_backend_config where id;
+$$;
+revoke all on function public.chino_project_url() from public, anon, authenticated;
+grant execute on function public.chino_project_url() to service_role;
 
 -- ============================================================
 -- 1. BASE TABLES
@@ -1517,7 +1539,31 @@ create trigger trg_payment_sessions_touch_updated_at
 before update on public.payment_sessions
 for each row execute function public.touch_updated_at();
 
--- Paddle Rage public launch boundary. Manila business time is authoritative,
+-- A venue may set opening_date after its opening schedule is confirmed.
+create or replace function public.court_opening_date()
+returns date
+language plpgsql
+stable
+security definer
+set search_path = public, pg_temp
+as $opening$
+declare
+  configured_date text;
+begin
+  select nullif(trim(value), '') into configured_date
+  from public.settings where key = 'opening_date';
+  if configured_date is null then return date '2026-01-01'; end if;
+  begin
+    return configured_date::date;
+  exception when invalid_datetime_format or datetime_field_overflow then
+    return date '2026-01-01';
+  end;
+end;
+$opening$;
+revoke all on function public.court_opening_date() from public;
+grant execute on function public.court_opening_date() to anon, authenticated, service_role;
+
+-- CHINO public launch boundary. Manila business time is authoritative,
 -- and after launch the same rule continues to reject past dates.
 create or replace function public.enforce_public_court_opening_date()
 returns trigger
@@ -1526,7 +1572,7 @@ set search_path = public, pg_temp
 as $$
 declare
   minimum_date date := greatest(
-    date '2026-09-19',
+    public.court_opening_date(),
     timezone('Asia/Manila', now())::date
   );
 begin
@@ -1546,7 +1592,7 @@ as $$
 declare
   session_date date;
   minimum_date date := greatest(
-    date '2026-09-19',
+    public.court_opening_date(),
     timezone('Asia/Manila', now())::date
   );
 begin
@@ -2180,7 +2226,7 @@ drop policy if exists host_ids_no_delete on storage.objects;
 
 insert into public.settings (key, value)
 values
-  ('venue_name', 'Paddle Rage Pickleball'),
+  ('venue_name', 'CHINO Pickleball Courts'),
   ('open_time', '6'),
   ('close_time', '22'),
   ('booking_fee', '5'),
@@ -2200,7 +2246,7 @@ notify pgrst, 'reload schema';
 -- 1. Apply every migration from
 --    supabase/migrations/20260713213000_accumulated_booking_fee_remittances.sql
 --    forward, in filename order, through the newest migration.
--- 2. Authentication -> Providers -> Email -> disable Confirm email.
+-- 2. Keep email confirmation enabled; host applicants verify email ownership.
 -- 3. Project Settings -> API -> copy Project URL and anon public key.
 -- 4. Update .env.local / supabase-config.js for the cloned app.
 -- 5. Run create-accounts.js with a service-role key to create dashboard users.

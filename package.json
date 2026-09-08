@@ -1,8 +1,8 @@
 {
-  "name": "paddle-rage-pickleball",
+  "name": "chino-pickleball-courts",
   "version": "1.0.0",
   "private": true,
-  "description": "Paddle Rage Pickleball court booking and operations platform",
+  "description": "CHINO Pickleball Courts court booking and operations platform",
   "scripts": {
     "dev": "node tools/local-server.js",
     "build:vendor:qrcode": "esbuild tools/qrcode-browser-entry.js --bundle --minify --platform=browser --format=iife --outfile=qrcode.min.js",

@@ -1,5 +1,5 @@
 const MAILEROO_ENDPOINT = "https://smtp.maileroo.com/api/v2/emails";
-const DEFAULT_FROM_NAME = "Paddle Rage Pickleball";
+const DEFAULT_FROM_NAME = "CHINO Pickleball Courts";
 
 export type MailerooEmail = {
   to: string;

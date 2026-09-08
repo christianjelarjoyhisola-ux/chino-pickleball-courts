@@ -6,9 +6,9 @@
   'use strict';
 
   const MANILA_TIME_ZONE = 'Asia/Manila';
-  const OPENING_DATE = '2026-09-19';
+  const OPENING_DATE = '2026-01-01';
   const FRESHNESS_LIMIT_MS = 3 * 60 * 1000;
-  const DEFAULT_BOOKING_URL = 'https://paddleragecdo.ph/';
+  const DEFAULT_BOOKING_URL = 'https://chinopickleball.pages.dev/';
   const COURT_COLLATOR = new Intl.Collator('en', { numeric: true, sensitivity: 'base' });
   const FORMATS = Object.freeze({
     feed: Object.freeze({ width: 1080, height: 1350, label: 'Facebook post', short: 'POST' }),
@@ -42,7 +42,7 @@
     size: 231,
     margin: 4,
     errorCorrectionLevel: 'M',
-    dark: '#050706',
+    dark: '#111b24',
     light: '#ffffff',
   });
   const FOOTER_LAYOUTS = Object.freeze({
@@ -411,7 +411,7 @@
     const suffix = totalPages > 1
       ? `-${String(pageIndex + 1).padStart(2, '0')}-of-${String(totalPages).padStart(2, '0')}`
       : '';
-    return `paddle-rage-availability-${safeDate}-${format}${suffix}.png`;
+    return `chino-availability-${safeDate}-${format}${suffix}.png`;
   }
 
   function snapshotAge(snapshot, now = Date.now()) {
@@ -462,7 +462,7 @@
       `Book your court: ${bookingUrl}`,
       `Availability as of ${formatGeneratedAt(normalized.generatedAt)} PHT. Slots may change.`,
       '',
-      '#PaddleRage #PickleballCDO #BookYourCourt',
+      '#CHINOPickleball #Pickleball #BookYourCourt',
     );
     return lines.join('\n');
   }
@@ -547,7 +547,7 @@
               </div>
               <div class="prag-canvas-stage" data-prag-stage>
                 <div class="prag-canvas-shell" data-prag-canvas-shell>
-                  <canvas data-prag-canvas width="1080" height="1350" aria-label="Preview of the Paddle Rage court availability post"></canvas>
+                  <canvas data-prag-canvas width="1080" height="1350" aria-label="Preview of the CHINO court availability post"></canvas>
                 </div>
                 <div class="prag-loading" data-prag-loading hidden><span></span><strong>Syncing live courts</strong><small>Building your graphic…</small></div>
               </div>
@@ -654,7 +654,7 @@
     if (state.canvas) {
       state.canvas.width = format.width;
       state.canvas.height = format.height;
-      state.canvas.setAttribute('aria-label', `Preview of the ${format.label} for Paddle Rage court availability`);
+      state.canvas.setAttribute('aria-label', `Preview of the ${format.label} for CHINO court availability`);
     }
   }
 
@@ -853,7 +853,7 @@
 
   function drawCourtTexture(context, width, height) {
     context.save();
-    context.strokeStyle = 'rgba(215,255,63,.055)';
+    context.strokeStyle = 'rgba(142, 185, 225,.055)';
     context.lineWidth = 2;
     const cell = 96;
     for (let x = -height; x < width + height; x += cell) {
@@ -890,7 +890,7 @@
   }
 
   async function logoImage() {
-    if (!state.logoPromise) state.logoPromise = loadSameOriginImage(state.options.logoUrl || 'paddleragelogo-transparent.png');
+    if (!state.logoPromise) state.logoPromise = loadSameOriginImage(state.options.logoUrl || 'assets/chino-mark.svg');
     return state.logoPromise;
   }
 
@@ -917,28 +917,28 @@
     const x = 70;
     const y = layout.brandY;
     const logoSize = story ? 112 : 96;
-    fillRoundRect(context, x, y, logoSize, logoSize, 25, '#f8faf4');
-    strokeRoundRect(context, x, y, logoSize, logoSize, 25, 'rgba(215,255,63,.72)', 2);
+    fillRoundRect(context, x, y, logoSize, logoSize, 25, '#f4f7fa');
+    strokeRoundRect(context, x, y, logoSize, logoSize, 25, 'rgba(142, 185, 225,.72)', 2);
     if (logo) {
       const inset = 8;
       context.drawImage(logo, x + inset, y + inset, logoSize - inset * 2, logoSize - inset * 2);
     } else {
-      context.fillStyle = '#050706';
+      context.fillStyle = '#111b24';
       context.font = `900 ${story ? 44 : 38}px "Bebas Neue", "Arial Narrow", sans-serif`;
       context.textAlign = 'center';
-      context.fillText('PR', x + logoSize / 2, y + logoSize * .65);
+      context.fillText('C', x + logoSize / 2, y + logoSize * .65);
       context.textAlign = 'left';
     }
-    context.fillStyle = '#f8faf4';
+    context.fillStyle = '#f4f7fa';
     context.font = `900 ${story ? 39 : 34}px "Bebas Neue", "Arial Narrow", sans-serif`;
-    trackedText(context, 'PADDLE RAGE', x + logoSize + 24, y + 40, 2.8);
-    context.fillStyle = '#b6f000';
+    trackedText(context, 'CHINO', x + logoSize + 24, y + 40, 2.8);
+    context.fillStyle = '#8eb9e1';
     context.font = `800 ${story ? 16 : 14}px "DM Sans", Arial, sans-serif`;
-    trackedText(context, 'PICKLEBALL · CDO', x + logoSize + 24, y + 69, 3.6);
+    trackedText(context, 'PICKLEBALL COURTS', x + logoSize + 24, y + 69, 3.6);
 
-    fillRoundRect(context, width - (story ? 308 : 284) - 70, y + 9, story ? 308 : 284, story ? 57 : 50, 28, 'rgba(182,240,0,.11)');
-    strokeRoundRect(context, width - (story ? 308 : 284) - 70, y + 9, story ? 308 : 284, story ? 57 : 50, 28, 'rgba(182,240,0,.32)', 2);
-    context.fillStyle = '#d7ff3f';
+    fillRoundRect(context, width - (story ? 308 : 284) - 70, y + 9, story ? 308 : 284, story ? 57 : 50, 28, 'rgba(62, 121, 181,.11)');
+    strokeRoundRect(context, width - (story ? 308 : 284) - 70, y + 9, story ? 308 : 284, story ? 57 : 50, 28, 'rgba(62, 121, 181,.32)', 2);
+    context.fillStyle = '#c1d9ed';
     context.font = `800 ${story ? 17 : 15}px "DM Sans", Arial, sans-serif`;
     trackedText(context, 'LIVE AVAILABILITY', width - (story ? 308 : 284) - 42, y + (story ? 45 : 41), 2.5);
   }
@@ -968,16 +968,16 @@
     const date = formatDate(snapshot.date);
     const weekday = formatDate(snapshot.date, 'weekday').toUpperCase();
 
-    context.fillStyle = '#b6f000';
+    context.fillStyle = '#8eb9e1';
     context.font = `900 ${story ? 22 : 18}px "DM Sans", Arial, sans-serif`;
     trackedText(context, summary.kicker, 72, top, 5);
 
-    context.fillStyle = '#f8faf4';
+    context.fillStyle = '#f4f7fa';
     const headlineSize = fitFont(context, summary.headline, width - 144, story ? 144 : 124, 82, '"Bebas Neue", "Arial Narrow", sans-serif', 900);
     context.font = `900 ${headlineSize}px "Bebas Neue", "Arial Narrow", sans-serif`;
     context.fillText(summary.headline, 68, top + (story ? 138 : 117));
 
-    context.fillStyle = '#d7ff3f';
+    context.fillStyle = '#c1d9ed';
     context.font = `900 ${story ? 49 : 40}px "DM Sans", Arial, sans-serif`;
     context.fillText(`${weekday} · ${date.toUpperCase()}`, 72, top + (story ? 210 : 176));
 
@@ -990,7 +990,7 @@
     const pillWidth = width - 144;
     fillRoundRect(context, 72, pillY, pillWidth, story ? 56 : 50, 15, 'rgba(255,255,255,.075)');
     strokeRoundRect(context, 72, pillY, pillWidth, story ? 56 : 50, 15, 'rgba(255,255,255,.13)', 1.5);
-    context.fillStyle = '#e8eee5';
+    context.fillStyle = '#e5eaee';
     fitFont(context, statText, pillWidth - 56, story ? 20 : 17, 13, '"DM Sans", Arial, sans-serif', 800);
     context.fillText(statText, 100, pillY + (story ? 36 : 32));
   }
@@ -1016,12 +1016,12 @@
 
     if (!courts.length) {
       fillRoundRect(context, 72, startY, cardWidth, story ? 240 : 210, 30, 'rgba(255,255,255,.045)');
-      strokeRoundRect(context, 72, startY, cardWidth, story ? 240 : 210, 30, 'rgba(182,240,0,.22)', 2);
-      context.fillStyle = '#f8faf4';
+      strokeRoundRect(context, 72, startY, cardWidth, story ? 240 : 210, 30, 'rgba(62, 121, 181,.22)', 2);
+      context.fillStyle = '#f4f7fa';
       context.font = `900 ${story ? 42 : 36}px "Bebas Neue", "Arial Narrow", sans-serif`;
       context.textAlign = 'center';
       context.fillText('SELECT A COURT TO CONTINUE', width / 2, startY + (story ? 112 : 98));
-      context.fillStyle = '#99a397';
+      context.fillStyle = '#979da3';
       context.font = `600 ${story ? 19 : 16}px "DM Sans", Arial, sans-serif`;
       context.fillText('Your live openings will appear here.', width / 2, startY + (story ? 155 : 138));
       context.textAlign = 'left';
@@ -1033,19 +1033,19 @@
       const ranges = mergeAvailableRanges(court.slots);
       const available = Boolean(ranges.length);
       const cardGradient = context.createLinearGradient(72, y, width - 72, y + cardHeight);
-      cardGradient.addColorStop(0, available ? 'rgba(20,28,21,.98)' : 'rgba(25,24,22,.98)');
-      cardGradient.addColorStop(1, available ? 'rgba(9,14,10,.98)' : 'rgba(13,12,11,.98)');
+      cardGradient.addColorStop(0, available ? 'rgba(29,43,55,.98)' : 'rgba(25,24,22,.98)');
+      cardGradient.addColorStop(1, available ? 'rgba(17,27,36,.98)' : 'rgba(13,12,11,.98)');
       fillRoundRect(context, 72, y, cardWidth, cardHeight, 26, cardGradient);
-      strokeRoundRect(context, 72, y, cardWidth, cardHeight, 26, available ? 'rgba(182,240,0,.26)' : 'rgba(255,255,255,.09)', 2);
-      fillRoundRect(context, 72, y, 9, cardHeight, 5, available ? '#b6f000' : '#535a52');
+      strokeRoundRect(context, 72, y, cardWidth, cardHeight, 26, available ? 'rgba(62, 121, 181,.26)' : 'rgba(255,255,255,.09)', 2);
+      fillRoundRect(context, 72, y, 9, cardHeight, 5, available ? '#8eb9e1' : '#52565a');
 
       const left = 108;
       const midpoint = story ? 425 : 396;
-      context.fillStyle = available ? '#b6f000' : '#7d867b';
+      context.fillStyle = available ? '#8eb9e1' : '#7b8186';
       context.font = `900 ${story ? 14 : 12}px "DM Sans", Arial, sans-serif`;
       const statusLabel = available ? 'AVAILABLE' : 'NO OPEN SLOTS';
       trackedText(context, statusLabel, left, y + cardHeight * .3, 2.2);
-      context.fillStyle = '#f8faf4';
+      context.fillStyle = '#f4f7fa';
       const courtName = text(court.name).toUpperCase();
       fitFont(context, courtName, midpoint - left - 20, story ? 38 : 34, 32, '"Bebas Neue", "Arial Narrow", sans-serif', 900);
       context.fillText(courtName, left, y + cardHeight * .7);
@@ -1058,13 +1058,13 @@
           height: cardHeight - (story ? 32 : 28),
         };
         const grid = rangeGridLayout(ranges.length, rangeBounds, story);
-        context.fillStyle = '#f3f7ef';
+        context.fillStyle = '#eff3f7';
         ranges.forEach((range, rangeIndex) => {
           const cell = grid.cells[rangeIndex];
           if (!cell) return;
           if (grid.columns > 1) {
             fillRoundRect(context, cell.x, cell.y, cell.width, cell.height, 10, 'rgba(255,255,255,.045)');
-            strokeRoundRect(context, cell.x, cell.y, cell.width, cell.height, 10, 'rgba(182,240,0,.1)', 1);
+            strokeRoundRect(context, cell.x, cell.y, cell.width, cell.height, 10, 'rgba(62, 121, 181,.1)', 1);
           }
           const horizontalPadding = grid.columns > 1 ? (story ? 11 : 9) : 0;
           const fontSize = fitFont(
@@ -1076,7 +1076,7 @@
             '"DM Sans", Arial, sans-serif',
             800,
           );
-          context.fillStyle = '#f3f7ef';
+          context.fillStyle = '#eff3f7';
           context.fillText(
             range.label,
             cell.x + horizontalPadding,
@@ -1084,7 +1084,7 @@
           );
         });
       } else {
-        context.fillStyle = '#8e978b';
+        context.fillStyle = '#8b9197';
         context.font = `700 ${story ? 32 : 32}px "DM Sans", Arial, sans-serif`;
         context.fillText('Try another court or date', midpoint, y + cardHeight / 2 + 8);
       }
@@ -1100,8 +1100,8 @@
     const x = layout.width - width - 70;
     const y = layout.brandY + (layout.story ? 78 : 65);
     fillRoundRect(context, x, y, width, height, height / 2, 'rgba(5,7,6,.72)');
-    strokeRoundRect(context, x, y, width, height, height / 2, 'rgba(215,255,63,.35)', 1.5);
-    context.fillStyle = '#d7ff3f';
+    strokeRoundRect(context, x, y, width, height, height / 2, 'rgba(142, 185, 225,.35)', 1.5);
+    context.fillStyle = '#c1d9ed';
     context.font = `900 ${layout.story ? 14 : 12}px "DM Sans", Arial, sans-serif`;
     context.textAlign = 'center';
     context.fillText(label, x + width / 2, y + height * .65);
@@ -1114,9 +1114,9 @@
     const footerY = layout.footerY;
     const footerHeight = height - footerY;
     const gradient = context.createLinearGradient(0, footerY, width, height);
-    gradient.addColorStop(0, '#d7ff3f');
-    gradient.addColorStop(.6, '#b6f000');
-    gradient.addColorStop(1, '#91c000');
+    gradient.addColorStop(0, '#c1d9ed');
+    gradient.addColorStop(.6, '#8eb9e1');
+    gradient.addColorStop(1, '#7fa4c5');
     context.fillStyle = gradient;
     context.fillRect(0, footerY, width, footerHeight);
 
@@ -1126,7 +1126,7 @@
     context.fill();
 
     const x = 72;
-    context.fillStyle = '#050706';
+    context.fillStyle = '#111b24';
     context.font = `900 ${footer.readyFontSize}px "DM Sans", Arial, sans-serif`;
     trackedText(context, 'READY TO PLAY?', x, footer.readyY, 3.1);
     context.font = `900 ${footer.ctaFontSize}px "Bebas Neue", "Arial Narrow", sans-serif`;
@@ -1157,7 +1157,7 @@
       context.imageSmoothingEnabled = false;
       context.drawImage(qr, qrX, qrY, size, size);
       context.restore();
-      context.fillStyle = '#050706';
+      context.fillStyle = '#111b24';
       context.font = `900 ${footer.qrLabelFontSize}px "DM Sans", Arial, sans-serif`;
       context.textAlign = 'center';
       context.fillText('SCAN TO BOOK', footer.qrCardX + cardSize / 2, footer.qrLabelY);
@@ -1182,18 +1182,18 @@
     ]);
 
     context.clearRect(0, 0, format.width, format.height);
-    context.fillStyle = '#050706';
+    context.fillStyle = '#111b24';
     context.fillRect(0, 0, format.width, format.height);
     const glow = context.createRadialGradient(format.width * .78, format.height * .05, 10, format.width * .78, format.height * .05, format.width * .72);
-    glow.addColorStop(0, 'rgba(182,240,0,.23)');
-    glow.addColorStop(.38, 'rgba(182,240,0,.07)');
+    glow.addColorStop(0, 'rgba(62, 121, 181,.23)');
+    glow.addColorStop(.38, 'rgba(62, 121, 181,.07)');
     glow.addColorStop(1, 'rgba(5,7,6,0)');
     context.fillStyle = glow;
     context.fillRect(0, 0, format.width, format.height);
     drawCourtTexture(context, format.width, format.height);
 
     context.save();
-    context.strokeStyle = 'rgba(182,240,0,.18)';
+    context.strokeStyle = 'rgba(62, 121, 181,.18)';
     context.lineWidth = 2;
     context.beginPath();
     context.arc(format.width + 40, story ? 380 : 300, story ? 410 : 330, 0, Math.PI * 2);
@@ -1362,7 +1362,7 @@
           notify(`This device cannot attach all ${items.length} image${items.length === 1 ? '' : 's'}. Use Download ${items.length > 1 ? 'PNGs' : 'PNG'}, then upload ${items.length > 1 ? 'the numbered pages' : 'the image'} to Facebook.`, 'notice');
           return;
         }
-        await root.navigator.share({ title: 'Paddle Rage court availability', text: caption, files });
+        await root.navigator.share({ title: 'CHINO court availability', text: caption, files });
         notify('Availability post shared.', 'success');
       } catch (error) {
         const message = shareErrorMessage(error);

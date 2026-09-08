@@ -29,10 +29,20 @@ const sb = createClient(SUPABASE_URL, SERVICE_KEY, {
 });
 
 const ACCOUNTS = [
-  { email: env.OWNER_EMAIL || 'owner@paddlerage.local', password: env.OWNER_PASSWORD || 'CHANGE_THIS_PASSWORD!', username: 'sysowner', full_name: 'System Owner', role: 'owner' },
-  { email: env.COURT_OWNER_EMAIL || 'courtowner@paddlerage.local', password: env.COURT_OWNER_PASSWORD || 'CHANGE_THIS_PASSWORD!', username: 'courtowner', full_name: 'Court Owner', role: 'court_owner' },
-  { email: env.STAFF_EMAIL || 'staff@paddlerage.local', password: env.STAFF_PASSWORD || 'CHANGE_THIS_PASSWORD!', username: 'courtstaff', full_name: 'Court Staff', role: 'staff' },
-];
+  { email: env.OWNER_EMAIL, password: env.OWNER_PASSWORD, username: 'sysowner', full_name: 'CHINO System Owner', role: 'owner' },
+  { email: env.COURT_OWNER_EMAIL, password: env.COURT_OWNER_PASSWORD, username: 'courtowner', full_name: 'CHINO Court Owner', role: 'court_owner' },
+  { email: env.STAFF_EMAIL, password: env.STAFF_PASSWORD, username: 'courtstaff', full_name: 'CHINO Court Staff', role: 'staff' },
+].filter(account => account.email || account.password);
+
+if (SUPABASE_URL !== 'https://mtomskztsvljvzgmewav.supabase.co') {
+  throw new Error('Account setup is restricted to the dedicated CHINO project.');
+}
+for (const account of ACCOUNTS) {
+  if (!account.email || !account.password || account.password.length < 8 || /CHANGE_THIS/i.test(account.password)) {
+    throw new Error('Set each selected CHINO account email and a password of at least 8 characters in .env.local.');
+  }
+}
+if (!ACCOUNTS.length) throw new Error('No CHINO accounts were configured.');
 
 async function run() {
   console.log('Creating admin accounts in Supabase project:', SUPABASE_URL, '\n');
@@ -68,11 +78,10 @@ async function run() {
     await upsertAccountRow(uid, acc);
   }
 
-  console.log('\nDone! Login credentials:');
-  console.log('  URL:      <your-deployed-url>/login.html');
+  console.log('\nDone! Sign in at https://chinopickleball.pages.dev/login');
   const roleLabel = { owner: 'System Owner', court_owner: 'Court Owner ', staff: 'Court Staff ' };
   for (const acc of ACCOUNTS) {
-    console.log(`  ${roleLabel[acc.role] || acc.role}: ${acc.email} / ${acc.password}`);
+    console.log(`  ${roleLabel[acc.role] || acc.role}: ${acc.email} (password kept in your private setup file)`);
   }
 }
 
@@ -89,4 +98,4 @@ async function upsertAccountRow(uid, acc) {
   else console.log(`  ✓ accounts row inserted: ${acc.username} (${acc.role})`);
 }
 
-run().catch(e => console.error('Fatal:', e.message));
+run().catch(e => { console.error('Fatal:', e.message); process.exitCode = 1; });

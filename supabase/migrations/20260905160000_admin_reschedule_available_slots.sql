@@ -53,7 +53,7 @@ declare
   starts integer[] := '{}';
 begin
   booking := public.admin_reschedule_booking_context(p_ref);
-  if p_date is null or p_date<greatest(date '2026-09-19',timezone('Asia/Manila',now())::date)
+  if p_date is null or p_date<greatest(public.court_opening_date(),timezone('Asia/Manila',now())::date)
      or p_date>timezone('Asia/Manila',now())::date+366 then
     raise exception 'Choose a valid date within the next year.' using errcode='22023';
   end if;

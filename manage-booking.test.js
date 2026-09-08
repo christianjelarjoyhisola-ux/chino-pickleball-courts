@@ -21,7 +21,7 @@ function sqlFunctionBody(sql, functionName) {
 test('guest management page gives returning players a clear, accessible lookup', () => {
   const html = read('manage-booking.html');
   assert.match(html, /<h1>Manage your booking<\/h1>/);
-  assert.match(html, /Paddle Rage booking reference/);
+  assert.match(html, /CHINO booking reference/);
   assert.match(html, /Starts with PB-/);
   assert.match(html, /Don.t enter your bank or e-wallet payment reference/);
   assert.match(html, /id="bookingEmail"[\s\S]*type="email"/);

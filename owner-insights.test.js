@@ -58,7 +58,7 @@ test('fresh production data stays explicitly at day zero and invents no forecast
 test('pre-opening forecast counts only opening-day onward capacity and advance reservations', () => {
   const snapshot = Insights.buildSnapshot(baseInput({
     now: '2026-09-02T12:00:00+08:00',
-    openingDate: Insights.OPENING_DATE,
+    openingDate: '2026-09-19',
     bookings: [
       booking({ ref: 'LEGACY-PREOPEN', date: '2026-09-18', status: 'confirmed', paymentStatus: 'paid' }),
       booking({ ref: 'ADVANCE', date: '2026-09-19', status: 'pending', paymentStatus: 'unpaid', createdAt: '2026-09-02T08:00:00+08:00' }),
@@ -77,7 +77,7 @@ test('pre-opening forecast counts only opening-day onward capacity and advance r
 test('learning begins after opening-day play and ignores imported pre-opening history', () => {
   const snapshot = Insights.buildSnapshot(baseInput({
     now: '2026-09-20T00:05:00+08:00',
-    openingDate: Insights.OPENING_DATE,
+    openingDate: '2026-09-19',
     bookings: [
       booking({ ref: 'PREOPEN', date: '2026-09-18', createdAt: '2026-09-01T00:00:00Z' }),
       booking({ ref: 'OPENING-DAY', date: '2026-09-19', createdAt: '2026-09-02T00:00:00Z' }),
@@ -93,7 +93,7 @@ test('learning begins after opening-day play and ignores imported pre-opening hi
 test('30 venue days do not overpromise a Court Pick before comparable-weekday evidence is ready', () => {
   const snapshot = Insights.buildSnapshot(baseInput({
     now: '2026-10-19T08:00:00+08:00',
-    openingDate: Insights.OPENING_DATE,
+    openingDate: '2026-09-19',
     bookings: [booking({ ref: 'OPENING-DAY', date: '2026-09-19' })],
   }));
 
@@ -242,7 +242,7 @@ test('Paddle admin integration is branded, role-scoped, mobile-safe, and read-on
   const deploy = read('deploy-cloudflare-pages.ps1');
 
   assert.match(admin, /data-s="insights" data-perm="insights"/);
-  assert.match(admin, /Paddle Rage Intelligence/);
+  assert.match(admin, /CHINO Intelligence/);
   assert.match(admin, /Find quiet hours\. Fill more courts\./);
   assert.match(admin, /insights:'Insights'/);
   assert.match(admin, /insights:'insights'/);

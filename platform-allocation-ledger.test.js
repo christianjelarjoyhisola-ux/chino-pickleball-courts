@@ -42,7 +42,7 @@ function runLocalRemittanceDashboard(bookings, role = 'court_owner') {
   return getDashboard();
 }
 
-test('the approved policy is fixed at PHP 10 per booked court-hour', () => {
+test('the source allocation audit is preserved and CHINO starts with an explicit zero policy', () => {
   assert.match(clientSource, /service_fee_rate:\s*'10'/);
   assert.match(clientSource, /maintenance_fee:\s*'10'/);
   assert.match(clientSource, /fee_type:\s*'per_hour'/);
@@ -50,6 +50,13 @@ test('the approved policy is fixed at PHP 10 per booked court-hour', () => {
   assert.match(migrationSource, /\('fee_type',\s*'per_hour',\s*now\(\)\)/i);
   assert.match(migrationSource, /create or replace function public\.guard_fixed_booking_fee_policy\(\)/i);
   assert.match(migrationSource, /booking_fee_policy_history_rate_check\s+check\s*\(fee_rate = 10\)/i);
+  const chinoPolicy = fs.readFileSync(path.join(root, 'supabase', 'migrations', '20260908120000_chino_independent_venue.sql'), 'utf8');
+  assert.match(chinoPolicy, /'chino-initial-allocation-v1',\s*'per_hour',\s*0,/);
+  assert.match(chinoPolicy, /order by effective_at desc, recorded_at desc, policy_key desc\s*limit 1/i);
+  assert.match(chinoPolicy, /round\(trim\(new\.value\)::numeric, 2\) <> policy_rate/);
+  for (const setting of ['maintenance_fee', 'service_fee_rate', 'booking_fee']) {
+    assert.match(chinoPolicy, new RegExp(`\\('${setting}', '0', now\\(\\)\\)`));
+  }
 });
 
 test('three courts booked for three hours create nine court-hours and PHP 90', () => {
@@ -69,6 +76,33 @@ test('three courts booked for three hours create nine court-hours and PHP 90', (
   assert.equal(rows.reduce((sum, row) => sum + row.bookingFeeAmountSnapshot, 0), 90);
   assert.ok(rows.every(row => row.bookingFeeRateSnapshot === 10));
   assert.ok(rows.every(row => row.bookingFeeTypeSnapshot === 'per_hour'));
+});
+
+test('current allocation settings display zero or configured rates without rewriting historical snapshots', async () => {
+  const helperStart = adminSource.indexOf('function normalizePlatformFeeType(type)');
+  const helperEnd = adminSource.indexOf('function bookingBillableHours(b)', helperStart);
+  const renderStart = adminSource.indexOf('async function renderMaintRateSettings(');
+  const renderEnd = adminSource.indexOf('async function renderHours()', renderStart);
+  assert.ok(helperStart >= 0 && helperEnd > helperStart && renderStart >= 0 && renderEnd > renderStart);
+  const elements = new Map();
+  const getElement = id => {
+    if (!elements.has(id)) elements.set(id, { textContent: '' });
+    return elements.get(id);
+  };
+  const render = new Function('$', 'fmt', 'DB', `${adminSource.slice(helperStart, helperEnd)}\n${adminSource.slice(renderStart, renderEnd)}\nreturn renderMaintRateSettings;`)(
+    getElement,
+    value => `PHP ${Number(value).toFixed(2)}`,
+    { getSettings: async () => ({ maintenance_fee: '0', fee_type: 'per_hour' }) },
+  );
+  await render();
+  assert.equal(getElement('maintRateLockedValue').textContent, 'PHP 0.00');
+  assert.match(getElement('maintRateSummary').textContent, /No platform allocation is deducted from new bookings/);
+  assert.match(getElement('maintRateSummary').textContent, /Historical bookings keep their locked snapshots/);
+  await render({ maintenance_fee: '12.5', fee_type: 'flat' });
+  assert.equal(getElement('maintRateLockedValue').textContent, 'PHP 12.50');
+  assert.equal(getElement('maintRateMethod').textContent, 'Per confirmed booking transaction');
+  assert.match(getElement('maintRateSummary').textContent, /PHP 12\.50 per confirmed booking transaction/);
+  assert.doesNotMatch(adminSource, /const PLATFORM_ALLOCATION_RATE\s*=\s*10/);
 });
 
 test('pending proof earns nothing and an accepted booking earns its allocation once', () => {
@@ -445,7 +479,7 @@ test('the court breakdown remains an accessible, closed-by-default authoritative
   assert.ok(refreshStart >= 0 && refreshEnd > refreshStart);
   assert.ok(
     refreshSource.indexOf('setPlatformCourtBreakdown(false);')
-      < refreshSource.indexOf('await DB.getBookingFeeRemittanceDashboard()'),
+      < refreshSource.indexOf('DB.getBookingFeeRemittanceDashboard()'),
     'refresh must collapse the supplementary disclosure before awaiting new data',
   );
   assert.match(

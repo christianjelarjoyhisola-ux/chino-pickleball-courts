@@ -137,7 +137,7 @@ function buildBooking(today, runKey, index, spec, courts, bookingFee, feeType) {
     created_via: spec.createdVia || 'customer',
     created_by_role: spec.createdVia === 'admin' ? 'staff' : null,
     created_by_name: spec.createdVia === 'admin' ? 'Demo Front Desk' : null,
-    created_by_email: spec.createdVia === 'admin' ? 'staff@paddlerage.local' : null,
+    created_by_email: spec.createdVia === 'admin' ? 'staff@chino.local' : null,
     created_at: timestamp(createdDate, 10 + (index % 7), 5),
   };
 }

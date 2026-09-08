@@ -7,7 +7,7 @@
 begin;
 
 insert into public.settings (key, value)
-values ('bpi_receipt_recipient_name', 'PaddleRage')
+values ('bpi_receipt_recipient_name', '')
 on conflict (key) do nothing;
 
 do $$

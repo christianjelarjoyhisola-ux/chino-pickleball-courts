@@ -134,7 +134,7 @@ function eventMatchesCanonicalState(
 
 function adminUrl(): string {
   return Deno.env.get("APP_ADMIN_URL") ||
-    "https://paddleragecdo.ph/admin.html";
+    "https://chinopickleball.pages.dev/admin.html";
 }
 
 function bookingMessage(
@@ -180,7 +180,7 @@ function bookingMessage(
     (sharedDate ? `📅 ${esc(fmtDate(sharedDate))}\n` : "") +
     `${courtLines}\n` +
     `💰 <b>TOTAL PAYMENT: ${fmtPHP(total)}</b>\n\n` +
-    `🔗 <a href="${adminUrl()}">Open the Paddle Rage dashboard</a>`
+    `🔗 <a href="${adminUrl()}">Open the CHINO dashboard</a>`
   );
 }
 

@@ -237,14 +237,14 @@ function schedulePlain(items: ScheduleItem[]): string {
 
 function scheduleHtml(items: ScheduleItem[]): string {
   if (!items.length) {
-    return '<div style="color:#b7c0b5;font-size:14px;line-height:1.6;">Schedule details unavailable</div>';
+    return '<div style="color:#b7c7d8;font-size:14px;line-height:1.6;">Schedule details unavailable</div>';
   }
   return items.map((item) => `
-    <div style="padding:12px 0;border-bottom:1px solid #29362c;">
-      <div style="font-size:15px;line-height:1.45;font-weight:900;color:#f6f8f2;">${
+    <div style="padding:12px 0;border-bottom:1px solid #31465e;">
+      <div style="font-size:15px;line-height:1.45;font-weight:900;color:#f4f7fb;">${
     escapeHtml(item.courtName)
   }</div>
-      <div style="margin-top:3px;font-size:13px;line-height:1.55;color:#b7c0b5;">${
+      <div style="margin-top:3px;font-size:13px;line-height:1.55;color:#b7c7d8;">${
     escapeHtml(dateLabel(item.date))
   }<br>${escapeHtml(item.startTime)} &ndash; ${escapeHtml(item.endTime)}</div>
     </div>`).join("");
@@ -252,7 +252,7 @@ function scheduleHtml(items: ScheduleItem[]): string {
 
 function publicUrl(): string {
   const raw = text(
-    Deno.env.get("APP_PUBLIC_URL") || "https://paddleragecdo.ph",
+    Deno.env.get("APP_PUBLIC_URL") || "https://chinopickleball.pages.dev",
     500,
   ).replace(/\/+$/, "");
   try {
@@ -262,7 +262,7 @@ function publicUrl(): string {
     }
     return url.toString().replace(/\/+$/, "");
   } catch {
-    return "https://paddleragecdo.ph";
+    return "https://chinopickleball.pages.dev";
   }
 }
 
@@ -300,7 +300,7 @@ function emailCopy(kind: string): {
         statusBackground: "#211b08",
         title: "We received your schedule request",
         intro:
-          "Your current booking stays confirmed while the Paddle Rage team reviews the requested schedule.",
+          "Your current booking stays confirmed while the CHINO team reviews the requested schedule.",
         currentLabel: "CURRENT SCHEDULE",
         requestedLabel: "REQUESTED SCHEDULE",
         note:
@@ -310,8 +310,8 @@ function emailCopy(kind: string): {
       return {
         subject: "Reschedule request approved",
         status: "NEW SCHEDULE CONFIRMED",
-        statusColor: "#d7ff3f",
-        statusBackground: "#172006",
+        statusColor: "#b5d7f5",
+        statusBackground: "#142c47",
         title: "Your booking has been rescheduled",
         intro:
           "Your new court schedule is confirmed. The previous schedule is no longer active.",
@@ -332,7 +332,7 @@ function emailCopy(kind: string): {
         currentLabel: "ACTIVE SCHEDULE",
         requestedLabel: "REQUESTED SCHEDULE",
         note:
-          "You may contact Paddle Rage if you need help with another eligible schedule.",
+          "You may contact CHINO if you need help with another eligible schedule.",
       };
     case "customer_conflicted":
       return {
@@ -351,7 +351,7 @@ function emailCopy(kind: string): {
       return {
         subject: "Reschedule request withdrawn",
         status: "REQUEST WITHDRAWN",
-        statusColor: "#f6f8f2",
+        statusColor: "#f4f7fb",
         statusBackground: "#1b211c",
         title: "Your schedule request was withdrawn",
         intro:
@@ -384,7 +384,7 @@ function renderCustomerEmail(notification: ClaimedNotification): {
       "customer_rejected",
       "customer_conflicted",
     ].includes(notification.kind)
-    ? `<div style="margin-top:18px;padding:15px 17px;border:1px solid #5b3d11;border-radius:12px;background:#211b08;color:#f6f8f2;font-size:14px;line-height:1.65;"><strong style="color:#ffdf75;">Review note</strong><br>${
+    ? `<div style="margin-top:18px;padding:15px 17px;border:1px solid #5b3d11;border-radius:12px;background:#211b08;color:#f4f7fb;font-size:14px;line-height:1.65;"><strong style="color:#ffdf75;">Review note</strong><br>${
       escapeHtml(reason)
     }</div>`
     : "";
@@ -393,78 +393,78 @@ function renderCustomerEmail(notification: ClaimedNotification): {
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>${
     escapeHtml(copy.subject)
-  } | Paddle Rage Pickleball</title><style>
+  } | CHINO Pickleball Courts</title><style>
     @media only screen and (max-width:620px){
       .email-wrap{padding:0!important}.email-card{border-radius:0!important;border-left:0!important;border-right:0!important}
       .mobile-pad{padding-left:21px!important;padding-right:21px!important}.schedule-cell{display:block!important;width:100%!important;box-sizing:border-box!important}
       .schedule-gap{display:block!important;width:100%!important;height:12px!important}.email-title{font-size:26px!important}
     }
   </style></head>
-<body style="margin:0;padding:0;background:#050706;font-family:Arial,'Helvetica Neue',sans-serif;color:#f6f8f2;">
+<body style="margin:0;padding:0;background:#0a1422;font-family:Arial,'Helvetica Neue',sans-serif;color:#f4f7fb;">
   <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">${
     escapeHtml(copy.intro)
   }</div>
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;background:#050706;"><tr><td class="email-wrap" align="center" style="padding:30px 12px;">
-    <table role="presentation" class="email-card" width="600" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;background:#0b0f0c;border:1px solid #29362c;border-radius:18px;overflow:hidden;">
-      <tr><td style="height:7px;background:#b6f000;font-size:0;line-height:0;">&nbsp;</td></tr>
-      <tr><td class="mobile-pad" style="padding:24px 32px;background:#050706;border-bottom:1px solid #29362c;">
-        <div style="font-size:22px;line-height:1.15;font-weight:900;letter-spacing:1.8px;color:#ffffff;">PADDLE RAGE</div>
-        <div style="margin-top:4px;font-size:11px;font-weight:800;letter-spacing:2px;color:#b6f000;">PICKLEBALL &middot; CDO</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;background:#0a1422;"><tr><td class="email-wrap" align="center" style="padding:30px 12px;">
+    <table role="presentation" class="email-card" width="600" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;background:#101e30;border:1px solid #31465e;border-radius:18px;overflow:hidden;">
+      <tr><td style="height:7px;background:#83b8ee;font-size:0;line-height:0;">&nbsp;</td></tr>
+      <tr><td class="mobile-pad" style="padding:24px 32px;background:#0a1422;border-bottom:1px solid #31465e;">
+        <div style="font-size:22px;line-height:1.15;font-weight:900;letter-spacing:1.8px;color:#ffffff;">CHINO</div>
+        <div style="margin-top:4px;font-size:11px;font-weight:800;letter-spacing:2px;color:#83b8ee;">PICKLEBALL COURTS</div>
       </td></tr>
       <tr><td style="padding:11px 20px;text-align:center;background:${copy.statusBackground};color:${copy.statusColor};font-size:12px;font-weight:900;letter-spacing:1.2px;">${
     escapeHtml(copy.status)
   }</td></tr>
       <tr><td class="mobile-pad" style="padding:32px 34px 14px;">
-        <h1 class="email-title" style="margin:0 0 14px;font-size:29px;line-height:1.2;color:#f6f8f2;">${
+        <h1 class="email-title" style="margin:0 0 14px;font-size:29px;line-height:1.2;color:#f4f7fb;">${
     escapeHtml(copy.title)
   }</h1>
-        <p style="margin:0 0 8px;font-size:16px;line-height:1.65;color:#f6f8f2;">Hi <strong>${
+        <p style="margin:0 0 8px;font-size:16px;line-height:1.65;color:#f4f7fb;">Hi <strong>${
     escapeHtml(name)
   }</strong>,</p>
-        <p style="margin:0;font-size:15px;line-height:1.7;color:#b7c0b5;">${
+        <p style="margin:0;font-size:15px;line-height:1.7;color:#b7c7d8;">${
     escapeHtml(copy.intro)
   }</p>
       </td></tr>
       <tr><td class="mobile-pad" style="padding:12px 34px 32px;">
-        <div style="margin-bottom:18px;padding:14px 16px;border:1px solid #3b4d3f;border-radius:12px;background:#111712;">
+        <div style="margin-bottom:18px;padding:14px 16px;border:1px solid #3b4d3f;border-radius:12px;background:#17283d;">
           <div style="font-size:10px;font-weight:900;letter-spacing:1.4px;color:#9ca79d;">BOOKING REFERENCE</div>
-          <div style="margin-top:6px;font-family:Consolas,'Courier New',monospace;font-size:18px;font-weight:900;color:#d7ff3f;overflow-wrap:anywhere;">${
+          <div style="margin-top:6px;font-family:Consolas,'Courier New',monospace;font-size:18px;font-weight:900;color:#b5d7f5;overflow-wrap:anywhere;">${
     escapeHtml(displayRef)
   }</div>
         </div>
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
-          <td class="schedule-cell" style="width:50%;padding:16px;vertical-align:top;border:1px solid #29362c;border-radius:13px;background:#111712;">
+          <td class="schedule-cell" style="width:50%;padding:16px;vertical-align:top;border:1px solid #31465e;border-radius:13px;background:#17283d;">
             <div style="font-size:10px;font-weight:900;letter-spacing:1.2px;color:#9ca79d;">${
     escapeHtml(copy.currentLabel)
   }</div>${scheduleHtml(oldItems)}
           </td>
           <td class="schedule-gap" style="width:12px;font-size:0;">&nbsp;</td>
-          <td class="schedule-cell" style="width:50%;padding:16px;vertical-align:top;border:1px solid #516b11;border-radius:13px;background:#172006;">
-            <div style="font-size:10px;font-weight:900;letter-spacing:1.2px;color:#b6f000;">${
+          <td class="schedule-cell" style="width:50%;padding:16px;vertical-align:top;border:1px solid #516b11;border-radius:13px;background:#142c47;">
+            <div style="font-size:10px;font-weight:900;letter-spacing:1.2px;color:#83b8ee;">${
     escapeHtml(copy.requestedLabel)
   }</div>${scheduleHtml(requestedItems)}
           </td>
         </tr></table>
         ${reasonHtml}
-        <div style="margin-top:19px;padding:15px 17px;border-left:4px solid #b6f000;border-radius:8px;background:#151d17;color:#dbe2d9;font-size:14px;line-height:1.65;">${
+        <div style="margin-top:19px;padding:15px 17px;border-left:4px solid #83b8ee;border-radius:8px;background:#1b2d43;color:#dbe2d9;font-size:14px;line-height:1.65;">${
     escapeHtml(copy.note)
   }</div>
         <div style="margin-top:22px;text-align:center;"><a href="${
     escapeHtml(manageUrl)
-  }" style="display:inline-block;padding:13px 20px;border-radius:10px;background:#b6f000;color:#050706;font-size:14px;font-weight:900;text-decoration:none;">Manage booking</a></div>
+  }" style="display:inline-block;padding:13px 20px;border-radius:10px;background:#83b8ee;color:#0a1422;font-size:14px;font-weight:900;text-decoration:none;">Manage booking</a></div>
       </td></tr>
-      <tr><td style="padding:21px 30px;background:#050706;border-top:1px solid #29362c;text-align:center;color:#9ca79d;font-size:12px;line-height:1.6;">
-        Payments are non-refundable. Eligible reservations may be rescheduled under Paddle Rage booking rules.<br>
+      <tr><td style="padding:21px 30px;background:#0a1422;border-top:1px solid #31465e;text-align:center;color:#9ca79d;font-size:12px;line-height:1.6;">
+        Payments are non-refundable. Eligible reservations may be rescheduled under CHINO booking rules.<br>
         <a href="${
     escapeHtml(publicUrl())
-  }" style="color:#b6f000;text-decoration:none;font-weight:800;">paddleragecdo.ph</a>
+  }" style="color:#83b8ee;text-decoration:none;font-weight:800;">chinopickleball.pages.dev</a>
       </td></tr>
     </table>
   </td></tr></table>
 </body></html>`;
 
   const plainText = [
-    "PADDLE RAGE PICKLEBALL",
+    "CHINO PICKLEBALL COURTS",
     copy.status,
     "",
     `Hi ${name},`,
@@ -486,11 +486,11 @@ function renderCustomerEmail(notification: ClaimedNotification): {
     copy.note,
     `Manage booking: ${manageUrl}`,
     "",
-    "Payments are non-refundable. Eligible reservations may be rescheduled under Paddle Rage booking rules.",
+    "Payments are non-refundable. Eligible reservations may be rescheduled under CHINO booking rules.",
   ].join("\n");
 
   return {
-    subject: `${copy.subject}: ${displayRef} | Paddle Rage Pickleball`,
+    subject: `${copy.subject}: ${displayRef} | CHINO Pickleball Courts`,
     html,
     plain: plainText,
   };
@@ -598,7 +598,7 @@ function telegramMessage(notification: ClaimedNotification): string {
     "⏳ Pending owner review",
     `🔗 <a href="${
       telegramEscape(adminUrl())
-    }">Open the Paddle Rage dashboard</a>`,
+    }">Open the CHINO dashboard</a>`,
   ].join("\n");
 }
 

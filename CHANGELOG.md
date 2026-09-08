@@ -1,20 +1,14 @@
-# Changelog — Paddle Rage Pickleball
+# Changelog — CHINO Pickleball Courts
 
-## 2026-08-31 — Paddle Rage Intelligence
+## 2026-09-08 — Independent CHINO platform
 
-- Added a premium owner/court-owner Insights workspace with actual 28-day booked capacity, evidence-gated fill forecasting, a responsive demand heatmap, court filtering, and one regular-price Court Pick recommendation.
-- Kept Intelligence read-only: it never changes prices, bookings, payments, receipts, or customer data.
-- Corrected Korte Dos analytics issues by using an explicit zero-history state, calculating expected total fill from existing reservations plus evidence-backed open-hour demand, excluding Open Play from private-court demand, and avoiding false “published” claims.
-- Added a paginated, PII-minimal booking adapter plus Manila-time, payment-state, schedule-exclusion, role, branding, mobile, and forecast regression coverage.
-- Replaced the long mobile hourly list with a compact seven-day matrix whose time columns swipe horizontally, including sticky weekday labels, time-of-day jumps, truthful learning and error states, and accessible selected-hour details.
+- Adapted the owner's Paddle Rage Pickleball platform, retaining court reservations, host workflows, payment review, booking management and rescheduling, live Open Play, owner insights, and reporting.
+- Established a separate CHINO repository and Supabase project, with `https://chinopickleball.pages.dev` as the site address.
+- Introduced a premium court-blue, charcoal, and concrete identity, new CHINO marks, and the owner's court photograph.
+- Rebranded public pages, dashboard surfaces, messages, downloadable graphics, metadata, and deployment defaults.
+- Removed inherited venue contact, launch, merchant, and imagery defaults. CHINO's owner supplies the venue configuration.
+- Preserved regression coverage for booking, payments, authorization, concurrency, and reporting while updating intentional brand and fresh-project expectations.
 
-## 2026-07-16 — Independent brand foundation
+## Source foundation
 
-- Imported the booking platform as a clean code snapshot without source Git history or remote configuration.
-- Replaced user-facing venue branding with Paddle Rage Pickleball across public, host, login, admin, database seed, and Edge Function content.
-- Applied the supplied Paddle Rage logo to all page branding and favicon references.
-- Added a centralized black and neon-green visual system with accessible high-contrast controls.
-- Removed the previous live Supabase URL and anon key, production domain redirects, AdSense publisher, court photos, unrelated venue imagery, and legacy brand assets.
-- Changed deployment defaults to a new `paddle-rage-pickleball` Cloudflare Pages project.
-- Made email logo and admin URLs environment-driven and added an explicit configuration template.
-- Added clean setup, separation, testing, and launch documentation.
+The source platform supplied the mature reservation, receipt verification, Open Play, remittance, Insights, and grouped-rescheduling workflows. CHINO continues those features with independent operations and data.

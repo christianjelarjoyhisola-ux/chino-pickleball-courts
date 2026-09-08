@@ -348,7 +348,7 @@ Deno.serve(async (req) => {
             to: customerEmail,
             toName: first.full_name || "Player",
             subject:
-              `Payment not completed: ${displayRef} | Paddle Rage Pickleball`,
+              `Payment not completed: ${displayRef} | CHINO Pickleball Courts`,
             html: content.html,
             plain: content.plain,
             tags: {
