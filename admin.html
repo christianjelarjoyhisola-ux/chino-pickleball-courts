@@ -6416,7 +6416,7 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(45, 62, 79, .1
         <div style="margin-top:12px;padding:16px;background:var(--input);border-radius:12px;border:1px solid var(--border)">
           <div class="pm-brand-heading" style="font-weight:800;margin-bottom:12px;color:var(--text)"><span class="pm-brand-mark pm-brand-mark--small pm-brand-mark--securitybank" data-payment-method="securitybank" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/security-bank.svg" width="32" height="32" alt="" decoding="async" /></span><span>Security Bank</span></div>
           <div class="frow" style="gap:12px">
-            <div class="fg" style="flex:1"><label class="fl" for="securitybankNumInput">Account number</label><input type="text" class="fi" id="securitybankNumInput" placeholder="Enter account number" inputmode="numeric" autocomplete="off" maxlength="40" /></div>
+            <div class="fg" style="flex:1"><label class="fl" for="securitybankNumInput">Account number</label><input type="text" class="fi" id="securitybankNumInput" placeholder="Full account number, including leading zeroes" inputmode="numeric" autocomplete="off" maxlength="40" /><small class="muted">Use the full account number. Masked numbers keep receipts pending for owner review.</small></div>
             <div class="fg" style="flex:1"><label class="fl" for="securitybankNameInput">Account name</label><input type="text" class="fi" id="securitybankNameInput" placeholder="Enter account name" autocomplete="off" maxlength="150" /></div>
           </div>
           <div class="fg" style="margin:0 0 14px">
@@ -7586,8 +7586,20 @@ const RECEIPT_FLAG_LABELS = {
   REF_MISMATCH:'Reference does not match', INSTAPAY_REF_UNREADABLE:'InstaPay reference unreadable', INSTAPAY_UNREADABLE:'InstaPay unreadable', TRANSFER_STATUS_UNREADABLE:'Transfer status needs review', PROVIDER_REVIEW_REQUIRED:'Payment provider requires owner review',
   TRANSFER_STATUS_INVALID:'Transfer failed or reversed', TRANSFER_PENDING:'Transfer still pending',
   DATE_UNREADABLE:'Date unreadable', TIME_UNREADABLE:'Time unreadable', NUMBER_UNREADABLE:'Receiver number unreadable', REF_LABEL_UNREADABLE:'Reference label unreadable',
-  BDO_PAY_UNREADABLE:'BDO Pay/InstaPay unreadable', MAYA_UNREADABLE:'Maya unreadable', BPI_UNREADABLE:'BPI success unreadable', BPI_CONFIRMATION_UNREADABLE:'BPI confirmation unreadable', BPI_TRANSACTION_UNREADABLE:'BPI transaction ref unreadable', INSTAPAY_QRPH_UNREADABLE:'InstaPay/QRPh unreadable', GXI_DESTINATION_UNREADABLE:'GXI/GCash destination unreadable', RECEIVER_NAME_UNREADABLE:'Receiver name unreadable', MERCHANT_CONFIG_MISSING:'GCash recipient number not configured', BOOKING_GROUP_PAYMENT_MISMATCH:'Booking payment details need review', AUTO_APPROVAL_FAILED:'Auto-verification could not finalize', REJECTION_FINALIZATION_FAILED:'Duplicate rejection could not finalize',
+  BDO_PAY_UNREADABLE:'BDO Pay/InstaPay unreadable', MAYA_UNREADABLE:'Maya unreadable', BPI_UNREADABLE:'BPI success unreadable', BPI_CONFIRMATION_UNREADABLE:'BPI confirmation unreadable', BPI_TRANSACTION_UNREADABLE:'BPI transaction ref unreadable', INSTAPAY_QRPH_UNREADABLE:'InstaPay/QRPh unreadable', GXI_DESTINATION_UNREADABLE:'GXI/GCash destination unreadable', RECEIVER_NAME_UNREADABLE:'Receiver name unreadable', MERCHANT_CONFIG_MISSING:'Recipient account details incomplete', BOOKING_GROUP_PAYMENT_MISMATCH:'Booking payment details need review', AUTO_APPROVAL_FAILED:'Auto-verification could not finalize', REJECTION_FINALIZATION_FAILED:'Duplicate rejection could not finalize',
 };
+Object.assign(RECEIPT_FLAG_LABELS, {
+  SECURITYBANK_AMBIGUOUS_FIELDS: 'Conflicting Security Bank receipt fields',
+  SECURITYBANK_AMOUNT_BREAKDOWN_UNREADABLE: 'Transfer amount, bank fee or total could not be read',
+  SECURITYBANK_TOTAL_MISMATCH: 'Transfer amount and bank fee do not match the receipt total',
+  SECURITYBANK_TIMESTAMP_AMBIGUOUS: 'Security Bank receipt timestamp unclear',
+  SECURITYBANK_SOURCE_UNREADABLE: 'GCash bank-transfer source could not be verified',
+  SECURITYBANK_DESTINATION_MISMATCH: 'Security Bank destination could not be verified',
+  SECURITYBANK_INVOICE_UNREADABLE: 'InstaPay invoice could not be read',
+  RECEIVER_ACCOUNT_UNREADABLE: 'Recipient account could not be read',
+  RECEIVER_ACCOUNT_MISMATCH: 'Recipient account does not match',
+  REVIEW_FINALIZATION_FAILED: 'Receipt check was saved in the audit but could not finish updating the booking',
+});
 function receiptReasonText(flags){
   if (!flags || !flags.length) return 'No specific reason saved';
   return flags.map(f => RECEIPT_FLAG_LABELS[f] || f).join(', ');
@@ -7767,6 +7779,7 @@ function receiptDetailsHtml(b){
     bpi_to_gcash_v1: 'Dedicated BPI to GCash v1',
     gotyme_to_gcash_v1: 'Dedicated GoTyme → GCash v1',
     maribank_to_gcash_v1: 'Dedicated MariBank → GCash v1',
+    gcash_to_securitybank_v1: 'Dedicated GCash → Security Bank v1',
   })[String(ex.parserVersion || '').toLowerCase()] || '';
   const displayFlags = receiptFlagsForDisplay(b);
   const paymentState = String(b.paymentStatus || '').toLowerCase();
@@ -7779,7 +7792,9 @@ function receiptDetailsHtml(b){
       ? 'All provider, reference, amount, time, recipient, and replay checks passed'
       : canonicallyResolved
         ? 'Parser review completed — payment was resolved by staff'
-      : 'No hard mismatch found — owner confirmation required';
+      : !ex.parserVersion
+        ? 'Verification details unavailable — owner review required'
+        : 'Receipt checks recorded — owner confirmation required';
   const ocrConfidenceNumber = Number(ex.ocrConfidence);
   const ocrConfidence = ex.ocrConfidence != null && Number.isFinite(ocrConfidenceNumber)
     ? `${Math.round(ocrConfidenceNumber * 100)}%`
@@ -7805,6 +7820,16 @@ function receiptDetailsHtml(b){
     ['Window', ex.allowedPaymentWindowMinutes ? `${esc(ex.allowedPaymentWindowMinutes)} min` : '--'],
     ['OCR Engine', receiptOcrProviderLabel(ex.ocrProvider)],
     ...(parserLabel ? [['Parser', parserLabel]] : []),
+    ...(bankTransfer && ex.parserVersion === 'gcash_to_securitybank_v1' ? [
+      ['Destination Bank', receiptDetailValue(bankTransfer.recipient?.bankRaw), true],
+      ['Recipient Name', receiptDetailValue(bankTransfer.recipient?.nameRaw), true],
+      ['Recipient Account', receiptDetailValue(bankTransfer.recipient?.accountRaw), true],
+      ['Recipient Check', receiptDetailValue(`Name: ${bankTransfer.recipientComparison || 'review'} / Account: ${bankTransfer.recipientAccountComparison || 'review'}`), true],
+      ['InstaPay Invoice (not payment ref)', receiptDetailValue(bankTransfer.invoice?.value), true],
+      ['Bank Fee (not payment)', receiptAmountValue(bankTransfer.transferFee), true],
+      ['Receipt Total (including bank fee)', receiptAmountValue(bankTransfer.total), true],
+      ...(bankTransfer.recipientAccountComparison === 'not_configured' ? [['Setup Required', 'Enter the full Security Bank account number in Payment Settings. A masked number cannot enable automatic approval.', true]] : []),
+    ] : []),
     ...(gcash ? [
       ['Recipient Phone', receiptDetailValue(gcashPhoneCheckLabel(recipientCheck.phone)), true],
       ['Recipient Name', receiptDetailValue(gcashNameCheckLabel(recipientCheck.name, gcash.receiver?.name?.raw)), true],
@@ -18745,7 +18770,7 @@ async function checkAgreementGate(session) {
 
 <script src="supabase.min.js"></script>
 <script src="open-play-rating.js?v=20260729-head-to-head-v1"></script>
-<script src="supabase-config.js?v=20260909-fee-modes"></script>
+<script src="supabase-config.js?v=20260909-bank-verifier"></script>
 <script src="qrcode.min.js?v=1.5.4"></script>
 <script src="availability-graphic.js?v=20260909-domain-v1"></script>
 <script src="play-manager.js?v=20260909-official-logo-v1"></script>

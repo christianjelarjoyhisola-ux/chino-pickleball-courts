@@ -257,3 +257,34 @@ Deno.test("Security Bank receipt-only checkout extracts its own reference withou
   assert(check(RECEIPT.replace("2044841788110", "unreadable"), { typedReference: "" }).flags.includes("REF_UNREADABLE"));
   assert(check(RECEIPT, { typedReference: "9999999999999" }).flags.includes("REF_MISMATCH"));
 });
+
+// Redacted real Vision output: label columns precede value columns.
+const COLUMN_RECEIPT = "Bank Transfer Complete\nSent via GCash\nSuccessful transactions are credited instantly. You will receive\nan update about this transaction in your GCash Inbox.\nBank\nAccount No.\nAccount Name\nTransfer Method\nSecurity Bank\nCorporation\n.........2980\nKristie Lou V.\nInstaPay\nReceipt sent to\nsample@example.com\nTransfer Amount\n1.00\n+Fee\nTotal\n10.00\nP 11.00\nDate\nSep 09, 2026 02:16 AM\nInstaPay Invoice No.\n911062\nRef No.\n2044842501303\n228g (gC02e)\nBy going digital, you reduce your carbon footprint from\ntransportation, paper, and plastic.\nPowered by instaFay";
+Deno.test('real Vision column layout reads independent transfer, fee, total and recipient', () => {
+ const p = parseSecurityBankReceipt(COLUMN_RECEIPT);
+ assert(p.reference.value === '2044842501303');
+ assert(p.invoice.value === '911062');
+ assert(p.amount.amount === 1 && p.transferFee === 10 && p.total === 11);
+ assert(p.recipient.bankRaw === 'Security Bank Corporation');
+ assert(p.recipient.nameRaw === 'Kristie Lou V.');
+ assert(p.recipient.accountRaw?.endsWith('2980'));
+ assert(p.timestamp.instant === '2026-09-08T18:16:00.000Z');
+ const v = verifySecurityBankReceipt(p, {...context, typedReference:'', expectedRecipientName:'KRISTIE LOU V.', bookingStartedAt:'2026-09-08T18:14:27Z', now:'2026-09-08T18:19:00Z'});
+ assert(v.flags.length === 0, JSON.stringify(v.flags));
+ const masked = verifySecurityBankReceipt(p, {...context, typedReference:'', expectedRecipientNumber:'*********2980', bookingStartedAt:'2026-09-08T18:14:27Z', now:'2026-09-08T18:19:00Z'});
+ assert(masked.flags.includes('MERCHANT_CONFIG_MISSING'));
+});
+Deno.test('incomplete, reordered, duplicated and conflicting column evidence stays for review', () => {
+ for (const raw of [
+  COLUMN_RECEIPT.replace('Kristie Lou V.\n',''),
+  COLUMN_RECEIPT.replace('Account No.\nAccount Name','Account Name\nAccount No.'),
+  COLUMN_RECEIPT.replace('Security Bank\nCorporation','Other Bank\nCorporation'),
+  COLUMN_RECEIPT.replace('+Fee\nTotal\n10.00\nP 11.00','+Fee\nTotal\nP 11.00\n10.00'),
+  COLUMN_RECEIPT + '\nBank: Security Bank Corporation',
+  COLUMN_RECEIPT + '\nAccount No.: ********1234',
+  COLUMN_RECEIPT + '\nTotal: P 11.00',
+ ]) {
+  const v=verifySecurityBankReceipt(parseSecurityBankReceipt(raw), {...context, typedReference:'', bookingStartedAt:'2026-09-08T18:14:27Z', now:'2026-09-08T18:19:00Z'});
+  assert(v.flags.length > 0, 'Uncertain column layout must not pass');
+ }
+});

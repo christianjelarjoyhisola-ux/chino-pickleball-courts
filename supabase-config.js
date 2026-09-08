@@ -617,10 +617,11 @@ function normalizePaymentKey(value, fallback = '') {
 }
 
 function receivedAccountForBooking(b = {}) {
+  const method = normalizePaymentKey(b.paymentMethod || b.payment_method, 'cash');
+  if (method === 'securitybank') return 'securitybank';
   const explicit = normalizePaymentKey(b.receivedAccount || b.received_account);
   if (explicit) return explicit;
 
-  const method = normalizePaymentKey(b.paymentMethod || b.payment_method, 'cash');
   if (method === 'cash') return 'cash';
   return 'gcash';
 }

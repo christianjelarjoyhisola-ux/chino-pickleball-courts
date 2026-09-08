@@ -6,6 +6,38 @@ import type {
 } from "./bank-to-gcash.ts";
 
 type Field = { value: string | null; ambiguous: boolean };
+// Vision sometimes reads this receipt's label column before its value column.
+// Reorder only complete, structurally validated blocks; leave uncertain blocks
+// untouched so the ordinary parser sends them for review. Keep raw OCR in audit.
+function normalizeColumns(input: string[]): string[] {
+  const lines = [...input];
+  for (let i = 0; i < lines.length; i++) {
+    if (/^Bank:?$/i.test(lines[i]) &&
+      /^Account\s*(?:No\.?|Number):?$/i.test(lines[i + 1] || "") &&
+      /^Account Name:?$/i.test(lines[i + 2] || "") &&
+      /^Transfer Method:?$/i.test(lines[i + 3] || "")) {
+      const end = lines.findIndex((s, j) => j > i + 3 && /^Receipt sent to:?$/i.test(s));
+      const values = end < 0 ? [] : lines.slice(i + 4, end);
+      const accountIndex = values.findIndex((s) => /^(?:[*•●·.xX]{2,}\d{4}|\d{8,30})$/.test(s.replace(/[\s-]/g, "")));
+      if ((accountIndex === 1 || accountIndex === 2) && values.length === accountIndex + 3 &&
+        values.slice(0, accountIndex).every((s) => /^[A-Za-z][A-Za-z .&-]*$/.test(s)) &&
+        /^[\p{L}][\p{L} .'-]+$/u.test(values[accountIndex + 1]) &&
+        /^Insta\s*Pay$/i.test(values[accountIndex + 2])) {
+        lines.splice(i, end - i,
+          `Bank: ${values.slice(0, accountIndex).join(" ")}`,
+          `Account No.: ${values[accountIndex]}`,
+          `Account Name: ${values[accountIndex + 1]}`,
+          `Transfer Method: ${values[accountIndex + 2]}`);
+      }
+    }
+    if (/^\+?Fee:?$/i.test(lines[i]) && /^Total:?$/i.test(lines[i + 1] || "") &&
+      money(lines[i + 2]) !== null && money(lines[i + 3]) !== null &&
+      /^Date:?$/i.test(lines[i + 4] || "")) {
+      lines.splice(i, 4, `+Fee: ${lines[i + 2]}`, `Total: ${lines[i + 3]}`);
+    }
+  }
+  return lines;
+}
 const LABEL =
   /^(?:bank\b|account\s*(?:no\.?|number|name)\b|transfer\s*(?:method|amount)\b|receipt\s+sent\s+to\b|\+?\s*fee\b|total\b|date\b|insta\s*pay\s+invoice\b|ref(?:erence)?\.?\s*(?:no\.?|number|#))/i;
 function field(lines: string[], pattern: RegExp): Field {
@@ -73,9 +105,9 @@ export function parseSecurityBankReceipt(
   rawText: string,
   options: { typedReference?: string } = {},
 ) {
-  const lines = String(rawText || "").normalize("NFKC").split(/\r?\n/).map(
+  const lines = normalizeColumns(String(rawText || "").normalize("NFKC").split(/\r?\n/).map(
     (x) => x.replace(/\s+/g, " ").trim(),
-  ).filter(Boolean);
+  ).filter(Boolean));
   const text = lines.join("\n");
   const bank = field(lines, /^bank(?!\s+transfer\b)\s*:?\s*(.*)$/i);
   const account = field(lines, /^account\s*(?:no\.?|number)\s*:?\s*(.*)$/i);

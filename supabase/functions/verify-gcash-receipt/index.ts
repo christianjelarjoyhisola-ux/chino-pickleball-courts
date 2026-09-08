@@ -3106,6 +3106,7 @@ Deno.serve(async (req) => {
         ? {
           reference: bankParse.reference,
           invoice: "invoice" in bankParse ? bankParse.invoice : null,
+          total: "total" in bankParse ? bankParse.total : null,
           transferFee: "transferFee" in bankParse
             ? bankParse.transferFee
             : null,
@@ -3306,6 +3307,7 @@ Deno.serve(async (req) => {
 
         if (reviewResponse.error) {
           finalUpdateError = errMsg(reviewResponse.error);
+          if (!flags.includes("REVIEW_FINALIZATION_FAILED")) flags.push("REVIEW_FINALIZATION_FAILED");
           console.error(
             "Digital receipt review finalization failed:",
             finalUpdateError,

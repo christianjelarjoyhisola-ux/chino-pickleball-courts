@@ -93,3 +93,12 @@ test('Security Bank preserves references and dispatches through its dedicated pa
   assert.match(registry,/case "securitybank"/);
   assert.match(registry,/verifySecurityBankReceipt/);
 });
+
+test('Security Bank destination stays distinct even with stale GCash defaults', () => {
+ const c=vm.createContext({});
+ vm.runInContext(fn('supabase-config.js','normalizePaymentKey')+fn('supabase-config.js','receivedAccountForBooking'),c);
+ assert.equal(c.receivedAccountForBooking({paymentMethod:'securitybank',receivedAccount:'gcash'}),'securitybank');
+ assert.equal(c.receivedAccountForBooking({payment_method:'securitybank'}),'securitybank');
+ assert.equal(c.receivedAccountForBooking({paymentMethod:'gcash'}),'gcash');
+ assert.equal(c.receivedAccountForBooking({paymentMethod:'cash'}),'cash');
+});
