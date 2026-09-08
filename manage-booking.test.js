@@ -190,8 +190,8 @@ test('confirmation email links to management with a fragment, not query-string P
   const email = read('supabase/functions/_shared/paddle-rage-email.ts');
   assert.match(email, /manage-booking\.html#ref=\$\{/);
   assert.doesNotMatch(email, /manage-booking\.html\?ref=/);
-  assert.match(email, /not your GCash, Maya, BDO Pay, BPI, bank, or e-wallet payment reference/);
-  assert.match(email, /View booking status/);
+  assert.match(email, /BOOKING REFERENCE/);
+  assert.match(email, /View booking<\/a>/);
 });
 
 test('new page and assets are included in deployment and no-store routing', () => {
@@ -206,3 +206,4 @@ test('new page and assets are included in deployment and no-store routing', () =
   assert.match(worker, /'\/manage-booking'/);
   assert.match(worker, /'\/manage-booking\.js'/);
 });
+

@@ -125,7 +125,7 @@ test('splash and court cards omit the booking-fee promotion while preserving act
   assert.match(courtCards, /allInSlotRate\(c\.rate\)/);
   assert.doesNotMatch(courtCards, /NO BOOKING FEES|cc-rate-promise/i);
   assert.doesNotMatch(courtCards, /₱\s*10|\/hr\s*[×x]/i);
-  assert.doesNotMatch(sourceBetween('<!-- COURTS -->', '<div class="find-time-entry">'), /NO BOOKING FEES/);
+  assert.doesNotMatch(sourceBetween('<!-- COURTS -->', '<div class="shared-date-entry">'), /NO BOOKING FEES/);
   const splashMarkup = sourceBetween('<!-- SPLASH SCREEN -->', '<!-- NAVBAR -->');
   assert.doesNotMatch(splashMarkup, /NO BOOKING FEES|pr-splash-offer/i);
 });
