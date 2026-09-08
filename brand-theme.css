@@ -169,8 +169,24 @@ body.host-mode .chino-welcome { display:none; }
 #venueAddress span { white-space:pre-line; }
 #splashScreen [hidden] { display:none!important; }
 .pr-splash-enter { display:flex; align-items:center; justify-content:center; width:min(420px,100%); min-height:60px; flex:0 0 auto; padding:12px 24px; border:1px solid rgba(155,207,234,.55); border-radius:10px; background:linear-gradient(110deg,#285f91,#237b9a); color:#fff; font:400 clamp(1.4rem,5vw,1.7rem)/1.1 'Bebas Neue','Arial Narrow',sans-serif; letter-spacing:.09em; text-transform:uppercase; cursor:pointer; box-shadow:inset 0 1px 1px rgba(255,255,255,.16),0 8px 24px rgba(0,0,0,.16); transition:background .2s,transform .2s,box-shadow .2s; }
+.pr-splash-enter { position:relative; overflow:hidden; isolation:isolate; }
+.pr-splash-enter-label { position:relative; z-index:1; }
+/* One gentle sweep on arrival keeps the main action calm and readable. */
+.pr-splash-enter::after {
+  content:""; position:absolute; z-index:0; pointer-events:none;
+  top:-55%; left:0; width:35%; height:210%;
+  background:linear-gradient(90deg,transparent,rgba(229,246,255,.28),transparent);
+  opacity:0; transform:translateX(-160%) skewX(-18deg);
+  animation:chino-booking-sheen 1.7s cubic-bezier(.25,.46,.45,.94) .8s 1 both;
+}
+@keyframes chino-booking-sheen {
+  0% { opacity:0; transform:translateX(-160%) skewX(-18deg); }
+  18%,72% { opacity:.8; }
+  100% { opacity:0; transform:translateX(380%) skewX(-18deg); }
+}
+#splashScreen.dismissed .pr-splash-enter::after { animation:none; }
 .pr-splash-enter:hover { background:linear-gradient(110deg,#3476ad,#2a8da9); color:#fff; transform:translateY(-1px); box-shadow:inset 0 1px 1px rgba(255,255,255,.2),0 10px 28px rgba(0,0,0,.2); }
-.pr-splash-enter:active { transform:translateY(0); }
+.pr-splash-enter:active { transform:translateY(1px) scale(.985); box-shadow:inset 0 1px 1px rgba(255,255,255,.16),0 3px 10px rgba(0,0,0,.18); }
 .pr-splash-copy { max-width:420px; color:#c4d6e0; font-size:.875rem; font-weight:400; line-height:1.6; margin:13px 0 6px; }
 .chino-splash-utilities { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; column-gap:28px; width:100%; }
 #splashScreen .pr-splash-manage { order:0; min-height:44px; margin:0; padding:5px 0; gap:7px; color:#b5ccd9; font-size:.8rem; font-weight:400; }
@@ -203,7 +219,12 @@ body.host-mode .chino-welcome { display:none; }
   .pr-splash-copy { margin-top:10px; font-size:.84rem; }
 }
 @media(max-width:360px) { #splashScreen { padding-inline:18px!important; } .chino-splash-tagline { letter-spacing:.16em; } .chino-splash-utilities { column-gap:20px; } }
-@media(prefers-reduced-motion:reduce) { .pr-splash-content { animation:none!important; } .pr-splash-enter { transition:none; } }
+@media(prefers-reduced-motion:reduce) {
+  .pr-splash-content { animation:none!important; }
+  .pr-splash-enter { transition:none; }
+  .pr-splash-enter::after { animation:none; opacity:0; }
+  .pr-splash-enter:hover,.pr-splash-enter:active { transform:none; }
+}
 
 /* Real light theme. Keep the launch splash dark, but switch every application
    surface and native control to a high-contrast light palette. */
