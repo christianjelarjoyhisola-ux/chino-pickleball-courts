@@ -343,16 +343,16 @@ test("player view ships with private caching headers and the QR license", () => 
   assert.match(read("qrcode-LICENSE.txt"), /The MIT License/i);
 });
 
-test("player live board uses the transparent system logo without a badge background", () => {
+test("player live board presents the official logo intact on white", () => {
   assert.match(
     playerPage,
-    /<img class="plb-brand-mark" src="assets\/chino-mark\.svg" alt="" width="48" height="48" aria-hidden="true">/i
+    /<img class="plb-brand-mark" src="logochino\.jpg" alt="" width="48" height="48" aria-hidden="true">/i
   );
   assert.doesNotMatch(playerPage, /class="plb-brand-mark"[^>]*>PR<\/span>/i);
-  assert.match(playerPage, /player-live\.css\?v=20260908-chino-v1/i);
+  assert.match(playerPage, /player-live\.css\?v=20260909-official-logo-v1/i);
   assert.match(
     playerCss,
-    /\.plb-brand-mark\s*\{[\s\S]*?width:\s*48px[\s\S]*?height:\s*48px[\s\S]*?border:\s*0[\s\S]*?background:\s*transparent[\s\S]*?object-fit:\s*contain/i
+    /\.plb-brand-mark\s*\{[\s\S]*?width:\s*48px[\s\S]*?height:\s*48px[\s\S]*?border:\s*0[\s\S]*?background:\s*#fff[\s\S]*?object-fit:\s*contain/i
   );
 });
 
@@ -805,7 +805,7 @@ test("completed sessions download a branded CHINO result image", () => {
   assert.match(brandedDownload, /state\.session\?\.status[\s\S]*?completed/i);
   assert.match(brandedDownload, /document\.createElement\("canvas"\)/i);
   assert.match(brandedDownload, /loadResultBrandLogo\(\)/i);
-  assert.match(manager, /image\.src = "assets\/chino-mark\.svg"/i);
+  assert.match(manager, /image\.src = "logochino\.jpg"/i);
   assert.match(brandedDownload, /CHINO PICKLEBALL COURTS/i);
   assert.match(
     brandedDownload,
@@ -1296,7 +1296,7 @@ test("LIVE court card mirrors the READY card system with a cyan state treatment"
     managerCss,
     /\.pm2-court-card\.is-live \.pm2-result-btn\s*\{[^}]*min-height:\s*56px[^}]*border-radius:\s*11px[^}]*font-size:\s*1rem/is
   );
-  assert.match(admin, /play-manager\.css\?v=20260729-dispatch-type-v2/i);
+  assert.match(admin, /play-manager\.css\?v=20260909-official-logo-v1/i);
 });
 
 test("court cards share one compact height and use the modern court-blue and coral team palette", () => {
@@ -1609,7 +1609,7 @@ test("Play Manager stores editable six-star player skills and uses them for bala
   );
   assert.match(admin, /supabase-config\.js\?v=[a-z0-9._-]+/i);
   assert.match(admin, /open-play-rating\.js\?v=20260729-head-to-head-v1/i);
-  assert.match(admin, /play-manager\.js\?v=20260729-result-footer-v1/i);
+  assert.match(admin, /play-manager\.js\?v=20260909-official-logo-v1/i);
   assert.doesNotMatch(playerClient, /skill_level|skillLevel/i);
 });
 
@@ -2087,7 +2087,7 @@ test("admin hides the default dashboard until the restored section is ready", ()
   assert.match(admin, /id="adminBootSplash" role="status" aria-live="polite"/i);
   assert.match(
     admin,
-    /<img class="admin-boot-logo" src="assets\/chino-mark\.svg" alt="CHINO Pickleball Courts">/i
+    /<img class="admin-boot-logo" src="logochino\.jpg" alt="CHINO Pickleball Courts">/i
   );
   assert.doesNotMatch(admin, /class="admin-boot-mark"[^>]*>PR</i);
   assert.match(admin, /<div id="adminShell" inert aria-hidden="true">/i);
@@ -2145,14 +2145,14 @@ test("all same-context Play Manager rerenders preserve main and panel scroll", (
   assert.match(managerCss, /\.pm2\.pm2-display\s*\{[\s\S]*?overflow:\s*auto/i);
 });
 
-test("Play Manager uses the system logo without a badge background", () => {
+test("Play Manager presents the official logo intact on white", () => {
   assert.match(
     manager,
-    /<img class="pm2-brand-mark" src="assets\/chino-mark\.svg" alt="">/i
+    /<img class="pm2-brand-mark" src="logochino\.jpg" alt="">/i
   );
   assert.doesNotMatch(manager, /<div class="pm2-brand-mark"[^>]*>PR<\/div>/i);
   assert.match(
     managerCss,
-    /\.pm2-brand-mark\s*\{[\s\S]*?border:\s*0;[\s\S]*?background:\s*transparent;[\s\S]*?box-shadow:\s*none;/i
+    /\.pm2-brand-mark\s*\{[\s\S]*?border:\s*0;[\s\S]*?background:\s*#fff;[\s\S]*?box-shadow:\s*none;/i
   );
 });

@@ -109,8 +109,10 @@ a:focus-visible {
   height: 48px;
   flex: 0 0 48px;
   border: 0;
-  border-radius: 0;
-  background: transparent;
+  border-radius: 9px;
+  background: #fff;
+  padding: 2px;
+  filter: none;
   box-shadow: none;
   object-fit: contain;
 }

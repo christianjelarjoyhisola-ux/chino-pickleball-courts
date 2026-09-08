@@ -91,6 +91,16 @@ body::before {
   box-shadow: none !important;
 }
 .logo-name { font-family: 'Outfit',system-ui,sans-serif; font-size:1.3rem; font-weight:650; letter-spacing:.2em; }
+/* Preserve the supplied official badge, including its white background. */
+img[src="logochino.jpg"] {
+  object-fit:contain!important;
+  padding:3px!important;
+  background:#fff!important;
+  filter:none!important;
+  mix-blend-mode:normal!important;
+  border-radius:10px!important;
+}
+.nav-brand:hover img[src="logochino.jpg"] { transform:none; }
 .logo-sub { font-family:'Outfit',system-ui,sans-serif; font-size:.6rem; letter-spacing:.12em; text-transform:uppercase; color:var(--muted)!important; }
 .logo-tx,.title,.sec-hd h2,.hc-tt,.cc-name,.wiz-court-name {
   font-family:'Outfit',system-ui,sans-serif;
@@ -130,6 +140,9 @@ body.host-mode .chino-welcome { display:none; }
 #splashScreen::before { content:""; position:absolute; inset:0!important; background:url('assets/chino-courts.png') center 65%/cover no-repeat!important; transform:none!important; filter:none!important; animation:none!important; }
 #splashScreen::after { content:""; position:absolute; inset:0!important; background:linear-gradient(90deg,rgba(11,22,33,.94) 0%,rgba(11,22,33,.80) 34%,rgba(11,22,33,.25) 72%,rgba(11,22,33,.12)),linear-gradient(0deg,rgba(11,22,33,.65),transparent 50%)!important; border:0!important; border-radius:0!important; pointer-events:none; }
 .pr-splash-content { position:relative; z-index:3; display:flex; flex-direction:column; align-items:flex-start; width:min(570px,100%); padding:0; animation:chino-welcome-in .65s ease both; }
+.chino-splash-brand { display:flex; align-items:center; gap:20px; margin-bottom:25px; }
+.chino-splash-logo { display:block; width:104px; height:104px; flex:0 0 104px; box-shadow:0 8px 28px rgba(0,0,0,.16)!important; }
+.chino-splash-brand .pr-splash-location { margin:0; max-width:130px; line-height:1.8; }
 .pr-splash-location { color:#bfd2e2; font-size:.64rem; text-transform:uppercase; letter-spacing:.22em; margin-bottom:23px; }
 .pr-splash-title { font-family:'Outfit',system-ui,sans-serif!important; font-size:clamp(4.2rem,10vw,8.5rem); font-weight:500; letter-spacing:.09em; line-height:.9; color:#fff; margin:0 0 20px!important; animation:none!important; text-shadow:none!important; }
 .pr-splash-title-word { display:block; transform:none!important; animation:none!important; }
@@ -154,6 +167,8 @@ body.host-mode .chino-welcome { display:none; }
 @keyframes chino-sound-bars { from { transform:scaleY(.45); } to { transform:scaleY(1); } }
 @media(max-width:1208px) { .chino-welcome { margin-inline:24px; } }
 @media(max-width:700px) {
+  .chino-splash-brand { gap:16px; margin-bottom:22px; }
+  .chino-splash-logo { width:88px; height:88px; flex-basis:88px; }
   .chino-welcome { margin:20px 16px 8px; grid-template-columns:1fr; border-radius:16px; }
   .chino-welcome-copy { padding:26px 25px; }
   .chino-welcome h1 { font-size:2.65rem; margin:14px 0; }
@@ -169,6 +184,8 @@ body.host-mode .chino-welcome { display:none; }
   .pr-splash-footer { left:28px; bottom:22px; font-size:.55rem; }
 }
 @media(max-height:640px) {
+  .chino-splash-brand { margin-bottom:14px; }
+  .chino-splash-logo { width:60px; height:60px; flex-basis:60px; }
   #splashScreen { padding-top:24px!important; padding-bottom:62px!important; overflow:auto; }
   .pr-splash-location { margin-bottom:15px; }
   .pr-splash-title { font-size:4.8rem; margin-bottom:12px!important; }

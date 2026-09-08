@@ -71,6 +71,7 @@ $publicFiles = @(
   "host.html",
   "index.html",
   "assets/chino-courts.png",
+  "logochino.jpg",
   "assets/chino-mark.svg",
   "assets/chino-wordmark.svg",
   "login.html",

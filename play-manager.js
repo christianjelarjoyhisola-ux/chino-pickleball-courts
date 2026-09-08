@@ -882,7 +882,7 @@
       >
         <header class="pm2-header">
           <div class="pm2-brand">
-            <img class="pm2-brand-mark" src="assets/chino-mark.svg" alt="">
+            <img class="pm2-brand-mark" src="logochino.jpg" alt="">
             <div class="pm2-brand-copy">
               <span class="pm2-brand-kicker">Open Play</span>
               <h2>CHINO Play Manager</h2>
@@ -3645,7 +3645,7 @@
       const image = new Image();
       image.onload = () => resolve(image);
       image.onerror = () => resolve(null);
-      image.src = "assets/chino-mark.svg";
+      image.src = "logochino.jpg";
     });
   }
 

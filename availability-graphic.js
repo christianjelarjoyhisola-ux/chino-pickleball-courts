@@ -493,7 +493,7 @@
       <div class="prag-overlay" data-prag-overlay hidden>
         <section class="prag-modal" role="dialog" aria-modal="true" aria-labelledby="pragTitle" aria-describedby="pragDescription" tabindex="-1">
           <header class="prag-header">
-            <div class="prag-brand-mark" aria-hidden="true"><span>PR</span><i></i></div>
+            <div class="prag-brand-mark"><img src="logochino.jpg" alt="CHINO Pickleball Courts official logo" width="52" height="52"></div>
             <div class="prag-heading">
               <span class="prag-eyebrow">Social studio <b>Live availability</b></span>
               <h2 id="pragTitle">Create availability post</h2>
@@ -890,7 +890,7 @@
   }
 
   async function logoImage() {
-    if (!state.logoPromise) state.logoPromise = loadSameOriginImage(state.options.logoUrl || 'assets/chino-mark.svg');
+    if (!state.logoPromise) state.logoPromise = loadSameOriginImage(state.options.logoUrl || 'logochino.jpg');
     return state.logoPromise;
   }
 
