@@ -4402,7 +4402,8 @@ function calcSvcFee(hrs) { return _serviceFeeType === 'flat' ? _serviceFeeRate :
 function isSeparateBookingFee() { return typeof _bookingFeeMode !== 'undefined' && _bookingFeeMode === 'separate'; }
 function hasExactAllInSlotPrice() { return true; }
 function allInSlotRate(baseRate) {
-  return Math.round(Math.max(0, Number(baseRate || 0) + (isSeparateBookingFee() ? calcSvcFee(1) : 0)) * 100) / 100;
+  // Court cards and slots show court rental only; separate fees belong in the summary.
+  return Math.round(Math.max(0, Number(baseRate || 0)) * 100) / 100;
 }
 function compactPeso(amount) {
   const value = Math.max(0, Number(amount || 0));
@@ -4415,7 +4416,7 @@ function allInSlotPriceHtml(baseRate) {
   return `<div class="csl-price">${compactPeso(allInSlotRate(baseRate))}</div>`;
 }
 function allInSlotAriaLabel(baseRate) {
-  return `${compactPeso(allInSlotRate(baseRate))} per hour${isSeparateBookingFee() ? ', including ' + compactPeso(calcSvcFee(1)) + ' booking fee' : ', free booking fee'}`;
+  return `${compactPeso(allInSlotRate(baseRate))} per hour${isSeparateBookingFee() ? ', plus ' + compactPeso(calcSvcFee(1)) + ' booking fee per booked hour' : ', free booking fee'}`;
 }
 function activeHostSession() {
   const sess = window.Auth?.getSession?.();
@@ -5951,7 +5952,7 @@ async function loadOperatingHours() {
   _bookingFeeMode = settings.booking_fee_mode === 'separate' ? 'separate' : 'included';
   if ($('bookingFeeNotice')) {
     $('bookingFeeNotice').hidden = !isSeparateBookingFee() || _serviceFeeRate <= 0;
-    $('bookingFeeNotice').textContent = `Court rental + ${fmt(_serviceFeeRate)} booking fee per court-hour. Slot prices show the total.`;
+    $('bookingFeeNotice').textContent = `Slot prices show court rental only. A ${fmt(_serviceFeeRate)} booking fee per booked court-hour is added separately in your booking summary.`;
   }
   applyPaymentSettings(settings);
   const note = $('slotHoursNote');

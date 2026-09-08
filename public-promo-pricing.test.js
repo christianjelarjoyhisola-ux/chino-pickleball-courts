@@ -215,7 +215,7 @@ test('separate hourly fee reconciles selection, stored hold and court-only recei
   assert.equal(item.courtFee,730);
   assert.equal(item.serviceFee,30);
   assert.equal(item.feeMode,'separate');
-  assert.equal(context.allInSlotRate(365),380);
+  assert.equal(context.allInSlotRate(365),365);
   context.DB = {getBookingByRef:async()=>({...plain(item),bookingFeeModeSnapshot:'separate',bookingFeeAmountSnapshot:30,slotRates:[]})};
   const [saved] = await context.verifiedReservedBookingItems([item]);
   assert.equal(saved.total,760);

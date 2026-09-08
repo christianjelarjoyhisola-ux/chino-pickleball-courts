@@ -17,9 +17,11 @@ function pricingHarness() {
   return new Function(`
     let _serviceFeeType = 'per_hour';
     let _serviceFeeRate = 0;
+    let _bookingFeeMode = 'included';
     ${source}
     return {
-      quote(type, fee, base) {
+      quote(type, fee, base, mode = 'included') {
+        _bookingFeeMode = mode;
         _serviceFeeType = type;
         _serviceFeeRate = fee;
         return {
@@ -135,6 +137,14 @@ test('per-hour configuration creates exact all-in slot prices', () => {
   assert.match(quote.html, /₱350/);
   assert.doesNotMatch(quote.html, /Final|Live total|csl-final/i);
   assert.match(quote.aria, /₱350 per hour, free booking fee/);
+});
+
+test('separate booking fees stay out of slot and court display prices', () => {
+  const quote = pricingHarness().quote('per_hour', 15, 315, 'separate');
+  assert.equal(quote.rate, 315);
+  assert.match(quote.html, /₱315/);
+  assert.doesNotMatch(quote.html, /₱330/);
+  assert.match(quote.aria, /₱315 per hour, plus ₱15 booking fee per booked hour/);
 });
 
 test('flat configuration never repeats the flat share on every slot', () => {
