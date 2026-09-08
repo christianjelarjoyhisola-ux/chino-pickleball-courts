@@ -26,8 +26,8 @@ The checkout function supports `PAYMENT_PROVIDER=paymongo`. Static URL templates
 
 - `PAYMONGO_SECRET_KEY`
 - `PAYMENT_WEBHOOK_SECRET`
-- `PAYMENT_SUCCESS_URL=https://chinopickleball.pages.dev/?payment=success`
-- `PAYMENT_CANCEL_URL=https://chinopickleball.pages.dev/?payment=cancelled`
+- `PAYMENT_SUCCESS_URL=https://chinopickleballcourt.com/?payment=success`
+- `PAYMENT_CANCEL_URL=https://chinopickleballcourt.com/?payment=cancelled`
 
 A successful session response contains a newly created provider checkout URL and a canonical booking amount. Merely visiting the return URL does not prove payment.
 

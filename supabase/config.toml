@@ -1,8 +1,8 @@
 project_id = "chino-pickleball-courts"
 
 [auth]
-site_url = "https://chinopickleball.pages.dev"
-additional_redirect_urls = ["https://chinopickleball.pages.dev/login", "https://chinopickleball.pages.dev/login.html", "https://chinopickleball.pages.dev/host.html?email_verified=1"]
+site_url = "https://chinopickleballcourt.com"
+additional_redirect_urls = ["https://chinopickleballcourt.com/login", "https://chinopickleballcourt.com/login.html", "https://chinopickleballcourt.com/host.html?email_verified=1", "https://chinopickleball.pages.dev/login", "https://chinopickleball.pages.dev/login.html", "https://chinopickleball.pages.dev/host.html?email_verified=1"]
 enable_signup = false
 
 [functions.create-payment-session]

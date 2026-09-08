@@ -78,7 +78,7 @@ async function run() {
     await upsertAccountRow(uid, acc);
   }
 
-  console.log('\nDone! Sign in at https://chinopickleball.pages.dev/login');
+  console.log('\nDone! Sign in at https://chinopickleballcourt.com/login');
   const roleLabel = { owner: 'System Owner', court_owner: 'Court Owner ', staff: 'Court Staff ' };
   for (const acc of ACCOUNTS) {
     console.log(`  ${roleLabel[acc.role] || acc.role}: ${acc.email} (password kept in your private setup file)`);

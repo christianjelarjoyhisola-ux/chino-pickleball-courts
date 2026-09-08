@@ -119,7 +119,7 @@ test('caption contains only court availability, booking CTA, and freshness discl
   });
   assert.match(caption, /Court One: 6–8 PM/);
   assert.match(caption, /Slots may change/);
-  assert.match(caption, /chinopickleball\.pages\.dev/);
+  assert.match(caption, /chinopickleballcourt\.com/);
   assert.doesNotMatch(caption, /Hidden Customer/);
 });
 

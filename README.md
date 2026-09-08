@@ -2,7 +2,7 @@
 
 CHINO's independent court booking and operations platform, with a court-blue, charcoal, and concrete visual identity inspired by the supplied venue photograph.
 
-- Website: [chinopickleball.pages.dev](https://chinopickleball.pages.dev)
+- Website: [chinopickleballcourt.com](https://chinopickleballcourt.com)
 - Private repository: [christianjelarjoyhisola-ux/chino-pickleball-courts](https://github.com/christianjelarjoyhisola-ux/chino-pickleball-courts)
 - Dedicated Supabase project: `wskzptxekldhsxluhgos` — Singapore (`ap-southeast-1`)
 - Independent Supabase organization: [CHINO Pickleball Courts](https://supabase.com/dashboard/org/xvtjpartlhxcyirwkhgo)

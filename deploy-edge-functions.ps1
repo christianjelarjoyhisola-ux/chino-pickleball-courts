@@ -65,7 +65,7 @@ if ($serviceRoleKey.Split('.').Count -eq 3) {
   $keyClaims = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($keyPayload)) | ConvertFrom-Json
   if ($keyClaims.ref -ne $projectRef -or $keyClaims.role -ne 'service_role') { throw "The server key is not CHINO's service-role key." }
 }
-if (-not $appPublicUrl) { $appPublicUrl = "https://chinopickleball.pages.dev" }
+if (-not $appPublicUrl) { $appPublicUrl = "https://chinopickleballcourt.com" }
 if (-not $appAdminUrl) { $appAdminUrl = "$appPublicUrl/admin.html" }
 if (-not $publicLogoUrl) { $publicLogoUrl = "$appPublicUrl/logochino.jpg" }
 if (-not $emailAllowedOrigins) { $emailAllowedOrigins = $appPublicUrl }
