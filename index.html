@@ -3451,6 +3451,33 @@ body.host-mode .courts { padding-bottom:140px; }
 }
 @media(prefers-reduced-motion:reduce) { .host-balance-progress::after { animation:none; width:100%; background:var(--lime); } }
 
+
+/* Compact mobile details, with the total outside the scrollable form. */
+.booking-footer-total { display:none; }
+@media(max-width:640px) {
+  #bookModal:has(#wizPanel3.on) .wiz-steps { padding:8px 12px 6px; box-shadow:none; }
+  #bookModal:has(#wizPanel3.on) .wiz-dot { width:22px; height:22px; }
+  #bookModal:has(#wizPanel3.on) .wiz-step:not(:last-child)::after { top:10px; }
+  #bookModal:has(#wizPanel3.on) .bk-modal-body { padding:8px 12px; }
+  #wizPanel3 .wiz-sec-title { display:none; }
+  #wizPanel3 .frow, #wizPanel3 > .fg { margin-bottom:7px; }
+  #wizPanel3 .fl { margin-bottom:3px; font-size:.66rem; letter-spacing:.3px; }
+  #wizPanel3 .fi { min-height:38px; padding:7px 9px; font-size:16px; }
+  #wizPanel3 .wiz-summary { margin-top:7px; padding:7px 9px; }
+  #wizPanel3 .wiz-summary-lbl { margin-bottom:4px; font-size:.65rem; }
+  #wizPanel3 .pbs-rental-breakdown { padding:5px 0; }
+  #wizPanel3 .pbs-rental-heading.is-itemized { margin-bottom:6px; }
+  #wizPanel3 .pbs-rental-entry + .pbs-rental-entry { margin-top:5px; padding-top:5px; }
+  #wizPanel3 .pbs-rental-context.is-itemized { margin-bottom:2px; font-size:.68rem; }
+  #wizPanel3 .pbs-rental-formula { font-size:.7rem; }
+  #wizPanel3 .pbs-rental-subtotal { font-size:.76rem; }
+  #wizPanel3 .pbs-price-row { padding:6px 0; font-size:.7rem; }
+  #wizPanel3 .pbs-price-row.total { display:none; }
+  #bookModal:has(#wizPanel3.on) .bk-modal-ft { flex-wrap:wrap; gap:7px; padding:8px 12px calc(8px + env(safe-area-inset-bottom)); }
+  #bookModal:has(#wizPanel3.on) .booking-footer-total { display:flex; flex-basis:100%; align-items:center; justify-content:space-between; gap:12px; color:var(--text); font-size:.73rem; font-weight:800; }
+  .booking-footer-total strong { color:var(--accent); font-size:1.05rem; white-space:nowrap; }
+  #bookModal:has(#wizPanel3.on) .bk-modal-ft .btn { min-height:44px; padding:8px 12px; }
+}
 </style>
 <link rel="stylesheet" href="brand-theme.css?v=20260908-navbar-identity">
 <link rel="stylesheet" href="promo-pricing.css?v=20260908-contrast-v2">
@@ -4126,6 +4153,7 @@ try {
 
     <!-- Footer -->
     <div class="bk-modal-ft">
+      <div class="booking-footer-total"><span>Booking total</span><strong id="bookingFooterTotal"></strong></div>
       <button class="btn btn-g" id="wizBackBtn" onclick="wizBack()" type="button">✕ Cancel</button>
       <button class="btn btn-p" id="wizNextBtn" onclick="wizNext()" type="button">Next →</button>
     </div>
@@ -7595,6 +7623,7 @@ function updateWiz3SummaryLegacy() {
 function updateWiz3Summary() {
   const el = $('wiz3Summary');
   if (el) el.innerHTML = bookingItemsSummaryHtml();
+  if ($('bookingFooterTotal')) $('bookingFooterTotal').textContent = fmt(bookingItemsTotal());
 }
 
 /* =============================================
