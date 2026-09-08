@@ -1059,9 +1059,16 @@ tr:hover td { background: var(--bg2); }
 .m-body { padding: 20px 24px; }
 .m-foot {
   padding: 16px 24px; border-top: 1px solid var(--border);
-  display: flex; gap: 10px; justify-content: flex-end;
+  display: flex; flex-wrap:wrap; gap: 10px; justify-content: flex-end;
   position: sticky; bottom: 0; background: var(--surface);
 }
+.m-foot > .btn { min-width:0; max-width:100%; white-space:normal; overflow-wrap:anywhere; justify-content:center; text-align:center; }
+.modal.booking-details-modal { display:flex; flex-direction:column; max-width:760px; max-height:calc(100dvh - 32px); overflow:hidden; }
+.overlay.show .modal.booking-details-modal { transform:none; animation:none; }
+.booking-details-modal .m-hd { flex:0 0 auto; }
+.booking-details-modal .booking-details-body { flex:1 1 auto; min-height:0; max-height:none; }
+#bookingDetailsActions { position:static; flex:0 0 auto; display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,160px),1fr)); }
+#bookingDetailsActions > .btn { width:100%; min-height:44px; height:auto; }
 .verify-payment-modal { max-width: 720px; }
 .verify-payment-modal .m-hd { z-index: 2; }
 .verify-payment-modal .m-hd h2 { line-height: 1.15; margin: 0; }
@@ -14011,6 +14018,7 @@ let courtPromoFallbackTiers = [];
 function canManageCourtPromo() {
   return typeof sess !== 'undefined' && ['owner', 'court_owner'].includes(String(sess?.role || ''));
 }
+
 
 function courtPromoToday() {
   return window.ChinoPricing?.todayInManila() || '';
