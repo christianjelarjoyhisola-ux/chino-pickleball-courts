@@ -48,13 +48,15 @@ body:is(.light, .light-mode, [data-theme="light"]) {
   font-size: 10px;
   line-height: 1.4;
 }
-.cc-slot-btn.chino-promo-slot { min-height: 65px; }
+
 .cc-slot-btn .csl-price.chino-promo-slot-price,
 .slot .csl-price.chino-promo-slot-price {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
+  flex-direction: row;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px;
+  white-space: nowrap;
   line-height: 1.15;
 }
 .chino-promo-slot-price del { font-size: 11px; }
@@ -66,7 +68,6 @@ body:is(.light, .light-mode, [data-theme="light"]) {
   color: var(--promo-text, var(--text));
 }
 .chino-promo-slot-current strong { color: inherit; font-size: 13px; font-weight: 700; }
-.chino-promo-slot-label { font-size: 10px; font-weight: 600; letter-spacing: .015em; }
 .cc-slot-btn.selected .chino-promo-slot-current,
 .slot.sel .chino-promo-slot-current { color: #fff; }
 .cc-slot-btn.selected .chino-promo-slot-price del,
@@ -81,6 +82,6 @@ body:is(.light, .light-mode, [data-theme="light"]) {
   .cc-mobile-meta .chino-promo-rate { gap: 4px 6px; }
   .cc-mobile-meta .chino-promo-rate strong { font-size: 14px; }
   .cc-mobile-meta .chino-promo-rate del { font-size: 11px; }
-  .cc-slot-btn.chino-promo-slot { min-height: 67px; }
+
   .chino-promo-slot-current { gap: 3px; }
 }

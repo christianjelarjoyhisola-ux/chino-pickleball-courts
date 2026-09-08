@@ -3454,7 +3454,7 @@ body.host-mode .courts { padding-bottom:140px; }
 
 </style>
 <link rel="stylesheet" href="brand-theme.css?v=20260908-navbar-identity">
-<link rel="stylesheet" href="promo-pricing.css?v=20260908-contrast-v2">
+<link rel="stylesheet" href="promo-pricing.css?v=20260909-inline-prices">
 <link rel="stylesheet" href="site-interactions.css?v=20260909">
 <script defer src="site-interactions.js?v=20260909"></script>
 </head>
@@ -3710,7 +3710,6 @@ try {
   <div class="sec-hd">
     <span class="chino-eyebrow">MAKE TIME TO PLAY</span><h1>Find your court.</h1>
     <p>Select a date, choose a court and time, then book.</p>
-    <p id="bookingFeeNotice" hidden style="font-size:.82rem;color:var(--muted);line-height:1.5"></p>
   </div>
   <div class="find-time-entry">
     <div>
@@ -5964,10 +5963,6 @@ async function loadOperatingHours() {
   _serviceFeeRate = parseFloat(settings.maintenance_fee ?? settings.service_fee_rate ?? settings.booking_fee ?? '0') || 0;
   _serviceFeeType  = normalizePlatformFeeType(settings.fee_type);
   _bookingFeeMode = settings.booking_fee_mode === 'separate' ? 'separate' : 'included';
-  if ($('bookingFeeNotice')) {
-    $('bookingFeeNotice').hidden = !isSeparateBookingFee() || _serviceFeeRate <= 0;
-    $('bookingFeeNotice').textContent = `Slot prices show court rental only. A ${fmt(_serviceFeeRate)} booking fee per booked court-hour is added separately in your booking summary.`;
-  }
   applyPaymentSettings(settings);
   const note = $('slotHoursNote');
   if (note) note.textContent = `(${fmtT(openHour)} – ${fmtT(closeHour)} · select any available hours)`;
@@ -6292,7 +6287,7 @@ function courtRegularRate(c, hour) {
 }
 
 function courtPromoSlotPriceHtml(rate, regularRate) {
-  return `<div class="csl-price chino-promo-slot-price"><del aria-label="Regular price">${compactPeso(regularRate)}</del><span class="chino-promo-slot-current"><span class="chino-promo-slot-label">Promo</span><strong>${compactPeso(rate)}</strong></span></div>`;
+  return `<div class="csl-price chino-promo-slot-price"><del aria-label="Regular price">${compactPeso(regularRate)}</del><span class="chino-promo-slot-current"><strong>${compactPeso(rate)}</strong></span></div>`;
 }
 
 function courtPromoPriceAriaLabel(rate, regularRate) {
