@@ -2655,6 +2655,14 @@ body.gm-display-open { overflow:hidden; }
   @page { margin: 5mm; }
 }
 
+.grs-time-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:8px; margin-top:8px; }
+.grs-time-chip { min-width:0; min-height:44px; border:1px solid var(--border); border-radius:9px; background:var(--surface); color:var(--text); padding:10px 8px; font-family:inherit; font-size:12px; font-weight:700; line-height:1.4; cursor:pointer; }
+.grs-fields[hidden],.grs-time-grid[hidden],#grsSharedTimes[hidden],#grsApplyDate[hidden],.grs-item-editor[hidden] { display:none!important; }
+.grs-time-chip.active { background:var(--green); color:#071420; border-color:var(--green); }
+.grs-time-chip:focus-visible { outline:3px solid var(--green); outline-offset:2px; }
+.grs-shared-times { padding:14px; border:1px solid var(--border); border-radius:12px; margin-bottom:14px; }
+.grs-bulk > div { width:100%; }
+@media(max-width:600px) { .grs-time-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } .grs-item { padding:12px; } }
 </style>
 <link rel="stylesheet" href="brand-theme.css?v=20260909-official-logo-v1">
 <link rel="stylesheet" href="promo-admin.css?v=20260908-promo">
@@ -4789,6 +4797,7 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(45, 62, 79, .1
 .booking-reschedule-action { color:#397dac; border:1px solid rgba(74,154,220,.35); background:rgba(74,154,220,.1); }
 .grs-overlay { z-index:580; }
 .grs-modal { width:min(760px,100%); max-width:760px; max-height:calc(100dvh - 40px); display:flex; flex-direction:column; overflow:hidden; }
+.overlay.show .grs-modal { transform:none; animation:none; }
 .grs-modal [hidden] { display:none !important; }
 .grs-modal :is(.m-hd,.m-foot) { flex:0 0 auto; }
 .grs-head { gap:12px; background:linear-gradient(120deg,rgba(74,154,220,.1),var(--surface)); }
@@ -4802,7 +4811,7 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(45, 62, 79, .1
 .grs-tools { padding:14px; border:1px solid var(--border); border-radius:13px; background:var(--bg2); margin-bottom:16px; }
 .grs-select-all { display:flex; align-items:center; gap:9px; min-height:44px; font-size:.8rem; font-weight:800; cursor:pointer; }
 .grs-modal input[type="checkbox"] { flex:0 0 20px; width:20px; height:20px; min-height:20px; accent-color:var(--green); }
-.grs-bulk { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; align-items:end; margin-top:10px; }
+.grs-bulk { display:grid; grid-template-columns:minmax(0,1fr); gap:10px; align-items:end; margin-top:10px; }
 .grs-bulk .btn { min-height:44px; }
 .grs-items { display:grid; gap:14px; }
 .grs-item { padding:15px; border:1px solid var(--border); border-radius:15px; background:var(--surface); min-width:0; }
@@ -6942,13 +6951,14 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(45, 62, 79, .1
       <button class="m-x" id="grsCloseBtn" type="button" aria-label="Close grouped reschedule" onclick="closeGroupRescheduleModal()">&#10005;</button>
     </header>
     <div class="m-body grs-body">
-      <p class="grs-intro">Choose the schedules to move. Each court and booked duration stays the same. All selected changes are saved together.</p>
+      <p class="grs-intro">Choose one date and consecutive time blocks. Booked hours and payments stay the same.</p>
       <div class="grs-tools">
         <label class="grs-select-all"><input id="grsSelectAll" type="checkbox" onchange="grsToggleAll(this.checked)"><span>Select all eligible schedules</span></label>
-        <div class="grs-bulk"><div><label class="fl" for="grsBulkDate">New date for selected schedules</label><input class="fi" id="grsBulkDate" type="date"></div><button class="btn btn-g" id="grsApplyDate" type="button" onclick="grsApplyBulkDate()">Apply date</button></div>
+        <div class="grs-bulk"><div><label class="fl" for="grsBulkDate">New date for selected schedules</label><input class="fi" id="grsBulkDate" type="date" onchange="grsApplyBulkDate()"></div><button class="btn btn-g" id="grsApplyDate" hidden type="button" onclick="grsApplyBulkDate()">Apply date</button></div>
       </div>
+      <div id="grsSharedTimes" class="grs-shared-times" hidden></div>
       <div id="grsItems" class="grs-items"></div>
-      <div class="fg grs-note"><label class="fl" for="grsNote">Note to customer <span>(sent with the update)</span></label><textarea class="fi" id="grsNote" rows="3" maxlength="1000" placeholder="Add a reason or helpful details about the new schedules."></textarea></div>
+      <div class="fg grs-note"><label class="fl" for="grsNote">Reason / note <span>(sent with the update)</span></label><textarea class="fi" id="grsNote" rows="2" maxlength="1000" placeholder="Required when moving a started or finished booking."></textarea></div>
       <p class="grs-save-error" id="grsSaveError" role="alert" hidden></p>
     </div>
     <footer class="m-foot grs-footer">
@@ -13270,11 +13280,12 @@ async function openRescheduleModal(ref) {
   try {
     const group = await getBookingGroupByRef(ref);
     if (sequence !== _rsOpenSequence) return;
-    if (group?.isGroup || (group?.allItems || group?.items || []).length > 1) { await openGroupRescheduleModal(ref, group, trigger); return; }
+    if (group?.isGroup || (group?.allItems || group?.items || []).length > 1 || group?.status === 'completed') { await openGroupRescheduleModal(ref, group, trigger); return; }
     const b = await DB.getBookingByRef(ref);
     if (sequence !== _rsOpenSequence) return;
     if (!b) { toast('Booking not found.', 'err'); return; }
     const oldSlots = rsOriginalSlots(b.slots);
+    if (new Date(`${b.date}T${String(oldSlots[0]).padStart(2,'0')}:00:00+08:00`).getTime()<=Date.now()) { await openGroupRescheduleModal(ref,b,trigger); return; }
     const state = _rsState = {
       ref: String(b.ref), courtId: String(b.courtId), oldDate: b.date,
       oldStartTime: b.startTime, oldEndTime: b.endTime, oldSlots,
@@ -13381,8 +13392,8 @@ let _grsState = null;
 let _grsOpenSequence = 0;
 
 function grsItemEligibility(booking) {
-  if (!['confirmed', 'pending', 'verifying'].includes(String(booking?.status || '').toLowerCase())) {
-    return { eligible:false, reason:'Only active bookings can be moved.' };
+  if (!['confirmed', 'pending', 'verifying', 'completed'].includes(String(booking?.status || '').toLowerCase())) {
+    return { eligible:false, reason:'Cancelled or forfeited bookings cannot be moved.' };
   }
   if (isPlaceholderHold(booking)) return { eligible:false, reason:'Release this temporary hold from the booking list.' };
   if (pendingRescheduleRequestForBooking(booking)) return { eligible:false, reason:'Review the pending customer request first.' };
@@ -13416,6 +13427,8 @@ function grsBuildChanges(items, min, max) {
   if (selected.length > 8) return { changes:[], error:'Choose up to 8 booking schedules at a time.' };
   const occupied = new Map();
   const changes = [];
+  if (new Set(selected.map(item=>item.newDate)).size>1) return {changes:[],error:'Choose one shared date for all selected courts.'};
+  if (selected.length>1 && new Set(selected.map(item=>item.duration)).size===1 && new Set(selected.map(item=>item.startValue)).size>1) return {changes:[],error:'Choose one shared time for courts with matching durations.'};
   for (const item of selected) {
     if (!item.eligible) return { changes:[], error:'One selected booking is not eligible to move.' };
     if (!grsValidDate(item.newDate,min,max)) return { changes:[], error:'Choose a valid new date for every selected schedule.' };
@@ -13442,12 +13455,32 @@ function grsRenderItems(state) {
     <label class="grs-item-select"><input id="grsCheck${index}" type="checkbox" ${item.selected?'checked':''} ${item.eligible?'':'disabled'} onchange="grsToggleItem(${index},this.checked)"><span><strong>${esc(item.courtName)}</strong><small>${esc(item.ref)}</small></span><span class="grs-duration">${item.duration || '—'} ${item.duration===1?'hour':'hours'}</span></label>
     <div class="grs-current"><span>Current schedule</span><strong>${esc(fmtD(item.oldDate))} · ${esc(item.oldStartTime)} – ${esc(item.oldEndTime)}</strong></div>
     ${item.eligible ? `<div class="grs-item-editor" id="grsEditor${index}" ${item.selected?'':'hidden'}>
-      <div class="grs-fields"><div><label class="fl" for="grsDate${index}">New date</label><input class="fi" id="grsDate${index}" type="date" min="${state.min}" max="${state.max}" value="${item.newDate}" onchange="grsChangeDate(${index})"></div>
+      <div class="grs-fields" hidden><div><label class="fl" for="grsDate${index}">New date</label><input class="fi" id="grsDate${index}" type="date" min="${state.min}" max="${state.max}" value="${item.newDate}" onchange="grsChangeDate(${index})"></div>
       <div><label class="fl" for="grsTime${index}">Available ${item.duration}-hour time</label><select class="fi" id="grsTime${index}" disabled onchange="grsUpdateSelection(${index})"><option value="">Choose a date first</option></select></div></div>
+      <div class="grs-time-grid" id="grsSlots${index}" role="group" aria-label="Available times for ${esc(item.courtName)}"></div>
       <div class="grs-availability" id="grsStatus${index}" role="status" aria-live="polite">Choose a new date and time.</div>
       <button class="btn btn-g btn-sm grs-retry" id="grsRetry${index}" type="button" hidden onclick="grsLoadAvailability(${index})">Retry availability</button>
       <div class="grs-item-summary" id="grsItemSummary${index}"></div></div>` : `<p class="grs-ineligible">${esc(item.reason)}</p>`}
   </section>`).join('');
+}
+
+function grsRenderTimeChoices(state) {
+  const selected=state.items.filter(item=>item.selected);
+  const same=selected.length>1 && new Set(selected.map(item=>item.duration)).size===1;
+  const shared=$('grsSharedTimes'); shared.hidden=!same;
+  const ready=selected.length && selected.every(item=>!item.loading && item.optionsDate===item.newDate);
+  const common=ready ? selected[0].options.filter(option=>selected.every(item=>item.options.some(other=>other.start===option.start))) : [];
+  const button=(option,index,active)=>`<button id="grsChoice${index}_${option.start}" type="button" class="grs-time-chip${active?' active':''}" aria-pressed="${active}" ${state.saving?'disabled':''} onclick="grsChooseTime(${index},${option.start})">${esc(option.label)}</button>`;
+  if(same) shared.innerHTML=`<div class="fl">Time for all selected courts · ${selected[0].duration} ${selected[0].duration===1?'hour':'hours'}</div><div class="grs-time-grid" role="group" aria-label="Available times for all selected courts">${common.map(option=>button(option,-1,selected.every(item=>String(item.startValue)===String(option.start)))).join('')}</div><p class="grs-availability">${!ready?'Checking availability…':common.length?'Choose one block available on every selected court.':'No matching time available. Choose another date or fewer courts.'}</p>`;
+  state.items.forEach((item,index)=>{ if(!item.eligible)return; const grid=$('grsSlots'+index);grid.hidden=same;grid.innerHTML=same?'':item.options.map(option=>button(option,index,String(item.startValue)===String(option.start))).join('');$('grsStatus'+index).hidden=same; });
+}
+function grsChooseTime(index,start) {
+  const state=_grsState;if(!state||state.saving)return;
+  const chosen=index===-1?state.items.filter(item=>item.selected):[state.items[index]];
+  if(chosen.some(item=>!item?.selected||item.loading||!item.options.some(option=>option.start===start)))return;
+  state.items.forEach((item,i)=>{if(chosen.includes(item))$('grsTime'+i).value=String(start);});
+  grsUpdateSelection();
+  $('grsChoice'+index+'_'+start)?.focus();
 }
 
 function grsSyncSummary() {
@@ -13462,11 +13495,16 @@ function grsSyncSummary() {
       ? `New schedule: ${fmtD(item.newDate)} · ${option.label}\nSame court · ${item.duration} ${item.duration===1?'hour':'hours'} · payment preserved`
       : `Choose an available time. The booked ${item.duration}-hour duration stays fixed.`;
   }
+  grsRenderTimeChoices(state);
   const eligible = state.items.filter(item => item.eligible);
   const selected = state.items.filter(item => item.selected);
   $('grsSelectAll').checked = eligible.length > 0 && selected.length === eligible.length;
   $('grsSelectAll').indeterminate = selected.length > 0 && selected.length < eligible.length;
-  const validation = grsBuildChanges(state.items,state.min,state.max);
+  const validation = !grsValidDate($('grsBulkDate').value,state.min,state.max)
+    ? {changes:[],error:'Choose a valid shared date.'}
+    : selected.some(item=>item.newDate!==$('grsBulkDate').value)
+      ? {changes:[],error:'Wait for every court to load the selected date.'}
+      : grsBuildChanges(state.items,state.min,state.max);
   $('grsSummary').textContent = validation.error || `${selected.length} selected · ${selected.reduce((sum,item)=>sum+item.duration,0)} booked court-hours. Ready to save together.`;
   $('grsSummary').dataset.state = validation.error ? 'incomplete' : 'ready';
   $('grsSaveBtn').disabled = state.saving || Boolean(validation.error);
@@ -13542,7 +13580,7 @@ function grsToggleItem(index,selected) {
   $('grsCheck'+index).checked=item.selected;
   $('grsEditor'+index).hidden=!item.selected;
   $('grsItem'+index).classList.toggle('is-selected',item.selected);
-  if (item.selected) void grsLoadAvailability(index);
+  if (item.selected) { $('grsDate'+index).value=$('grsBulkDate').value; void grsLoadAvailability(index); }
   grsSyncSummary();
 }
 
@@ -13561,7 +13599,7 @@ async function grsApplyBulkDate() {
   const date=$('grsBulkDate').value;
   if (!grsValidDate(date,state.min,state.max)) {
     $('grsSaveError').textContent='Choose a valid date to apply to the selected schedules.';
-    $('grsSaveError').hidden=false; $('grsBulkDate').focus(); return;
+    $('grsSaveError').hidden=false; $('grsBulkDate').focus(); grsSyncSummary(); return;
   }
   const selected=state.items.map((item,index)=>({item,index})).filter(({item})=>item.selected);
   await Promise.allSettled(selected.map(({index})=>{ $('grsDate'+index).value=date; return grsLoadAvailability(index); }));
@@ -13586,7 +13624,7 @@ async function openGroupRescheduleModal(anchorRef, suppliedGroup=null, trigger=d
   try {
     const group=suppliedGroup || await getBookingGroupByRef(anchorRef);
     if(sequence!==_grsOpenSequence) return;
-    const rows=group?.allItems || group?.items || [];
+    const rows=group?.allItems || group?.items || (group?.ref?[group]:[]);
     if(!rows.length) throw new Error('Booking schedules could not be loaded.');
     if(rows.length>8) throw new Error('Grouped rescheduling supports reservations of up to 8 schedules. Review this oversized reservation before moving it.');
     const min=typeof _pbMinimumPublicBookingDate==='function' ? _pbMinimumPublicBookingDate() : phDateKeyFromTimestamp(new Date().toISOString());
@@ -13598,12 +13636,13 @@ async function openGroupRescheduleModal(anchorRef, suppliedGroup=null, trigger=d
       return { ...eligibility, ref:String(booking.ref), courtId:String(booking.courtId), courtName:booking.courtName || 'Court',
         oldDate:booking.date, oldSlots:slots, duration:slots.length || Number(booking.duration)||0,
         oldStartTime:booking.startTime || '',oldEndTime:booking.endTime || '',
-        selected:eligibility.eligible && selectedCount++<8, newDate:booking.date>=min&&booking.date<=max?booking.date:min,
+        selected:eligibility.eligible && selectedCount++<8, newDate:(group.date || rows[0].date)>=min&&(group.date || rows[0].date)<=max?(group.date || rows[0].date):min,
+        needsReason:String(booking.status)==='completed' || new Date(`${booking.date}T${String(slots[0]||0).padStart(2,'0')}:00:00+08:00`).getTime() <= Date.now(),
         options:[],optionsDate:'',startValue:'',loading:false,requestSequence:0 };
     });
     const state=_grsState={anchorRef:String(anchorRef),items,min,max,saving:false,trigger,priorOverflow:document.body.style.overflow};
     $('grsBookingName').textContent=`${group.fullName || 'Guest'} · ${group.displayRef || anchorRef}`;
-    $('grsBulkDate').min=min; $('grsBulkDate').max=max; $('grsBulkDate').value='';
+    $('grsBulkDate').min=min; $('grsBulkDate').max=max; $('grsBulkDate').value=items[0]?.newDate || min;
     $('grsNote').value=''; $('grsSaveError').hidden=true;
     grsRenderItems(state); grsSetSaving(state,false);
     const modal=$('groupRescheduleModal'); modal.hidden=false; modal.inert=false; modal.setAttribute('aria-hidden','false'); modal.classList.add('show');
@@ -13641,6 +13680,11 @@ async function saveGroupReschedule() {
   const anchorRef=changes[0].bookingRef;
   const selected=state.items.filter(item=>item.selected);
   const note=$('grsNote').value.trim();
+  if(selected.some(item=>item.needsReason) && note.length<5) {
+    $('grsSaveError').textContent='Add a reason (at least 5 characters) to move a started or finished booking.';
+    $('grsSaveError').hidden=false; $('grsNote').focus(); return;
+  }
+  if(note) changes.forEach(change=>{change.reason=note;});
   grsSetSaving(state,true);
   let result;
   try {

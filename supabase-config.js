@@ -4131,7 +4131,7 @@ window.DB = {
     const db = readDb();
     const booking = db.bookings.find(row => String(row.ref) === String(ref));
     if (!booking) throw new Error('Booking not found.');
-    if (!['confirmed','pending','verifying'].includes(booking.status)) throw new Error('Only an active booking can be rescheduled.');
+    if (!['confirmed','pending','verifying','completed'].includes(booking.status)) throw new Error('Cancelled or forfeited bookings cannot be rescheduled.');
     if ((db.bookingRescheduleRequests || []).some(request => request.status === 'pending'
         && (request.selectedBookingRefs || request.selected_booking_refs || request.itemRefs || [])
           .map(String).includes(String(ref)))) {
@@ -4215,6 +4215,9 @@ window.DB = {
         throw new Error('All selected items must belong to the same booking group.');
       }
       const options = buildLocalAdminRescheduleOptions(bookingRef, change.date);
+      const reason=String(change.reason || '').trim();
+      const started=new Date(`${booking.date}T${String(options.oldSlots[0]).padStart(2,'0')}:00:00+08:00`).getTime()<=Date.now();
+      if(reason.length>1000 || ((booking.status==='completed'||started)&&reason.length<5)) throw new Error('A reason is required to move a started or finished booking (5–1000 characters).');
       if (!Array.isArray(change.expectedSlots) || change.expectedSlots.some(hour =>
         !['number','string'].includes(typeof hour) || !/^(?:[0-9]|1[0-9]|2[0-3])$/.test(String(hour)))) {
         throw new Error('The original schedule changed. Reopen rescheduling.');
@@ -4235,13 +4238,16 @@ window.DB = {
       }
       return {bookingRef,courtId:options.courtId,date:change.date,slots,startTime:_fmtBookingHour(change.startHour),
         endTime:_fmtBookingHour(change.startHour+options.duration),duration:options.duration,
-        oldDate:options.oldDate,oldSlots:options.oldSlots,oldStartTime:booking.startTime,oldEndTime:booking.endTime};
+        oldDate:options.oldDate,oldSlots:options.oldSlots,oldStartTime:booking.startTime,oldEndTime:booking.endTime,reason:reason||null,oldStatus:booking.status};
     });
+    if(new Set(items.map(item=>item.date)).size>1) throw new Error('Choose one shared date for all selected courts.');
+    if(new Set(items.map(item=>item.duration)).size===1 && new Set(items.map(item=>item.startTime)).size>1) throw new Error('Choose one shared time for courts with matching durations.');
     // No storage writes occur until every item and destination has passed.
     for (const item of items) {
       const booking = db.bookings.find(row => String(row.ref) === item.bookingRef);
       Object.assign(booking,{date:item.date,slots:item.slots,startTime:item.startTime,
-        endTime:item.endTime,duration:item.duration});
+        endTime:item.endTime,duration:item.duration,status:booking.status==='completed'?'confirmed':booking.status});
+      (db.adminRescheduleHistory ||= []).push({bookingRef:item.bookingRef,actorId:session.id,reason:item.reason,createdAt:new Date().toISOString(),oldSchedule:{date:item.oldDate,slots:item.oldSlots,status:item.oldStatus},newSchedule:{date:item.date,slots:item.slots}});
     }
     writeDb(db);
     return {bookingRef:anchorRef,items};

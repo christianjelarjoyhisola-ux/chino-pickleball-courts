@@ -34,14 +34,29 @@ function harness({bookings,role='owner',pending=[]}={}) {
     }};
 }
 
-test('grouped move atomically preserves each court, duration and payment across courts and dates',()=>{
+test('grouped move atomically preserves each court, duration and payment on one date',()=>{
   const h=harness();const before=h.get();
-  const result=h.move([h.change('A'),h.change('B'),h.change('C','2026-10-13',18)]);
+  const result=h.move([h.change('A'),h.change('B'),h.change('C','2026-10-12',18)]);
   assert.equal(h.writes(),1);assert.equal(result.items.length,3);
   h.get().bookings.forEach((row,index)=>{
     for(const key of ['courtId','duration','total','rate','paymentStatus','groupRef','status']) assert.equal(row[key],before.bookings[index][key]);
   });
   assert.deepEqual(h.get().bookings.map(row=>row.slots),[[14,15,16],[14,15,16],[18,19]]);
+});
+
+test('shared date and matching-duration time rules reject mismatched submissions without writes',()=>{
+  const h=harness();assert.throws(()=>h.move([h.change('A'),h.change('B','2026-10-13')]),/shared date/);
+  assert.throws(()=>h.move([h.change('A'),h.change('B','2026-10-12',18)]),/shared time/);
+  assert.equal(h.writes(),0);
+});
+
+test('completed schedules require a reason, reserve the new slots and keep payment',()=>{
+  const rows=harness().get().bookings;rows[0].status='completed';
+  const h=harness({bookings:rows});const change=h.change('A');
+  assert.throws(()=>h.move([change]),/reason/);assert.equal(h.writes(),0);
+  h.move([{...change,reason:'Owner approved replacement session'}]);
+  assert.equal(h.get().bookings[0].status,'confirmed');assert.equal(h.get().bookings[0].paymentStatus,'paid');
+  assert.equal(h.get().adminRescheduleHistory[0].oldSchedule.status,'completed');
 });
 
 test('same-court multiple times and different durations can move together or individually',()=>{

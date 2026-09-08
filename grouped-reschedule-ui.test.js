@@ -77,6 +77,40 @@ test('group row and details expose rescheduling, including all stored rows and u
   h.group.items=[h.rows[0]];await h.open();assert.equal(h.context.grsTest.state.items.length,2,'stored allItems must not be dropped by display deduplication');
 });
 
+test('matching durations show only common blocks and select every court together',async()=>{
+  const h=harness();h.rows[1].slots=[12,13,14];h.rows[1].duration=3;
+  h.context.DB.getAdminRescheduleOptions=async(ref,date)=>h.snapshot(ref,date,ref===h.rows[0].ref?[15,18]:[18,19]);
+  await h.open();
+  assert.equal(h.get('grsSharedTimes').hidden,false);
+  assert.match(h.get('grsSharedTimes').innerHTML,/grsChooseTime\(-1,18\)/);
+  assert.doesNotMatch(h.get('grsSharedTimes').innerHTML,/grsChooseTime\(-1,(15|19)\)/);
+  h.context.grsChooseTime(-1,15);assert.equal(h.get('grsTime0').value,'');
+  h.context.grsChooseTime(-1,18);assert.equal(h.get('grsTime0').value,'18');assert.equal(h.get('grsTime1').value,'18');
+  assert.equal(h.get('grsSaveBtn').disabled,false);
+});
+
+test('different durations keep independent times on one shared date',async()=>{
+  const h=harness();await h.open();assert.equal(h.get('grsSharedTimes').hidden,true);
+  h.get('grsBulkDate').value='2026-10-15';await h.context.grsApplyBulkDate();
+  h.context.grsChooseTime(0,15);h.context.grsChooseTime(1,18);
+  await h.context.saveGroupReschedule();
+  assert.deepEqual(h.calls.moves[0][1].map(x=>[x.date,x.startHour]),[['2026-10-15',15],['2026-10-15',18]]);
+});
+
+test('reselected court inherits shared date and stale choices cannot save',async()=>{
+  const h=harness();await h.open();h.context.grsToggleItem(1,false);
+  h.get('grsBulkDate').value='2026-10-15';await h.context.grsApplyBulkDate();
+  h.context.grsToggleItem(1,true);await Promise.resolve();
+  assert.equal(h.get('grsDate1').value,'2026-10-15');assert.equal(h.get('grsSaveBtn').disabled,true);
+});
+
+test('completed booking needs an explicit reason before the atomic save',async()=>{
+  const h=harness();h.rows[0].status='completed';await h.open();h.choose(0);h.choose(1);
+  await h.context.saveGroupReschedule();assert.equal(h.calls.moves.length,0);assert.match(h.get('grsSaveError').textContent,/reason/);
+  h.get('grsNote').value='Owner approved schedule change';await h.context.saveGroupReschedule();
+  assert.equal(h.calls.moves.length,1);assert.equal(h.calls.moves[0][1][0].reason,'Owner approved schedule change');
+});
+
 test('subset save submits one atomic call with original court/date/slots and notifies once after success',async()=>{
   const pending=deferred();const h=harness({move:()=>pending.promise});await h.open();
   h.context.grsToggleItem(0,false);h.choose(1,18);
