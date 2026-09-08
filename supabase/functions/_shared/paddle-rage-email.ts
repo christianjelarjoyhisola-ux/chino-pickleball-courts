@@ -374,6 +374,7 @@ export function renderConfirmationEmail(
     : "";
   const location = venueLocation() || "Prk. Bautista, Mankilam, Tagum City";
   const mapsUrl = "https://maps.app.goo.gl/7Su6CtSH7HCbpn1K6";
+  const sameDate = items.every((item) => item.date === items[0]?.date);
   const scheduleRows = items.map((item) =>
     `<tr>
     <td style="padding:12px 0;border-bottom:1px solid ${BRAND.border};vertical-align:top;">
@@ -381,8 +382,8 @@ export function renderConfirmationEmail(
       escapeHtml(item.courtName)
     }</strong>
       <div style="margin-top:3px;font-size:13px;line-height:1.5;color:${BRAND.muted};">${
-      escapeHtml(formatDate(item.date))
-    }<br>${escapeHtml(item.startTime)} &ndash; ${escapeHtml(item.endTime)}</div>
+      sameDate ? "" : `${escapeHtml(formatDate(item.date))}<br>`
+    }${escapeHtml(item.startTime)} &ndash; ${escapeHtml(item.endTime)}</div>
     </td>
     <td align="right" style="padding:12px 0 12px 10px;border-bottom:1px solid ${BRAND.border};vertical-align:top;white-space:nowrap;font-size:14px;font-weight:700;color:${BRAND.text};">${
       formatPhp(Number(item.total || 0))
@@ -418,30 +419,43 @@ body,table,td,a{-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}table,td
     escapeHtml(rawRef)
   } confirmed. ${escapeHtml(formatDate(items[0]?.date || payload.date))}.</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;background:${BRAND.black};"><tr><td class="email-wrap" align="center" style="padding:24px 12px;">
-<table role="presentation" class="email-card" width="520" cellpadding="0" cellspacing="0" style="width:520px;max-width:520px;background:${BRAND.surface};border:1px solid ${BRAND.border};border-radius:16px;">
-<tr><td class="receipt-pad" style="padding:24px;">
+<table role="presentation" class="email-card" width="560" cellpadding="0" cellspacing="0" style="width:100%;max-width:560px;background:${BRAND.surface};border:1px solid ${BRAND.border};border-radius:16px;">
+<tr><td style="height:4px;background:${BRAND.neon};border-radius:16px 16px 0 0;font-size:0;line-height:0;">&nbsp;</td></tr>
+<tr><td class="receipt-pad" style="padding:20px 26px;background:${BRAND.black};border-bottom:1px solid ${BRAND.border};">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
-<td width="64" style="width:64px;vertical-align:middle;"><img src="${
+<td width="76" style="width:76px;vertical-align:middle;"><img src="${
     escapeHtml(publicUrl())
-  }/assets/chino-logo-transparent.png" width="52" height="52" alt="CHINO Pickleball Courts" style="display:block;width:52px;height:52px;object-fit:contain;"></td>
-<td style="vertical-align:middle;"><h1 style="margin:0;font-size:23px;line-height:1.2;font-weight:700;color:${BRAND.text};">Booking confirmed</h1><div style="margin-top:4px;font-size:12px;color:${BRAND.neon};">${
+  }/assets/chino-logo-transparent.png" width="60" height="60" alt="CHINO Pickleball Courts" style="display:block;width:60px;height:60px;object-fit:contain;"></td>
+<td style="vertical-align:middle;"><div style="font-size:22px;line-height:1.2;font-weight:700;letter-spacing:2px;color:${BRAND.text};">CHINO</div><div style="margin-top:4px;font-size:11px;line-height:1.4;font-weight:700;letter-spacing:1.5px;color:${BRAND.neon};">PICKLEBALL COURTS</div></td>
+</tr></table></td></tr>
+<tr><td class="receipt-pad" style="padding:24px 26px;">
+<h1 style="margin:0;font-size:25px;line-height:1.25;font-weight:700;letter-spacing:-.4px;color:${BRAND.text};">Booking confirmed</h1>
+<p style="margin:8px 0 18px;font-size:14px;line-height:1.5;overflow-wrap:anywhere;color:${BRAND.muted};">Hi ${
+    escapeHtml(payload.fullName || "Player")
+  }, your reservation is confirmed.</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;border:1px solid ${BRAND.border};border-radius:10px;background:${BRAND.surfaceRaised};"><tr><td style="padding:14px 16px;">
+<div style="font-size:10px;line-height:1.4;letter-spacing:1px;font-weight:700;color:${BRAND.muted};">BOOKING REFERENCE</div>
+<div style="margin-top:4px;font-size:14px;line-height:1.4;font-weight:700;overflow-wrap:anywhere;color:${BRAND.neon};">${
+    escapeHtml(rawRef)
+  }</div>
+${
+    sameDate
+      ? `<div style="margin-top:12px;font-size:14px;line-height:1.4;font-weight:700;color:${BRAND.text};">${
+        escapeHtml(formatDate(items[0]?.date || payload.date))
+      }</div>`
+      : ""
+  }
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;">${scheduleRows}
+</table></td></tr></table>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;margin-top:14px;background:${BRAND.neonTint};border:1px solid ${BRAND.neonDark};border-radius:10px;"><tr><td style="padding:14px 16px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="font-size:13px;font-weight:700;color:${BRAND.text};">Total paid<div style="margin-top:4px;font-size:11px;font-weight:400;color:${BRAND.muted};">${
     paidInFull
       ? "Paid in full"
       : paid > 0
       ? "Downpayment received"
       : "Payment not yet recorded"
-  }</div></td>
-</tr></table>
-<p style="margin:18px 0 4px;font-size:14px;line-height:1.5;overflow-wrap:anywhere;color:${BRAND.text};">Hi ${
-    escapeHtml(payload.fullName || "Player")
-  }, see you on the court.</p>
-<div style="margin-bottom:6px;font-size:12px;line-height:1.5;color:${BRAND.muted};">Booking reference &middot; <strong style="color:${BRAND.neon};overflow-wrap:anywhere;">${
-    escapeHtml(rawRef)
-  }</strong></div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;">${scheduleRows}
-<tr><td style="padding-top:16px;font-size:14px;font-weight:700;color:${BRAND.text};">Total paid</td><td align="right" style="padding-top:16px;font-size:23px;line-height:1.2;font-weight:700;white-space:nowrap;color:${BRAND.neon};">${
+  }</div></td><td align="right" style="font-size:23px;line-height:1.2;font-weight:700;white-space:nowrap;color:${BRAND.neon};">${
     formatPhp(paid)
-  }</td></tr>${hostBalance}</table>
+  }</td></tr>${hostBalance}</table></td></tr></table>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;margin-top:20px;"><tr><td align="center" style="background:${BRAND.neon};border-radius:9px;"><a href="${
     escapeHtml(manageUrl)
   }" style="display:block;padding:14px 18px;font-size:14px;line-height:1.2;font-weight:700;text-decoration:none;color:${BRAND.black};">View booking</a></td></tr></table>
@@ -467,7 +481,7 @@ body,table,td,a{-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}table,td
     html,
     plain: `CHINO PICKLEBALL COURTS\nBOOKING CONFIRMED\nHi ${
       plain(payload.fullName || "Player")
-    }, see you on the court.\nBooking reference: ${rawRef}\n\nSCHEDULE\n${schedules}\n\nTotal paid: ${
+    }, your reservation is confirmed.\nBooking reference: ${rawRef}\n\nSCHEDULE\n${schedules}\n\nTotal paid: ${
       formatPhpPlain(paid)
     }\n${balanceText}\n\nView booking: ${manageUrl}\n${location}\n${mapsUrl}`,
   };
