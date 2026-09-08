@@ -958,6 +958,8 @@ body.dark .shared-date-display {
 
 /* FORM */
 .frow { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px; }
+.frow.booking-contact-row { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.booking-contact-row > .fg { min-width:0; }
 .fg { margin-bottom:16px; }
 .fl { display:block; font-size:.77rem; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); margin-bottom:6px; }
 .fi {
@@ -3926,7 +3928,7 @@ try {
         <!-- ── STEP 3: YOUR DETAILS ── -->
         <div class="wiz-panel" id="wizPanel3">
           <div class="wiz-sec-title">👤 Your Details</div>
-          <div class="frow">
+          <div class="frow booking-contact-row">
             <div class="fg" style="margin:0">
               <label class="fl" for="bName">Full Name</label>
               <input type="text" class="fi" id="bName" placeholder="First Name / Last Name" autocomplete="off" />
