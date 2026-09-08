@@ -12,6 +12,21 @@ type Field = { value: string | null; ambiguous: boolean };
 function normalizeColumns(input: string[]): string[] {
   const lines = [...input];
   for (let i = 0; i < lines.length; i++) {
+    // Mixed OCR ordering: the bank is read as a normal row, followed by the
+    // three remaining labels as a column. Require all three typed values and
+    // the next label boundary before reconstructing their associations.
+    if (/^Account\s*(?:No\.?|Number):?$/i.test(lines[i]) &&
+      /^Account Name:?$/i.test(lines[i + 1] || "") &&
+      /^Transfer Method:?$/i.test(lines[i + 2] || "") &&
+      /^(?:[*•●·.xX]{2,}\d{4}|\d{8,30})$/.test((lines[i + 3] || "").replace(/[\s-]/g, "")) &&
+      /^[\p{L}][\p{L} .'-]+$/u.test(lines[i + 4] || "") &&
+      /^Insta\s*Pay$/i.test(lines[i + 5] || "") &&
+      /^Receipt sent to:?$/i.test(lines[i + 6] || "")) {
+      lines.splice(i, 6,
+        `Account No.: ${lines[i + 3]}`,
+        `Account Name: ${lines[i + 4]}`,
+        `Transfer Method: ${lines[i + 5]}`);
+    }
     if (/^Bank:?$/i.test(lines[i]) &&
       /^Account\s*(?:No\.?|Number):?$/i.test(lines[i + 1] || "") &&
       /^Account Name:?$/i.test(lines[i + 2] || "") &&

@@ -288,3 +288,21 @@ Deno.test('incomplete, reordered, duplicated and conflicting column evidence sta
   assert(v.flags.length > 0, 'Uncertain column layout must not pass');
  }
 });
+
+const MIXED_COLUMN_RECEIPT = "Bank Transfer Complete\nSent via GCash\nSuccessful transactions are credited instantly. You will receive\nan update about this transaction in your GCash Inbox.\nBank\nSecurity Bank\nCorporation\nAccount No.\nAccount Name\nTransfer Method\n.........2980\nKristie Lou V.\nInstaPay\nReceipt sent to\nsample@example.com\nTransfer Amount\n3.00\n+Fee\nTotal\n10.00\nP 13.00\nDate\nSep 09, 2026 03:29 AM\nInstaPay Invoice No.\n1209033\nRef No.\n2044842945312\n228g (gC02e)\nBy going digital, you reduce your carbon footprint from\ntransportation, paper, and plastic.\nPowered by instaFay";
+Deno.test('mixed row and column Vision layout reads the three-peso bank transfer', () => {
+ const p=parseSecurityBankReceipt(MIXED_COLUMN_RECEIPT);
+ assert(p.amount.amount===3 && p.transferFee===10 && p.total===13);
+ assert(p.recipient.nameRaw==='Kristie Lou V.');
+ assert(p.recipient.accountRaw==='.........2980');
+ assert(p.indicators.instaPay && p.indicators.destinationSecurityBank);
+ assert(p.reference.value==='2044842945312' && p.invoice.value==='1209033');
+ const c={...context,typedReference:'',expectedAmount:3,expectedRecipientName:'KRISTIE LOU V.',bookingStartedAt:'2026-09-08T19:27:00Z',now:'2026-09-08T19:30:00Z'};
+ const v=verifySecurityBankReceipt(p,c);
+ assert(v.flags.length===0,JSON.stringify(v.flags));
+ const masked=verifySecurityBankReceipt(p,{...c,expectedRecipientNumber:'*********2980'});
+ assert(masked.flags.length===1 && masked.flags[0]==='MERCHANT_CONFIG_MISSING',JSON.stringify(masked.flags));
+ for(const text of [MIXED_COLUMN_RECEIPT.replace('Kristie Lou V.\n',''),MIXED_COLUMN_RECEIPT.replace('Account Name\nTransfer Method','Transfer Method\nAccount Name'),MIXED_COLUMN_RECEIPT+'\nAccount Name: Other Owner']){
+  assert(verifySecurityBankReceipt(parseSecurityBankReceipt(text),c).flags.length>0,'Incomplete or conflicting fields must stay pending');
+ }
+});
