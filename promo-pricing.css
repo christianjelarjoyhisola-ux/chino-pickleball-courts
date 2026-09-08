@@ -1,4 +1,8 @@
 /* Court promos follow the selected play date and the CHINO court-blue palette. */
+body:is(.light, .light-mode, [data-theme="light"]) {
+  --promo-text: #143d63;
+  --promo-muted: #536575;
+}
 .chino-promo-rate {
   display: inline-flex;
   align-items: center;
@@ -24,14 +28,14 @@
 .chino-promo-rate del,
 .chino-promo-slot-price del,
 .ft-result-price del {
-  color: var(--muted);
+  color: var(--promo-muted, var(--muted));
   font-weight: 400;
   text-decoration-thickness: 1px;
   text-decoration-color: currentColor;
 }
 .chino-promo-rate del { font-size: .78em; }
 .chino-promo-rate strong {
-  color: var(--text);
+  color: var(--promo-text, var(--text));
   font-size: 1.15em;
   font-weight: 700;
   letter-spacing: -.02em;
@@ -40,7 +44,7 @@
 .chino-promo-period {
   display: inline-block;
   margin-top: 5px;
-  color: var(--muted);
+  color: var(--promo-muted, var(--muted));
   font-size: 10px;
   line-height: 1.4;
 }
@@ -53,16 +57,16 @@
   gap: 2px;
   line-height: 1.15;
 }
-.chino-promo-slot-price del { font-size: 10px; }
+.chino-promo-slot-price del { font-size: 11px; }
 .chino-promo-slot-current {
   display: inline-flex;
   align-items: baseline;
   justify-content: center;
   gap: 4px;
-  color: var(--text);
+  color: var(--promo-text, var(--text));
 }
-.chino-promo-slot-current strong { font-size: 13px; font-weight: 700; }
-.chino-promo-slot-label { font-size: 8px; font-weight: 600; letter-spacing: .015em; }
+.chino-promo-slot-current strong { color: inherit; font-size: 13px; font-weight: 700; }
+.chino-promo-slot-label { font-size: 10px; font-weight: 600; letter-spacing: .015em; }
 .cc-slot-btn.selected .chino-promo-slot-current,
 .slot.sel .chino-promo-slot-current { color: #fff; }
 .cc-slot-btn.selected .chino-promo-slot-price del,
@@ -71,13 +75,12 @@
 .cc-photo-rate .chino-promo-rate del { color: #d1dbe3; }
 .cc-photo-rate .chino-promo-rate strong { color: #fff; }
 .ft-result-price { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.ft-result-price strong { color: var(--text); }
+.ft-result-price strong { color: var(--promo-text, var(--text)); }
 .slot .chino-promo-slot-price { margin-top: 6px; }
 @media (max-width: 600px) {
   .cc-mobile-meta .chino-promo-rate { gap: 4px 6px; }
   .cc-mobile-meta .chino-promo-rate strong { font-size: 14px; }
-  .cc-mobile-meta .chino-promo-rate del { font-size: 10px; }
+  .cc-mobile-meta .chino-promo-rate del { font-size: 11px; }
   .cc-slot-btn.chino-promo-slot { min-height: 67px; }
   .chino-promo-slot-current { gap: 3px; }
-  .chino-promo-slot-current strong { font-size: 12px; }
 }

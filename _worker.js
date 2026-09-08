@@ -25,6 +25,7 @@ export default {
       '/owner-insights.css',
       '/manage-booking.js',
       '/manage-booking.css',
+      '/promo-pricing.css',
     ]);
     const isSharedRuntime = url.pathname === '/supabase-config.js' ||
       releaseCoupledRuntime.has(url.pathname);
