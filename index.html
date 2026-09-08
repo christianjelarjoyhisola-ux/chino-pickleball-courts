@@ -28,7 +28,7 @@
 <script src="payment-method-brand.js?v=20260909-security-bank"></script>
 <script src="booking-balance.js?v=20260831-payment-state-v7"></script>
 <script src="host-balance-payment.js?v=20260831-payment-state-v7"></script>
-<script src="court-pricing.js?v=20260908-court-promo-v1"></script>
+<script src="court-pricing.js?v=20260909-fee-modes"></script>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -3554,7 +3554,7 @@ try {
       </div>
       <div class="late-ext-courts" id="lateExtCourts"></div>
       <div class="late-ext-price">
-        <span class="late-ext-price-copy"><strong>Added price</strong><span>Booking fee · FREE</span></span>
+        <span class="late-ext-price-copy"><strong>Added price</strong><span id="lateExtFeeNote">Booking fee included</span></span>
         <strong class="late-ext-price-value" id="lateExtPrice">—</strong>
       </div>
       <div class="late-ext-note">This will be added as a separate next-day booking item in the same reservation.</div>
@@ -3705,6 +3705,7 @@ try {
   <div class="sec-hd">
     <span class="chino-eyebrow">MAKE TIME TO PLAY</span><h1>Find your court.</h1>
     <p>Select a date, choose a court and time, then book.</p>
+    <p id="bookingFeeNotice" hidden style="font-size:.82rem;color:var(--muted);line-height:1.5"></p>
   </div>
   <div class="find-time-entry">
     <div>
@@ -4249,7 +4250,7 @@ try {
               <div class="inv-amt-total" id="iAmountLabel">Booking Total</div>
               <div class="inv-amt-val" id="iTot">₱0.00</div>
             </div>
-            <div class="inv-fee-free"><span>Booking fee</span><strong>Free</strong></div>
+            <div class="inv-fee-free"><span>Booking fee</span><strong id="iBookingFee">—</strong></div>
           </div>
           <div class="inv-rental-breakdown" id="iRentalBreakdown" aria-label="Court rental calculation"></div>
           <div class="inv-payment-meta">
@@ -4385,6 +4386,7 @@ let openPlayFee = 100; // default ₱100, overridden by settings
 let openPlayMaxPlayers = 40; // default 40, overridden by settings
 let paymentAcceptanceMode = 'full_payment_only';
 let _serviceFeeRate = 0; // booking fee amount, loaded from settings
+let _bookingFeeMode = 'included';
 let _serviceFeeType = 'per_hour'; // 'per_hour' or 'flat'
 const HOST_DOWNPAYMENT_RATE = 0.25;
 let hostInviteTimer = null;
@@ -4397,9 +4399,10 @@ function normalizePlatformFeeType(type) {
   return ['flat', 'booking', 'per_booking', 'per_transaction'].includes(String(type || '').toLowerCase()) ? 'flat' : 'per_hour';
 }
 function calcSvcFee(hrs) { return _serviceFeeType === 'flat' ? _serviceFeeRate : _serviceFeeRate * hrs; }
+function isSeparateBookingFee() { return typeof _bookingFeeMode !== 'undefined' && _bookingFeeMode === 'separate'; }
 function hasExactAllInSlotPrice() { return true; }
 function allInSlotRate(baseRate) {
-  return Math.round(Math.max(0, Number(baseRate || 0)) * 100) / 100;
+  return Math.round(Math.max(0, Number(baseRate || 0) + (isSeparateBookingFee() ? calcSvcFee(1) : 0)) * 100) / 100;
 }
 function compactPeso(amount) {
   const value = Math.max(0, Number(amount || 0));
@@ -4412,7 +4415,7 @@ function allInSlotPriceHtml(baseRate) {
   return `<div class="csl-price">${compactPeso(allInSlotRate(baseRate))}</div>`;
 }
 function allInSlotAriaLabel(baseRate) {
-  return `${compactPeso(allInSlotRate(baseRate))} per hour, zero booking fee`;
+  return `${compactPeso(allInSlotRate(baseRate))} per hour${isSeparateBookingFee() ? ', including ' + compactPeso(calcSvcFee(1)) + ' booking fee' : ', booking fee included'}`;
 }
 function activeHostSession() {
   const sess = window.Auth?.getSession?.();
@@ -5208,15 +5211,16 @@ function selectionSlotRates(sel) {
 
 function selectionServiceFee(sel) {
   const listedPrice = Math.max(0, Number(selectionListedPrice(sel) || 0));
-  return Math.min(listedPrice, Math.max(0, Number(calcSvcFee((sel?.slots || []).length) || 0)));
+  const fee = Math.max(0, Number(calcSvcFee((sel?.slots || []).length) || 0));
+  return isSeparateBookingFee() ? fee : Math.min(listedPrice, fee);
 }
 
 function selectionCourtFee(sel) {
-  return Math.max(0, selectionListedPrice(sel) - selectionServiceFee(sel));
+  return Math.max(0, selectionListedPrice(sel) - (isSeparateBookingFee() ? 0 : selectionServiceFee(sel)));
 }
 
 function selectionTotal(sel) {
-  return selectionListedPrice(sel);
+  return selectionListedPrice(sel) + (isSeparateBookingFee() ? selectionServiceFee(sel) : 0);
 }
 
 function normalizedSlots(slots) {
@@ -5278,6 +5282,7 @@ function makeBookingItemFromSelection(sel, ref = null, groupRef = null) {
     slotRates: selectionSlotRates(sel),
     courtFee,
     serviceFee,
+    feeMode: isSeparateBookingFee() ? 'separate' : 'included',
     total,
   };
 }
@@ -5372,9 +5377,18 @@ function bookingItemsRateLabel(items = activeBookingItems()) {
   return court ? compactPeso(court.rate) + '/hr' : '-';
 }
 
+function itemBookingFeeMode(item = {}) { return item.bookingFeeModeSnapshot ?? item.booking_fee_mode_snapshot ?? item.feeMode ?? 'included'; }
+function itemBookingFeeAmount(item = {}) { return Math.max(0, Number(item.bookingFeeAmountSnapshot ?? item.booking_fee_amount_snapshot ?? item.serviceFee ?? 0) || 0); }
+function separateBookingFees(items = []) { return items.reduce((sum, item) => sum + (itemBookingFeeMode(item) === 'separate' ? itemBookingFeeAmount(item) : 0), 0); }
+function bookingFeeLineHtml(items = []) {
+  const amount = separateBookingFees(items);
+  const included = items.some(item => itemBookingFeeAmount(item) > 0);
+  return '<div class="pbs-price-row"><span>Booking fee' + (amount > 0 ? ' · ' + bookingItemsDuration(items) + ' booked court-hours' : '') + '</span><strong>' + (amount > 0 ? fmt(amount) : included ? 'Included' : 'Free') + '</strong></div>';
+}
+
 function bookingItemRateBreakdown(item = {}) {
   const duration = Math.max(0, Number(item.duration || item.slots?.length || 0));
-  const total = Math.max(0, Number(item.total || 0));
+  const total = Math.max(0, Number(item.total || 0) - (itemBookingFeeMode(item) === 'separate' ? itemBookingFeeAmount(item) : 0));
   const storedRates = Array.isArray(item.slotRates ?? item.slot_rates)
     ? (item.slotRates ?? item.slot_rates).map(Number)
     : [];
@@ -5493,7 +5507,7 @@ function hostBookingItemsSummaryHtml(items = uniqueBookingSelections(activeBooki
     <div class="premium-booking-summary">
       <div class="pbs-price-card">
         ${bookingRentalBreakdownHtml(items, { itemizeSchedule: true, dateFormatter: fmtDc })}
-        <div class="pbs-price-row fee-free"><span>Booking fee</span><strong class="pbs-free-badge">Free</strong></div>
+        ${bookingFeeLineHtml(items)}
         <div class="pbs-price-row total"><span>Booking total</span><strong>${fmt(total)}</strong></div>
         <div class="pbs-price-row due"><span>Reservation payment today</span><strong>${fmt(dueToday)}</strong></div>
         <div class="pbs-price-row balance"><span>Remaining balance</span><strong>${fmt(balance)}</strong></div>
@@ -5509,7 +5523,7 @@ function bookingItemsSummaryHtml(items = uniqueBookingSelections(activeBookingIt
     <div class="premium-booking-summary">
       <div class="pbs-price-card">
         ${bookingRentalBreakdownHtml(items, { itemizeSchedule: true, dateFormatter: fmtD })}
-        <div class="pbs-price-row fee-free"><span>Booking fee</span><strong class="pbs-free-badge">Free</strong></div>
+        ${bookingFeeLineHtml(items)}
         <div class="pbs-price-row total"><span>Total</span><strong>${fmt(total)}</strong></div>
       </div>
     </div>
@@ -5935,6 +5949,11 @@ async function loadOperatingHours() {
   }
   _serviceFeeRate = parseFloat(settings.maintenance_fee ?? settings.service_fee_rate ?? settings.booking_fee ?? '0') || 0;
   _serviceFeeType  = normalizePlatformFeeType(settings.fee_type);
+  _bookingFeeMode = settings.booking_fee_mode === 'separate' ? 'separate' : 'included';
+  if ($('bookingFeeNotice')) {
+    $('bookingFeeNotice').hidden = !isSeparateBookingFee() || _serviceFeeRate <= 0;
+    $('bookingFeeNotice').textContent = `Court rental + ${fmt(_serviceFeeRate)} booking fee per court-hour. Slot prices show the total.`;
+  }
   applyPaymentSettings(settings);
   const note = $('slotHoursNote');
   if (note) note.textContent = `(${fmtT(openHour)} – ${fmtT(closeHour)} · select any available hours)`;
@@ -6691,6 +6710,7 @@ function bookingItemFromReservedBooking(b) {
     duration,
     rate: Number(b.rate || 0),
     slotRates: Array.isArray(b.slotRates ?? b.slot_rates) ? [...(b.slotRates ?? b.slot_rates)].map(Number) : [],
+    feeMode: b.bookingFeeModeSnapshot ?? b.booking_fee_mode_snapshot ?? 'included',
     courtFee: Math.max(0, total - serviceFee),
     serviceFee,
     total,
@@ -7056,6 +7076,7 @@ function showLateNightExtensionPrompt(candidate) {
       : `Applies to ${courts[0] || 'your selected court'}.`;
   }
   if ($('lateExtPrice')) $('lateExtPrice').textContent = fmt(addedTotal);
+  if ($('lateExtFeeNote')) $('lateExtFeeNote').textContent = isSeparateBookingFee() ? 'Includes booking fee per added court-hour' : 'Booking fee included';
   modal.classList.add('show');
   modal.setAttribute('aria-hidden', 'false');
   document.body.style.overflow = 'hidden';
@@ -7081,7 +7102,7 @@ async function verifiedReservedBookingItems(quotedItems) {
     // Retain the quoted breakdown only when it reconciles to that saved total.
     const exactRates = rates => Array.isArray(rates) && rates.length === item.duration
       && rates.every(rate => Number.isFinite(Number(rate)) && Number(rate) >= 0)
-      && Math.abs(rates.reduce((sum, rate) => sum + Number(rate), 0) - item.total) <= 0.01;
+      && Math.abs(rates.reduce((sum, rate) => sum + Number(rate), 0) - (item.total - (item.feeMode === 'separate' ? item.serviceFee : 0))) <= 0.01;
     const quotedRates = quotedItems[index].slotRates;
     const rates = exactRates(item.slotRates) ? item.slotRates
       : exactRates(quotedRates) ? quotedRates : [];
@@ -8089,7 +8110,7 @@ function toggleSlot(h) {
    ============================================= */
 function updatePriceLegacy() {
   const hrs   = selSlots.length;
-  const total = selSlots.reduce((s, h) => s + getRateForHour(h), 0);
+  const total = selSlots.reduce((s, h) => s + getRateForHour(h), 0) + (isSeparateBookingFee() ? calcSvcFee(hrs) : 0);
   const svcFee = Math.min(total, Math.max(0, calcSvcFee(hrs)));
   const courtTotal = Math.max(0, total - svcFee);
   const dpAmt = downpaymentAmount(total, courtTotal, svcFee);
@@ -8102,9 +8123,9 @@ function updatePriceLegacy() {
       : (court ? fmt(allInSlotRate(court.rate)) + '/hr' : '—');
   if ($('pHrs')) $('pHrs').textContent  = `${hrs} hr${hrs !== 1 ? 's' : ''}`;
   if ($('pRate')) $('pRate').textContent = rateLabel;
-  if ($('pCourtFee')) $('pCourtFee').textContent = fmt(total);
+  if ($('pCourtFee')) $('pCourtFee').textContent = fmt(isSeparateBookingFee() ? courtTotal : total);
   if ($('pSvcFeeRow')) $('pSvcFeeRow').style.display = '';
-  if ($('pSvcFee'))    $('pSvcFee').textContent = 'FREE';
+  if ($('pSvcFee')) $('pSvcFee').textContent = isSeparateBookingFee() ? fmt(svcFee) : svcFee > 0 ? 'Included' : 'Free';
   if ($('pTot')) $('pTot').textContent  = fmt(total);
   if ($('pDown')) $('pDown').textContent = fmt(payAmt);
 
@@ -8142,9 +8163,9 @@ function updatePrice() {
 
   if ($('pHrs')) $('pHrs').textContent  = `${hrs} hr${hrs !== 1 ? 's' : ''}`;
   if ($('pRate')) $('pRate').textContent = bookingItemsRateLabel(items);
-  if ($('pCourtFee')) $('pCourtFee').textContent = fmt(total);
+  if ($('pCourtFee')) $('pCourtFee').textContent = fmt(isSeparateBookingFee() ? courtTotal : total);
   if ($('pSvcFeeRow')) $('pSvcFeeRow').style.display = '';
-  if ($('pSvcFee'))    $('pSvcFee').textContent = 'FREE';
+  if ($('pSvcFee')) $('pSvcFee').textContent = isSeparateBookingFee() ? fmt(svcFee) : svcFee > 0 ? 'Included' : 'Free';
   if ($('pTot')) $('pTot').textContent  = fmt(total);
   if ($('pDown')) $('pDown').textContent = fmt(payAmt);
 
@@ -8864,6 +8885,8 @@ async function submitBooking(e) {
     rate: item.rate,
     slotRates: Array.isArray(item.slotRates) ? [...item.slotRates] : [],
     total: item.total,
+    feeMode: item.feeMode,
+    serviceFee: item.serviceFee,
     paymentMethod: payMethod,
     gcashRef: gcashRef || null,
     paymentFlow: payMethod,
@@ -9587,6 +9610,8 @@ function bookingTicketSessionItems(booking = {}) {
       slots,
       rate: Number.isFinite(rateValue) ? rateValue : 0,
       slotRates: Array.isArray(item.slotRates ?? item.slot_rates) ? [...(item.slotRates ?? item.slot_rates)].map(Number) : [],
+      feeMode: item.bookingFeeModeSnapshot ?? item.booking_fee_mode_snapshot ?? item.feeMode ?? 'included',
+      serviceFee: Number(item.bookingFeeAmountSnapshot ?? item.booking_fee_amount_snapshot ?? item.serviceFee ?? 0),
       total: Number.isFinite(totalValue) ? totalValue : 0,
       sourceIndex: index,
     };
@@ -9801,6 +9826,9 @@ function showInvoice(b) {
   set('iContact', b.contactNumber);
   set('iEmail', b.email || 'Not provided');
   const ticketModel = renderBookingTicketSessions(b);
+  const invoicePricingItems = bookingTicketPricingItems(b, ticketModel);
+  const separateFee = separateBookingFees(invoicePricingItems);
+  set('iBookingFee', separateFee > 0 ? fmt(separateFee) : invoicePricingItems.some(item => itemBookingFeeAmount(item) > 0) ? 'Included' : 'Free');
   const rentalBreakdown = $('iRentalBreakdown');
   if (rentalBreakdown) rentalBreakdown.innerHTML = bookingRentalBreakdownHtml(bookingTicketPricingItems(b, ticketModel));
   set('iPay', payLabel);
@@ -11693,7 +11721,7 @@ async function submitOpenPlay() {
 }
 </script>
 <script src="supabase.min.js"></script>
-<script src="supabase-config.js?v=20260909-receipt-only"></script>
+<script src="supabase-config.js?v=20260909-fee-modes"></script>
 
 <!-- MOBILE STICKY BOOK NOW BAR -->
 <div id="mobileBookBar" class="mobile-book-bar" style="display:none">

@@ -78,3 +78,18 @@ test('snake-case database records and distinct courts produce independent quotes
   assert.equal(pricing.rateForHour({ rate: 400 }, 10, '2026-09-15'), 400);
   assert.equal(JSON.stringify(raw), before);
 });
+
+// Fee modes share the same court/promotional rate; only the booking-fee treatment changes.
+test('separate hourly fee adds once per court-hour, including zero and decimal fees', () => {
+  const cfg = {booking_fee_mode:'separate', maintenance_fee:15, fee_type:'per_hour'};
+  assert.deepEqual(pricing.bookingQuote(365,1,cfg), {courtFee:365,serviceFee:15,total:380,feeMode:'separate'});
+  assert.equal(pricing.bookingQuote(730,2,cfg).total,760);
+  assert.equal(pricing.bookingQuote(1460,4,cfg).total,1520);
+  assert.equal(pricing.bookingQuote(265,1,cfg).total,280);
+  assert.equal(pricing.bookingQuote(365,1,{...cfg,maintenance_fee:0}).total,365);
+  assert.equal(pricing.bookingQuote(365,1,{...cfg,maintenance_fee:12.50}).total,377.50);
+});
+test('included mode keeps the court price unchanged and caps its internal allocation', () => {
+  assert.deepEqual(pricing.bookingQuote(365,1,{maintenance_fee:15}), {courtFee:350,serviceFee:15,total:365,feeMode:'included'});
+  assert.deepEqual(pricing.bookingQuote(5,1,{maintenance_fee:15}), {courtFee:0,serviceFee:5,total:5,feeMode:'included'});
+});

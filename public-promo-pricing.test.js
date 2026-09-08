@@ -17,7 +17,7 @@ function between(start, end) {
 function harness(extra = {}) {
   const context = vm.createContext({
     ChinoPricing, pricingTiers: [], _settingsTiers: [], openHour: 6, closeHour: 24,
-    calcSvcFee: () => 0, fmtT: hour => `${hour}:00`, fmtTc: hour => `${hour}:00`,
+    isSeparateBookingFee: () => false, calcSvcFee: () => 0, fmtT: hour => `${hour}:00`, fmtTc: hour => `${hour}:00`,
     fmtDc: date => date, fmtD: date => date, fmt: amount => `₱${amount}`,
     esc: value => String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'),
     ...extra,
@@ -27,7 +27,7 @@ function harness(extra = {}) {
     between('function getPricingTiersForCourt(', 'const fmtTs ='),
     between('function selectionListedPrice(', 'function bookingSelectionKey('),
     between('function bookingItemFromReservedBooking(', 'function restoreGuestResumeDraft('),
-    between('function bookingItemRateBreakdown(', 'function bookingRentalBreakdownModel('),
+    between('function itemBookingFeeMode(', 'function bookingRentalBreakdownModel('),
     between('function bookingTicketHourLabel(', 'function renderBookingTicketSessions('),
     between('async function verifiedReservedBookingItems(', 'async function proceedToBookLegacy('),
   ].join('\n'), context);
@@ -205,4 +205,23 @@ test('public pricing assets load before inline consumers and all scripts parse',
   for (const match of page.matchAll(/<script([^>]*)>([\s\S]*?)<\/script>/gi)) {
     if (!/\bsrc\s*=|application\/ld\+json/i.test(match[1])) new vm.Script(match[2]);
   }
+});
+
+test('separate hourly fee reconciles selection, stored hold and court-only receipt breakdown', async () => {
+  const context = harness({isSeparateBookingFee:()=>true, calcSvcFee:hours=>hours*15});
+  const court = promoCourt({promoEnabled:false,rate:365,rateSchedule:[{from:0,to:24,rate:365}]});
+  const item = context.makeBookingItemFromSelection(selection(context,court,'2026-09-10',[10,11]),'FEE-TEST');
+  assert.equal(item.total,760);
+  assert.equal(item.courtFee,730);
+  assert.equal(item.serviceFee,30);
+  assert.equal(item.feeMode,'separate');
+  assert.equal(context.allInSlotRate(365),380);
+  context.DB = {getBookingByRef:async()=>({...plain(item),bookingFeeModeSnapshot:'separate',bookingFeeAmountSnapshot:30,slotRates:[]})};
+  const [saved] = await context.verifiedReservedBookingItems([item]);
+  assert.equal(saved.total,760);
+  assert.deepEqual(plain(saved.slotRates),[365,365]);
+  assert.equal(context.bookingItemRateBreakdown(saved).total,730);
+  // Historical included bookings must not acquire the newly enabled separate fee.
+  const historical = context.bookingItemFromReservedBooking({...plain(item),total:730,bookingFeeModeSnapshot:'included',bookingFeeAmountSnapshot:30});
+  assert.equal(context.bookingItemRateBreakdown(historical).total,730);
 });

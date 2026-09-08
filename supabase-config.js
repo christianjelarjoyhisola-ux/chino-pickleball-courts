@@ -674,6 +674,7 @@ function rowToBooking(r) {
     paidAt:        r.paid_at || null,
     gcashRef:      r.gcash_ref || null,
     downpayment:   r.downpayment || null,
+    bookingFeeModeSnapshot: r.booking_fee_mode_snapshot || 'included',
     bookingFeeAmountSnapshot: r.booking_fee_amount_snapshot != null ? Number(r.booking_fee_amount_snapshot) : null,
     bookingFeeRateSnapshot: r.booking_fee_rate_snapshot != null ? Number(r.booking_fee_rate_snapshot) : null,
     bookingFeeTypeSnapshot: r.booking_fee_type_snapshot || null,
@@ -2682,6 +2683,13 @@ window.DB = {
       data.forEach(r => out[r.key] = r.value);
       return out;
     });
+  },
+
+  async saveBookingFeePolicy(mode, rate) {
+    const { data, error } = await _sb.rpc('set_booking_fee_policy', { p_mode: mode, p_rate: Number(rate) });
+    if (error) throw error;
+    _pbClearFastCache(['settings']);
+    return data;
   },
 
   async saveSetting(key, value) {

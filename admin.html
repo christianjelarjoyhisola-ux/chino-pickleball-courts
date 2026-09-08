@@ -10,7 +10,7 @@
 <script src="payment-method-brand.js?v=20260909-security-bank"></script>
 <script src="chart.min.js"></script>
 <script src="booking-balance.js?v=20260831-payment-state-v7"></script>
-<script src="court-pricing.js?v=20260908-promo"></script>
+<script src="court-pricing.js?v=20260909-fee-modes"></script>
 <script src="host-balance-payment.js?v=20260831-payment-state-v7"></script>
 <script src="finance-core.js?v=20260719-finance-v2"></script>
 <script src="owner-insights.js?v=20260831-paddle-intelligence-v1"></script>
@@ -6251,11 +6251,11 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(45, 62, 79, .1
         <div class="fee-rule-head">
           <div>
             <div class="fee-rule-eyebrow">Internal finance</div>
-            <h4>&#9889; Platform Allocation</h4>
+            <h4>Booking fee</h4>
           </div>
           <span class="fee-rule-owner">System Owner</span>
         </div>
-        <p class="fee-rule-copy">This is the current platform allocation saved for CHINO. A zero rate means no platform share is deducted from new bookings. Existing bookings keep their original locked rate.</p>
+        <p class="fee-rule-copy">Choose whether the booking fee is included in the court rate or added separately for every booked court-hour. Changes apply to new bookings.</p>
         <div class="fee-rule-method" aria-label="Platform allocation method">
           <span class="fee-rule-method-icon" aria-hidden="true">&#9201;</span>
           <div><small>Calculation method</small><strong id="maintRateMethod">Per booked court-hour</strong></div>
@@ -6268,13 +6268,19 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(45, 62, 79, .1
           </div>
           <div class="fee-rule-deploy-note"><span aria-hidden="true">&#128274;</span><span><strong>Booking rates stay protected</strong>Existing bookings retain their recorded allocation.</span></div>
         </div>
+        <div class="frow" style="margin-top:18px;gap:14px;flex-wrap:wrap">
+          <div class="fg" style="flex:2;min-width:220px"><label class="fl" for="bookingFeeModeInput">How the fee is charged</label><select class="fi" id="bookingFeeModeInput" onchange="updateBookingFeePreview()"><option value="included">Included in court rate</option><option value="separate">Add separately per booked hour</option></select></div>
+          <div class="fg" style="flex:1;min-width:150px"><label class="fl" for="bookingFeeRateInput">Booking fee / court-hour (₱)</label><input class="fi" type="number" min="0" max="100000" step="0.01" id="bookingFeeRateInput" oninput="updateBookingFeePreview()" /></div>
+        </div>
+        <div id="bookingFeePreview" class="fee-rule-summary" aria-live="polite"></div>
+        <button type="button" class="btn btn-p" id="saveBookingFeePolicyButton" onclick="saveBookingFeePolicy()" style="margin-top:14px">Save booking fee</button>
         <div class="fee-rule-summary" id="maintRateSummary" aria-live="polite"></div>
       </div>
 
       <!-- BOOKING FEE REMITTANCE — System Owner only (where court owners send fees) -->
       <div class="panel" data-perm="owner_only" style="max-width:680px;margin-bottom:20px;border:1.5px solid rgba(255,160,0,.35);background:rgba(255,160,0,.04)">
         <h4>🏦 Booking Fee Remittance Account <span style="font-size:.7rem;background:rgba(255,160,0,.15);color:var(--yellow);padding:2px 8px;border-radius:8px;margin-left:6px;font-family:'DM Mono',monospace;letter-spacing:1px">SYSTEM OWNER</span></h4>
-        <p style="color:var(--muted);font-size:.84rem;margin:8px 0 14px">This is the GCash account where court owners remit the private booking-fee allocations embedded in collected court prices. Shown to them in the Remit Now dialog.</p>
+        <p style="color:var(--muted);font-size:.84rem;margin:8px 0 14px">This is the GCash account where court owners remit the booking fees collected for the platform. Shown to them in the Remit Now dialog.</p>
         <div class="frow" style="gap:10px;margin-bottom:10px;">
           <div class="fg" style="margin:0;flex:1">
             <label class="fl">Remittance GCash Number</label>
@@ -7132,7 +7138,7 @@ function normalizePlatformFeeType(type) {
 function getPlatformFeeConfig(settings = {}) {
   const amount = parseFloat(settings.maintenance_fee ?? settings.service_fee_rate ?? settings.booking_fee ?? '0') || 0;
   const type = normalizePlatformFeeType(settings.fee_type);
-  return { amount, type };
+  return { amount, type, mode: settings.booking_fee_mode === 'separate' ? 'separate' : 'included' };
 }
 function platformFeeLabel(cfg, { short = false } = {}) {
   const unit = cfg.type === 'flat'
@@ -12073,7 +12079,8 @@ function nbUpdateTotal() {
   const courtId = $('nbCourt')?.value;
   const court = _nbCourts.find(c => String(c.id) === String(courtId));
   const hrs = _nbSelSlots.length;
-  const total = court ? _nbSelSlots.reduce((s, h) => s + _nbGetRateForHour(court, h), 0) : 0;
+  const listed = court ? _nbSelSlots.reduce((s, h) => s + _nbGetRateForHour(court, h), 0) : 0;
+  const total = listed + (court && hrs && _nbPlatformFeeCfg.mode === 'separate' ? _nbBookingFeeForHours(hrs) : 0);
   const bookingFee = court && hrs ? Math.min(total, _nbBookingFeeForHours(hrs)) : 0;
   const courtTotal = Math.max(0, total - bookingFee);
   const half = Math.round((courtTotal * 0.5 + bookingFee) * 100) / 100;
@@ -12090,8 +12097,8 @@ function nbUpdateTotal() {
   sum.innerHTML = `<div class="nb-slots-summary">
     <div class="nb-sum-row"><span>Time</span><strong>${fmtHour(startH)} – ${fmtHour(endH)}</strong></div>
     <div class="nb-sum-row"><span>Duration</span><strong>${hrs} hr${hrs!==1?'s':''}</strong></div>
-    <div class="nb-sum-row"><span>Court Price</span><strong>${fmt(total)}</strong></div>
-    <div class="nb-sum-row"><span>Booking Fee</span><strong style="color:var(--green)">FREE</strong></div>
+    <div class="nb-sum-row"><span>Court Price</span><strong>${fmt(_nbPlatformFeeCfg.mode === 'separate' ? courtTotal : total)}</strong></div>
+    <div class="nb-sum-row"><span>Booking Fee</span><strong>${_nbPlatformFeeCfg.mode === 'separate' ? fmt(bookingFee) : bookingFee > 0 ? 'Included' : 'Free'}</strong></div>
     <div class="nb-sum-row nb-sum-total"><span>Total</span><span>${fmt(total)}</span></div>
   </div>`;
 }
@@ -12313,7 +12320,8 @@ function nbSelectionGroups() {
 function nbGroupsWithFees(groups = nbSelectionGroups()) {
   return groups.map(group => {
     const duration = Number(group.duration || group.slots?.length || 0);
-    const total = Math.max(0, Number(group.courtFee ?? group.total ?? 0));
+    const listed = Math.max(0, Number(group.courtFee ?? group.total ?? 0));
+    const total = listed + (_nbPlatformFeeCfg.mode === 'separate' ? _nbBookingFeeForHours(duration) : 0);
     const bookingFee = Math.min(total, Math.max(0, _nbBookingFeeForHours(duration)));
     const courtFee = Math.max(0, total - bookingFee);
     return {
@@ -12486,7 +12494,7 @@ function nbUpdateTotal() {
     const duration = group.duration || group.slots.length;
     return `
     <div class="nb-sum-row">
-      <span><strong>${esc(group.court.name)}</strong><br><span class="nb-sum-muted">${fmtHour(group.startH)} - ${fmtHour(group.endH)} (${duration} hr${duration === 1 ? '' : 's'})</span><br><span class="nb-sum-muted">Court price: ${fmt(group.total)}</span></span>
+      <span><strong>${esc(group.court.name)}</strong><br><span class="nb-sum-muted">${fmtHour(group.startH)} - ${fmtHour(group.endH)} (${duration} hr${duration === 1 ? '' : 's'})</span><br><span class="nb-sum-muted">Court price: ${fmt(_nbPlatformFeeCfg.mode === 'separate' ? group.courtFee : group.total)}</span></span>
       <strong>${fmt(group.total)}</strong>
     </div>`;
   }).join('');
@@ -14264,6 +14272,9 @@ async function saveVenueDetails() {
 
 async function renderMaintRateSettings(settings = null) {
   const cfg = getPlatformFeeConfig(settings || await DB.getSettings());
+  if ($('bookingFeeModeInput')) $('bookingFeeModeInput').value = cfg.mode || 'included';
+  if ($('bookingFeeRateInput')) $('bookingFeeRateInput').value = cfg.amount;
+  if (typeof updateBookingFeePreview === 'function') updateBookingFeePreview();
   const method = cfg.type === 'flat' ? 'Per confirmed booking transaction' : 'Per booked court-hour';
   if ($('maintRateLockedValue')) $('maintRateLockedValue').textContent = fmt(cfg.amount);
   if ($('maintRateMethod')) $('maintRateMethod').textContent = method;
@@ -14272,9 +14283,34 @@ async function renderMaintRateSettings(settings = null) {
   if (sum) {
     sum.textContent = cfg.amount === 0
       ? 'No platform allocation is deducted from new bookings. Historical bookings keep their locked snapshots.'
-      : `${platformFeeLabel(cfg)} · included inside the displayed court price · historical bookings keep their locked snapshots`;
+      : `${platformFeeLabel(cfg)} · ${cfg.mode === 'separate' ? 'added separately to the court rate' : 'included inside the displayed court price'} · historical bookings keep their locked snapshots`;
   }
 }
+function updateBookingFeePreview() {
+  const mode = $('bookingFeeModeInput')?.value || 'included';
+  const rate = Math.max(0, Number($('bookingFeeRateInput')?.value) || 0);
+  const quote = window.ChinoPricing.bookingQuote(365, 1, { booking_fee_mode: mode, maintenance_fee: rate, fee_type: 'per_hour' });
+  $('bookingFeePreview').textContent = mode === 'separate'
+    ? 'Example: ₱365 court + ' + fmt(rate) + ' booking fee = ' + fmt(quote.total) + ' for 1 hour. Two hours: ' + fmt(quote.total * 2) + '.'
+    : 'Example: ₱365 total for 1 hour. The ' + fmt(quote.serviceFee) + ' booking fee is included. Two hours: ₱730.';
+}
+async function saveBookingFeePolicy() {
+  if (sess?.role !== 'owner') { toast('Only the System Owner can change booking fees.', 'err'); return; }
+  const mode = $('bookingFeeModeInput').value;
+  const raw = $('bookingFeeRateInput').value.trim();
+  const rate = Number(raw);
+  if (!raw || !Number.isFinite(rate) || rate < 0 || rate > 100000 || Math.abs(rate * 100 - Math.round(rate * 100)) > 0.000001) { toast('Enter a valid hourly fee with up to two decimal places.', 'err'); return; }
+  const button = $('saveBookingFeePolicyButton');
+  if (button.disabled) return;
+  button.disabled = true;
+  try {
+    await DB.saveBookingFeePolicy(mode, rate);
+    await renderMaintRateSettings();
+    toast('Booking fee saved. New bookings will use this pricing.');
+  } catch (error) { toast(error?.message || 'Could not save booking fee.', 'err'); }
+  finally { button.disabled = false; }
+}
+
 async function renderHours() {
   const settings = await DB.getSettings();
   const openHr  = parseInt(settings.open_hour  || '6');
@@ -15061,7 +15097,7 @@ async function renderRemittances({ announce = false } = {}) {
 
     $('rmPageCopy').textContent = role === 'owner'
       ? 'Monitor platform allocations receivable, verify submitted proof, and inspect every permanent settlement record.'
-      : 'See the platform share already included in court prices, prepare an exact cutoff, submit proof, and keep every settlement record.';
+      : 'Review collected booking fees, prepare an exact cutoff, submit proof, and keep every settlement record.';
     $('rmRolePill').textContent = role === 'owner' ? 'System Owner · Verification' : 'Court Owner · Remittance';
     $('rmLiveStat').textContent = fmt(liveAmount);
     $('rmLiveStatNote').textContent = liveAmount > 0 ? 'Available for the next exact cutoff' : 'No allocation accumulating now';
@@ -18464,7 +18500,7 @@ function applyRoleVisibility(role) {
         <li>Platform hosting, security, and technical maintenance</li>
       </ul>
 
-      <h4 style="margin:0 0 8px;color:var(--green);font-size:.85rem;letter-spacing:.6px;text-transform:uppercase">3. Embedded Booking Fee Allocation &amp; Accumulated Remittance</h4>
+      <h4 style="margin:0 0 8px;color:var(--green);font-size:.85rem;letter-spacing:.6px;text-transform:uppercase">3. Booking Fee Allocation &amp; Accumulated Remittance</h4>
       <p id="agreeFeeIntro" style="margin:0 0 14px">In consideration of the platform access provided at no setup fee, one-time fee, monthly subscription fee, hidden fee, or other platform charge to the Court Owner, the Court Owner <strong>authorizes</strong> the Platform Provider to allocate the current System Owner-selected <strong>booking fee from within the Court Owner's configured player-facing price</strong> for each eligible transaction.<br><br>The configured court price is the complete amount shown to and paid by the customer. The booking fee allocation is <strong>not added on top at checkout</strong>. The System Owner sets the allocation amount and charging method, either per booked hour or per confirmed booking transaction, and the system privately records the allocation in the booking-period remittance statement.</p>
       <p id="agreeFeeBillable" style="margin:0 0 14px"><strong>When it applies.</strong> The configured booking fee allocation applies only to a <strong>confirmed booking transaction</strong> that successfully reserved a court slot. Bookings that are released before confirmation, expire, or never hold a slot do <strong>not</strong> create a remittance allocation.</p>
       <p id="agreeFeeCollection" style="margin:0 0 14px"><strong>Collection.</strong> The Court Owner collects the complete displayed price from the customer. From that collected amount, the configured booking fee allocation is held on behalf of the Platform Provider until remittance; the remainder is the Court Owner's net court revenue. No additional booking fee is charged to the player.</p>
@@ -18580,7 +18616,15 @@ async function updateAgreementFeeCopy() {
   const formula = cfg.type === 'flat'
     ? `number of confirmed booking transactions × ${fmt(cfg.amount)}`
     : `total booked hours from confirmed booking transactions × ${fmt(cfg.amount)}`;
-  const setHtml = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
+  const setHtml = (id, html) => {
+    if (cfg.mode === 'separate') html = html
+      .replaceAll("from within the Court Owner's configured player-facing price", "added to the Court Owner's configured court price")
+      .replaceAll('from within the complete player-facing price', 'as a separately itemized part of the complete player-facing price')
+      .replace('The configured court price is the complete amount shown to and paid by the customer. The allocation is <strong>not added on top at checkout</strong>.', 'The configured court rate covers court rental. The booking fee is <strong>added separately per booked court-hour</strong> and shown with the complete total before payment.')
+      .replace('No additional booking fee is charged to the player.', 'The booking fee is itemized separately in the customer’s total.')
+      .replace('The player never pays the allocation as an additional checkout charge.', 'The customer pays the court rental plus the separately itemized booking fee.');
+    const el = document.getElementById(id); if (el) el.innerHTML = html;
+  };
 
   setHtml('agreeFeeIntro', `In consideration of the platform access provided at no setup fee, one-time fee, monthly subscription fee, hidden fee, or other platform charge to the Court Owner, the Court Owner <strong>authorizes</strong> the Platform Provider to allocate the current System Owner-selected <strong>${fee} booking fee from within the Court Owner's configured player-facing price</strong> for each eligible transaction.<br><br>The configured court price is the complete amount shown to and paid by the customer. The allocation is <strong>not added on top at checkout</strong>. It is currently configured as a <strong>${feeMethod}</strong> at <strong>${fmt(cfg.amount)}</strong> and is privately recorded in the running remittance ledger when the booking becomes eligible.`);
   setHtml('agreeFeeBillable', `<strong>When it applies.</strong> The configured ${configuredFeeText} allocation applies only to a <strong>confirmed booking transaction</strong> that successfully reserved a court slot. Bookings that are released before confirmation, expire, or never hold a slot do <strong>not</strong> create a remittance allocation.`);
@@ -18701,7 +18745,7 @@ async function checkAgreementGate(session) {
 
 <script src="supabase.min.js"></script>
 <script src="open-play-rating.js?v=20260729-head-to-head-v1"></script>
-<script src="supabase-config.js?v=20260909-receipt-only"></script>
+<script src="supabase-config.js?v=20260909-fee-modes"></script>
 <script src="qrcode.min.js?v=1.5.4"></script>
 <script src="availability-graphic.js?v=20260909-domain-v1"></script>
 <script src="play-manager.js?v=20260909-official-logo-v1"></script>

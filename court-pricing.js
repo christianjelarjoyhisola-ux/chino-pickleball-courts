@@ -80,11 +80,22 @@
     return '';
   }
 
+  function bookingQuote(courtAmount, hours, settings = {}) {
+    const listed = money(Math.max(0, Number(courtAmount) || 0));
+    const units = Math.max(0, Number(hours) || 0);
+    const rate = Math.max(0, Number(settings.maintenance_fee ?? settings.service_fee_rate ?? settings.booking_fee ?? 0) || 0);
+    const separate = settings.booking_fee_mode === 'separate';
+    const fee = money(rate * (settings.fee_type === 'flat' && !separate ? 1 : units));
+    const serviceFee = separate ? fee : Math.min(listed, fee);
+    return { courtFee: separate ? listed : money(listed - serviceFee), serviceFee,
+      total: separate ? money(listed + fee) : listed, feeMode: separate ? 'separate' : 'included' };
+  }
+
   function todayInManila(now = new Date()) {
     const date = now instanceof Date ? now : new Date(now);
     if (!Number.isFinite(date.getTime())) return '';
     return new Date(date.getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
   }
 
-  return { regularRateForHour, rateForHour, promoForDate, validatePromo, todayInManila, validDate };
+  return { bookingQuote, regularRateForHour, rateForHour, promoForDate, validatePromo, todayInManila, validDate };
 });

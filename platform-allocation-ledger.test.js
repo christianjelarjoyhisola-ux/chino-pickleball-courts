@@ -82,7 +82,7 @@ test('current allocation settings display zero or configured rates without rewri
   const helperStart = adminSource.indexOf('function normalizePlatformFeeType(type)');
   const helperEnd = adminSource.indexOf('function bookingBillableHours(b)', helperStart);
   const renderStart = adminSource.indexOf('async function renderMaintRateSettings(');
-  const renderEnd = adminSource.indexOf('async function renderHours()', renderStart);
+  const renderEnd = adminSource.indexOf('function updateBookingFeePreview()', renderStart);
   assert.ok(helperStart >= 0 && helperEnd > helperStart && renderStart >= 0 && renderEnd > renderStart);
   const elements = new Map();
   const getElement = id => {

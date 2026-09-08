@@ -49,6 +49,7 @@ function selectionHarness() {
       }
       return fallbackRate;
     }
+    function isSeparateBookingFee() { return false; }
     function calcSvcFee(hours) {
       return _serviceFeeType === 'flat' ? _serviceFeeRate : _serviceFeeRate * hours;
     }
@@ -76,7 +77,7 @@ function selectionHarness() {
 }
 
 function rentalBreakdownHarness() {
-  const source = sourceBetween('function bookingItemRateBreakdown', 'function hostBookingItemsSummaryHtml');
+  const source = sourceBetween('function itemBookingFeeMode', 'function hostBookingItemsSummaryHtml');
   return new Function(`
     function normalizedSlots(slots) {
       return [...(slots || [])].map(Number).filter(Number.isFinite).sort((a, b) => a - b);
@@ -133,7 +134,7 @@ test('per-hour configuration creates exact all-in slot prices', () => {
   assert.equal(quote.rate, 350);
   assert.match(quote.html, /₱350/);
   assert.doesNotMatch(quote.html, /Final|Live total|csl-final/i);
-  assert.match(quote.aria, /₱350 per hour, zero booking fee/);
+  assert.match(quote.aria, /₱350 per hour, booking fee included/);
 });
 
 test('flat configuration never repeats the flat share on every slot', () => {
@@ -143,7 +144,7 @@ test('flat configuration never repeats the flat share on every slot', () => {
   assert.match(quote.html, /₱350/);
   assert.doesNotMatch(quote.html, /Live total|Final|csl-final/i);
   assert.doesNotMatch(quote.html, /₱360/);
-  assert.match(quote.aria, /₱350 per hour, zero booking fee/);
+  assert.match(quote.aria, /₱350 per hour, booking fee included/);
 
 });
 
@@ -341,13 +342,13 @@ test('both court renderers use the configured player price and accessible select
   assert.match(page, /\.cc-slot-btn\s*\{[^}]*min-height\s*:\s*48px/s);
 });
 
-test('player summary and confirmation show the fee-free all-in price only', () => {
+test('player summary and confirmation use the saved fee breakdown', () => {
   const summaries = sourceBetween('function hostBookingItemsSummaryHtml', 'async function refreshBookingItemViews');
   const stepThree = sourceBetween('<!-- ── STEP 3: YOUR DETAILS ── -->', '<!-- ── STEP 5: PAYMENT ── -->');
   assert.match(stepThree, /class="wiz-summary wiz-summary--booking"/, 'Step 3 must use one scoped booking summary card');
   assert.match(page, /\.wiz-summary--booking \.pbs-price-card\s*\{[^}]*border\s*:\s*0;[^}]*background\s*:\s*transparent;/s, 'the nested price shell must be visually flattened');
-  assert.match(summaries, /Booking fee/);
-  assert.match(summaries, /pbs-free-badge">Free/);
+  assert.match(summaries, /bookingFeeLineHtml\(items\)/);
+  assert.match(page, /included \? 'Included' : 'Free'/);
   assert.match(summaries, /Booking total/);
   assert.match(summaries, />Total</);
   assert.doesNotMatch(summaries, /Final booking total|Final total|Live total/i);
@@ -360,7 +361,7 @@ test('player summary and confirmation show the fee-free all-in price only', () =
   const confirmation = sourceBetween('<section class="inv-payment-card', '</section>');
   assert.match(confirmation, /inv-fee-free/);
   assert.match(confirmation, /Booking fee/);
-  assert.match(confirmation, />Free</);
+  assert.match(confirmation, /id="iBookingFee"/);
   assert.match(confirmation, /id="iRentalBreakdown"/);
 
   const submission = sourceBetween('async function submitBooking(e)', 'function resetForm');
@@ -387,11 +388,11 @@ test('stored bookings keep their immutable total and fee snapshot', () => {
   assert.doesNotMatch(source, /total:\s*courtFee \+ serviceFee/);
 });
 
-test('pricing surfaces never present the internal allocation as an add-on', () => {
+test('pricing surfaces use the configurable fee line', () => {
   const slotPricing = sourceBetween('function allInSlotRate', 'function activeHostSession');
   const summaries = sourceBetween('function hostBookingItemsSummaryHtml', 'async function refreshBookingItemViews');
   assert.doesNotMatch(slotPricing, /Final Prices|Live Total|csl-final/i);
   assert.doesNotMatch(summaries, /Final booking total|Final total|Live total/i);
-  assert.match(summaries, /Booking fee/);
-  assert.match(summaries, /pbs-free-badge">Free/);
+  assert.match(summaries, /bookingFeeLineHtml\(items\)/);
+  assert.match(page, /included \? 'Included' : 'Free'/);
 });
