@@ -46,7 +46,7 @@ test('guest management UI is read-only, bounded, and never stores or links the e
 test('public navigation and confirmation expose Manage booking without putting email in a URL', () => {
   const index = read('index.html');
   assert.match(index, /class="nav-manage-link guest-manage-link" href="manage-booking\.html"/);
-  assert.match(index, /Already booked\? <strong>Manage booking<\/strong>/);
+  assert.match(index, /<a class="pr-splash-manage"[^>]*href="manage-booking\.html"[^>]*>[\s\S]*?Manage booking[\s\S]*?<\/a>/);
   assert.match(index, /<li><a href="manage-booking\.html">Manage booking<\/a><\/li>/);
   assert.match(index, /manage-booking\.html#ref=\$\{encodeURIComponent\(bookingRef\)\}/);
   assert.doesNotMatch(index, /manage-booking\.html\?[^"'\s]*email=/i);

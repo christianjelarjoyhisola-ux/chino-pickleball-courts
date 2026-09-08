@@ -23,6 +23,7 @@ The date fallback `2026-01-01` is an internal lower bound, not an advertised ope
 
 - Court photograph: `assets/chino-courts.png`
 - Official logo: `logochino.jpg` (owner-supplied original)
+- Welcome-screen logo: `assets/chino-logo-transparent.png` (clean transparent cutout of the original, optimized for web)
 - Shared theme: `brand-theme.css`
 - Core palette: court blue `#3E79B5`, charcoal `#17222C`, concrete `#DCE2E5`
 

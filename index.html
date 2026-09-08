@@ -3471,7 +3471,7 @@ body.host-mode .courts { padding-bottom:140px; }
 @media(prefers-reduced-motion:reduce) { .host-balance-progress::after { animation:none; width:100%; background:var(--lime); } }
 
 </style>
-<link rel="stylesheet" href="brand-theme.css?v=20260909-official-logo-v1">
+<link rel="stylesheet" href="brand-theme.css?v=20260908-premium-welcome-v2">
 </head>
 <body class="dark">
 <script>
@@ -3588,28 +3588,30 @@ try {
 
 <!-- SPLASH SCREEN -->
 <div id="splashScreen" onclick="handleSplashBackgroundTap(event)">
-<div class="pr-splash-content">
-    <div class="chino-splash-brand">
-      <img class="chino-splash-logo" src="logochino.jpg" alt="CHINO Pickleball Courts official logo" width="104" height="104" fetchpriority="high">
-      <div class="pr-splash-location">Welcome to the courts</div>
+  <div class="pr-splash-content">
+    <div class="chino-splash-intro">
+      <p class="chino-splash-tagline">Good games. Great company.</p>
+      <p class="chino-splash-welcome">Your next game starts here</p>
     </div>
-    <h1 class="pr-splash-title" aria-label="CHINO Pickleball Courts"><span class="pr-splash-title-word pr-splash-title-rage">CHINO</span></h1>
-    <div class="pr-splash-sport">Pickleball Courts</div>
     <div class="pr-splash-rule" aria-hidden="true"></div>
-    <p class="pr-splash-copy">Good games. Great company.<br>Make time for your next match.</p>
+    <img class="chino-splash-logo" src="assets/chino-logo-transparent.png" alt="CHINO Pickleball Courts official logo" width="260" height="260" fetchpriority="high">
+    <h1 class="pr-splash-title" aria-label="CHINO Pickleball Courts"><span class="pr-splash-title-word pr-splash-title-rage">CHINO</span><span class="pr-splash-sport">Pickleball Courts</span></h1>
+    <p class="pr-splash-location" id="chinoSplashAddress" hidden></p>
     <audio id="splashWelcomeMusic" src="splash-music.mp3" preload="auto" autoplay loop playsinline aria-hidden="true" onplay="this.volume=Math.min(this.volume,0.52)"></audio>
-    <button id="splashSoundToggle" class="pr-splash-sound" type="button" aria-label="Play welcome music" aria-pressed="false" onclick="event.stopPropagation();toggleSplashSound()">
-      <span class="pr-splash-sound-bars" aria-hidden="true"><i></i><i></i><i></i></span>
-      <span class="pr-splash-sound-label">Play music</span>
-    </button>
     <button class="pr-splash-enter" type="button" onclick="event.stopPropagation();dismissSplashAndBook()">
-      <span class="pr-splash-enter-label">Book Now</span>
-      <span class="pr-splash-enter-arrow" aria-hidden="true">&rarr;</span>
+      <span class="pr-splash-enter-label">Tap to book</span>
     </button>
+    <p class="pr-splash-copy">Choose your court and time, then complete your booking.</p>
+    <div class="chino-splash-utilities">
+      <button id="splashSoundToggle" class="pr-splash-sound" type="button" aria-label="Play welcome music" aria-pressed="false" onclick="event.stopPropagation();toggleSplashSound()">
+        <span class="pr-splash-sound-bars" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="pr-splash-sound-label">Play music</span>
+      </button>
+      <a class="pr-splash-manage" href="manage-booking.html" aria-label="Already booked? Manage your booking" onclick="event.stopPropagation()"><strong>Manage booking</strong> <span aria-hidden="true">&rarr;</span></a>
+    </div>
     <p class="pr-splash-offer" role="note">NO BOOKING FEES</p>
-    <a class="pr-splash-manage" href="manage-booking.html" onclick="event.stopPropagation()">Already booked? <strong>Manage booking</strong> <span aria-hidden="true">&rarr;</span></a>
   </div>
-  <div class="pr-splash-footer">Court booking &nbsp;&middot;&nbsp; Open play &nbsp;&middot;&nbsp; Community</div>
+  <div class="pr-splash-footer"><span>CHINO Pickleball Courts</span><span class="chino-footer-divider" aria-hidden="true">&middot;</span><span>Your court. Your community.</span></div>
 </div>
 
 <!-- NAVBAR -->
@@ -5951,6 +5953,10 @@ function applyVenueDetails(settings = {}) {
   if ($('venueAddress')) {
     $('venueAddress').textContent = address;
     $('venueAddress').hidden = !address;
+  }
+  if ($('chinoSplashAddress')) {
+    $('chinoSplashAddress').textContent = address;
+    $('chinoSplashAddress').hidden = !address;
   }
   if ($('venuePhoneRow')) $('venuePhoneRow').hidden = !dialNumber;
   if ($('venuePhoneLink')) {
