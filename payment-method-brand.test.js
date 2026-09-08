@@ -14,7 +14,7 @@ function paymentFunction(name) {
 test('all public payment choices expose focus, selection and keyboard activation', () => {
   const page = read('index.html');
   const choices = [...page.matchAll(/<div class="pay-opt(?:"| op-pay-opt)[^>]*>/g)].map(match => match[0]);
-  assert.equal(choices.length, 16);
+  assert.equal(choices.length, 18);
   for (const choice of choices) {
     assert.match(choice, /role="button"/);
     assert.match(choice, /tabindex="0"/);
@@ -127,7 +127,7 @@ test('player and owner payment surfaces use the shared local brand system', () =
 
   for (const source of [page, admin]) {
     assert.match(source, /payment-method-brand\.css\?v=20260901-payment-icons-v2/);
-    assert.match(source, /payment-method-brand\.js\?v=20260901-payment-icons-v2/);
+    assert.match(source, /payment-method-brand\.js\?v=20260909-security-bank/);
     assert.doesNotMatch(source, /<img[^>]+src="https?:\/\/[^">]+"[^>]+payment-method/i);
   }
 
@@ -139,6 +139,7 @@ test('player and owner payment surfaces use the shared local brand system', () =
     Gotyme: 'gotyme.png',
     Maribank: 'maribank.png',
     Pnb: 'pnb.png',
+    Securitybank: 'security-bank.svg',
     Cash: 'cash.svg',
   };
   for (const [idSuffix, filename] of Object.entries(pickerAssets)) {

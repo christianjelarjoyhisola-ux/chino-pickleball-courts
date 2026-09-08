@@ -191,6 +191,7 @@
       gotyme: "GoTyme",
       maribank: "MariBank",
       pnb: "PNB",
+      securitybank: "Security Bank",
       cash: "Cash",
     };
     return labels[key] || (key ? key.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()) : "Not available");

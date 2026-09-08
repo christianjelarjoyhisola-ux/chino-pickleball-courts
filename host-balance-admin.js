@@ -306,7 +306,7 @@
     const key = String(value || '').toLowerCase();
     return ({
       gcash: 'GCash', bdopay: 'BDO Pay', maya: 'Maya', bpi: 'BPI',
-      gotyme: 'GoTyme → GCash', maribank: 'MariBank → GCash', pnb: 'PNB', cash: 'Cash',
+      gotyme: 'GoTyme → GCash', maribank: 'MariBank → GCash', pnb: 'PNB', securitybank: 'Security Bank', cash: 'Cash',
     })[key] || value || '—';
   }
 

@@ -48,6 +48,7 @@ const ALLOWED_PROVIDERS = new Set([
   "gotyme",
   "maribank",
   "pnb",
+  "securitybank",
 ]);
 
 function json(body: unknown, status = 200): Response {

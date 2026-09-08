@@ -85,7 +85,8 @@ type PaymentProvider =
   | "bpi"
   | "gotyme"
   | "maribank"
-  | "pnb";
+  | "pnb"
+  | "securitybank";
 type OcrProvider = "google_vision" | "none";
 
 type OcrResult = {
@@ -637,7 +638,7 @@ function paymentMethodProvider(raw: unknown): PaymentProvider | null {
   if (
     method === "gcash" || method === "bdopay" || method === "maya" ||
     method === "bpi" || method === "gotyme" || method === "maribank" ||
-    method === "pnb"
+    method === "pnb" || method === "securitybank"
   ) {
     return method as PaymentProvider;
   }
@@ -689,6 +690,9 @@ function expectedMerchantForProvider(
       name: settings.gcash_merchant_name ||
         settings.payment_merchant_name || "",
     };
+  }
+  if (provider === "securitybank") {
+    return { number: settings.securitybank_merchant_number || "", name: settings.securitybank_merchant_name || "" };
   }
   if (provider === "pnb") {
     return {

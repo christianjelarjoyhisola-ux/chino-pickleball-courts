@@ -15,6 +15,7 @@ const DIGITAL_METHODS = new Set([
   "gotyme",
   "maribank",
   "pnb",
+  "securitybank",
 ]);
 
 function json(body: unknown, status = 200): Response {

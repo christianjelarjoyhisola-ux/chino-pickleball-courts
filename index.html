@@ -25,7 +25,7 @@
 <meta name="twitter:image:alt" content="CHINO Pickleball Courts — Your court. Your community." />
 <link rel="icon" type="image/jpeg" href="logochino.jpg">
 <link rel="stylesheet" href="payment-method-brand.css?v=20260901-payment-icons-v2" />
-<script src="payment-method-brand.js?v=20260901-payment-icons-v2"></script>
+<script src="payment-method-brand.js?v=20260909-security-bank"></script>
 <script src="booking-balance.js?v=20260831-payment-state-v7"></script>
 <script src="host-balance-payment.js?v=20260831-payment-state-v7"></script>
 <script src="court-pricing.js?v=20260908-court-promo-v1"></script>
@@ -3905,6 +3905,11 @@ try {
                 <div class="pay-lb">PNB</div>
                 <div class="pay-sub">Scan QR · enter ref #</div>
               </div>
+              <div class="pay-opt" id="payOptSecuritybank" data-m="securitybank" role="button" tabindex="0" aria-pressed="false" onkeydown="paymentOptionKeydown(event)" onclick="pickPay('securitybank')">
+                <div class="pay-ic pm-brand-mark pm-brand-mark--picker pm-brand-mark--securitybank" data-payment-method="securitybank" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/security-bank.svg" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></div>
+                <div class="pay-lb">Security Bank</div>
+                <div class="pay-sub">Bank transfer</div>
+              </div>
               <div class="pay-opt" id="payOptCash" data-m="cash" role="button" tabindex="0" aria-pressed="false" onkeydown="paymentOptionKeydown(event)" onclick="pickPay('cash')">
                 <div class="pay-ic pm-brand-mark pm-brand-mark--picker pm-brand-mark--cash" data-payment-method="cash" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/cash.svg" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></div>
                 <div class="pay-lb">Cash</div>
@@ -3995,6 +4000,16 @@ try {
             </div>
           </div>
 
+          <div class="gcash bpay-card" id="securitybankBox">
+            <div class="gc-header"><span class="pm-brand-mark pm-brand-mark--small pm-brand-mark--securitybank" data-payment-method="securitybank" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/security-bank.svg" width="32" height="32" alt="" decoding="async" /></span><span class="gc-header-lbl">Security Bank Transfer</span></div>
+            <div class="bpay-card-head"><div class="bpay-amount-due"><span>Amount to pay</span><strong id="sbDownAmt">--</strong></div></div>
+            <div class="bpay-recipient-info" style="padding:18px 20px">
+              <div class="bpay-send-title">ACCOUNT NUMBER</div>
+              <div class="gc-num-row" style="justify-content:flex-start;flex-wrap:wrap"><div class="gc-num" id="sbMerchantNumber" style="font-size:1.1rem;overflow-wrap:anywhere">—</div><button type="button" class="gc-copy-btn" onclick="copyPaymentNumber('securitybank')">Copy</button></div>
+              <div class="bpay-send-title" style="margin-top:14px">ACCOUNT NAME</div><div class="bpay-send-name" id="sbMerchantName">—</div>
+            </div>
+            <div class="bpay-help" style="padding:0 20px 18px">Transfer the exact amount to this Security Bank account. Enter your transaction reference and upload the successful receipt below. Your booking stays pending until the owner reviews payment.</div>
+          </div>
           <!-- PNB section -->
           <div class="gcash bpay-card" id="pnbBox">
             <div class="gc-header">
@@ -4729,7 +4744,7 @@ function hostSessionPaymentHtml(session) {
     </div>
     <div class="fg">
       <label class="fl" for="hsPaymentRef">${_hostSessionPayMethod === 'bpi' ? 'BPI Confirmation No.' : `${label} Reference Number`}</label>
-      <input type="text" class="fi" id="hsPaymentRef" placeholder="${_hostSessionPayMethod === 'gcash' ? 'e.g. 1234567890123' : _hostSessionPayMethod === 'bdopay' ? 'e.g. BN-20260627-91811670' : _hostSessionPayMethod === 'maya' ? 'e.g. B6DC F633 F08C' : _hostSessionPayMethod === 'bpi' ? 'e.g. 1783397488347' : 'Enter the complete transaction reference'}" maxlength="${paymentRefMaxLength(_hostSessionPayMethod)}" inputmode="${['bdopay', 'maya', 'gotyme', 'maribank', 'pnb'].includes(_hostSessionPayMethod) ? 'text' : 'numeric'}" oninput="syncHostSessionRef()" />
+      <input type="text" class="fi" id="hsPaymentRef" placeholder="${_hostSessionPayMethod === 'gcash' ? 'e.g. 1234567890123' : _hostSessionPayMethod === 'bdopay' ? 'e.g. BN-20260627-91811670' : _hostSessionPayMethod === 'maya' ? 'e.g. B6DC F633 F08C' : _hostSessionPayMethod === 'bpi' ? 'e.g. 1783397488347' : 'Enter the complete transaction reference'}" maxlength="${paymentRefMaxLength(_hostSessionPayMethod)}" inputmode="${['bdopay', 'maya', 'gotyme', 'maribank', 'pnb', 'securitybank'].includes(_hostSessionPayMethod) ? 'text' : 'numeric'}" oninput="syncHostSessionRef()" />
       <div id="hsRefHelp" style="font-size:.7rem;color:var(--muted);margin-top:4px">${paymentRefHelpText(_hostSessionPayMethod)}</div>
     </div>
     <div class="fg">
@@ -5559,9 +5574,10 @@ let paymentReceiverSettings = {
   gotyme: { number: '', name: '', qrImage: '' },
   maribank: { number: '', name: '', qrImage: '' },
   pnb: { number: '', name: '', qrImage: '' },
+  securitybank: { number: '', name: '', qrImage: '' },
 };
-let paymentMethods = { cash: false, gcash: false, bdopay: false, maya: false, bpi: false, gotyme: false, maribank: false, pnb: false };
-const DIGITAL_PAYMENT_METHODS = ['gcash', 'bdopay', 'maya', 'bpi', 'gotyme', 'maribank', 'pnb'];
+let paymentMethods = { cash: false, gcash: false, bdopay: false, maya: false, bpi: false, gotyme: false, maribank: false, pnb: false, securitybank: false };
+const DIGITAL_PAYMENT_METHODS = ['gcash', 'bdopay', 'maya', 'bpi', 'gotyme', 'maribank', 'pnb', 'securitybank'];
 const ALL_PAYMENT_METHODS = [...DIGITAL_PAYMENT_METHODS, 'cash'];
 
 function isDigitalPayMethod(method) {
@@ -5569,7 +5585,7 @@ function isDigitalPayMethod(method) {
 }
 
 function paymentMethodName(method) {
-  return ({ gcash: 'GCash', bdopay: 'BDO Pay', maya: 'Maya', bpi: 'BPI', gotyme: 'GoTyme → GCash', maribank: 'MariBank → GCash', pnb: 'PNB', cash: 'Cash' }[String(method || '').toLowerCase()] || 'Payment');
+  return ({ gcash: 'GCash', bdopay: 'BDO Pay', maya: 'Maya', bpi: 'BPI', gotyme: 'GoTyme → GCash', maribank: 'MariBank → GCash', pnb: 'PNB', securitybank: 'Security Bank', cash: 'Cash' }[String(method || '').toLowerCase()] || 'Payment');
 }
 
 function paymentMethodBrandMarkHtml(method, modifier = 'pm-brand-mark--inline') {
@@ -5988,6 +6004,7 @@ function applyPaymentSettings(settings) {
       name: settings.gcash_merchant_name || sharedMerchantName,
       qrImage: settings.gcash_qr_image || '',
     },
+    securitybank: { number: settings.securitybank_merchant_number || '', name: settings.securitybank_merchant_name || '', qrImage: '' },
     pnb: {
       number: settings.pnb_merchant_number || '',
       name: settings.pnb_merchant_name || '',
@@ -6016,6 +6033,9 @@ function applyPaymentSettings(settings) {
   paymentMethods.bpi = settings.payment_method_bpi === '1' && receiverReady('bpi');
   paymentMethods.gotyme = settings.payment_method_gotyme === '1' && receiverReady('gotyme');
   paymentMethods.maribank = settings.payment_method_maribank === '1' && receiverReady('maribank');
+  paymentMethods.securitybank = settings.payment_method_securitybank === '1' && !!paymentReceiverSettings.securitybank.name.trim() && !!paymentReceiverSettings.securitybank.number.trim();
+  $('sbMerchantNumber').textContent = paymentReceiverSettings.securitybank.number;
+  $('sbMerchantName').textContent = paymentReceiverSettings.securitybank.name;
   paymentMethods.pnb = settings.payment_method_pnb === '1' && receiverReady('pnb');
   paymentAcceptanceMode = 'full_payment_only';
 
@@ -6050,6 +6070,7 @@ function applyPaymentMethodVisibility() {
   if ($('payOptBpi')) $('payOptBpi').style.display = paymentMethods.bpi ? '' : 'none';
   if ($('payOptGotyme')) $('payOptGotyme').style.display = paymentMethods.gotyme ? '' : 'none';
   if ($('payOptMaribank')) $('payOptMaribank').style.display = paymentMethods.maribank ? '' : 'none';
+  $('payOptSecuritybank').style.display = paymentMethods.securitybank ? '' : 'none';
   if ($('payOptPnb')) $('payOptPnb').style.display = paymentMethods.pnb ? '' : 'none';
 
   const hasAny = ALL_PAYMENT_METHODS.some(m => paymentMethods[m]);
@@ -6065,7 +6086,7 @@ function applyPaymentMethodVisibility() {
     $('bPay').value = '';
     document.querySelectorAll('.bpay-methods .pay-opt').forEach(el => { el.classList.remove('on'); el.setAttribute('aria-pressed', 'false'); });
     $('gcashBox').classList.remove('show');
-    $('pnbBox').classList.remove('show');
+    $('pnbBox').classList.remove('show'); $('securitybankBox').classList.remove('show');
     const refWrap = $('gcashRefWrap');
     if (refWrap) refWrap.style.display = 'none';
     $('cashNote').style.display = 'none';
@@ -6086,7 +6107,7 @@ function preparePaymentStep() {
     return;
   }
 
-  ['gcashBox', 'pnbBox'].forEach(id => $(id)?.classList.remove('show'));
+  ['gcashBox', 'pnbBox', 'securitybankBox'].forEach(id => $(id)?.classList.remove('show'));
   const refWrap = $('gcashRefWrap');
   if (refWrap) refWrap.style.display = 'none';
   if ($('cashNote')) $('cashNote').style.display = 'none';
@@ -8089,6 +8110,7 @@ function updatePriceLegacy() {
   // Update payment amount display in QR boxes
   if ($('gcDownAmt'))   $('gcDownAmt').textContent   = fmt(payAmt);
   if ($('pnDownAmt'))   $('pnDownAmt').textContent   = fmt(payAmt);
+  if ($('sbDownAmt')) $('sbDownAmt').textContent = fmt(payAmt);
   if ($('bStepPayAmtMethod')) $('bStepPayAmtMethod').textContent = fmt(payAmt);
   if ($('bStepPayAmt')) $('bStepPayAmt').textContent = fmt(payAmt);
 
@@ -8126,6 +8148,7 @@ function updatePrice() {
 
   if ($('gcDownAmt'))   $('gcDownAmt').textContent   = fmt(payAmt);
   if ($('pnDownAmt'))   $('pnDownAmt').textContent   = fmt(payAmt);
+  if ($('sbDownAmt')) $('sbDownAmt').textContent = fmt(payAmt);
   if ($('bStepPayAmtMethod')) $('bStepPayAmtMethod').textContent = fmt(payAmt);
   if ($('bStepPayAmt')) $('bStepPayAmt').textContent = fmt(payAmt);
 
@@ -8185,6 +8208,7 @@ function pickPay(m) {
       gotyme: 'Pay from GoTyme to the GCash recipient shown. Clean receipts can confirm automatically; anything doubtful stays pending for owner review.',
       maribank: 'Pay from MariBank to the GCash recipient shown. Clean receipts can confirm automatically; anything doubtful stays pending for owner review.',
       pnb: 'Use the configured PNB payment details. Your receipt stays pending for court-owner review.',
+      securitybank: 'Use the configured Security Bank payment details. Your receipt stays pending for court-owner review.',
       cash: 'Cash bookings are paid at the front desk and confirmed by staff.',
     };
     methodNote.innerHTML = Array.isArray(notes[m]) ? notes[m].map(esc).join('<br>') : esc(notes[m] || '');
@@ -8200,6 +8224,7 @@ function pickPay(m) {
   syncGcashSharedPanel(m);
   $('gcashBox').classList.toggle('show',  ['gcash', 'bdopay', 'maya', 'bpi', 'gotyme', 'maribank'].includes(m));
   $('pnbBox').classList.toggle('show',    m === 'pnb');
+  $('securitybankBox').classList.toggle('show', m === 'securitybank');
   const refWrap = $('gcashRefWrap');
   if (refWrap) refWrap.style.display = digitalPay ? '' : 'none';
   $('cashNote').style.display = m === 'cash' ? '' : 'none';
@@ -8278,6 +8303,7 @@ function copyPaymentNumber(method = 'gcash') {
     gotyme: { id: 'gcMerchantNumber', label: 'GCash recipient for GoTyme' },
     maribank: { id: 'gcMerchantNumber', label: 'GCash recipient for MariBank' },
     pnb: { id: 'pnMerchantNumber', label: 'PNB' },
+    securitybank: { id: 'sbMerchantNumber', label: 'Security Bank' },
   };
   const meta = map[method] || map.gcash;
   const raw = ($(meta.id)?.textContent || '').trim();
@@ -8315,7 +8341,7 @@ function normalizePaymentRef(value, method) {
     return compact.match(/.{1,4}/g)?.join(' ') || '';
   }
   if (method === 'bpi') return raw.replace(/\D/g, '').slice(0, paymentRefMaxLength(method));
-  if (['gotyme', 'maribank', 'pnb'].includes(method)) {
+  if (['gotyme', 'maribank', 'pnb', 'securitybank'].includes(method)) {
     return raw.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, paymentRefMaxLength(method));
   }
   return raw.replace(/\D/g, '').slice(0, paymentRefMaxLength(method));
@@ -8352,7 +8378,7 @@ function syncBookingRefUi(method = $('bPay')?.value || 'gcash') {
   if (input) {
     input.maxLength = paymentRefMaxLength(method);
     input.placeholder = method === 'gcash' ? 'e.g. 1234567890123' : method === 'bdopay' ? 'e.g. BN-20260627-91811670' : method === 'maya' ? 'e.g. B6DC F633 F08C' : method === 'bpi' ? 'e.g. 1783397488347' : `Enter ${method === 'gotyme' ? 'GoTyme' : method === 'maribank' ? 'MariBank' : 'payment'} reference`;
-    input.inputMode = ['bdopay', 'maya', 'gotyme', 'maribank', 'pnb'].includes(method) ? 'text' : 'numeric';
+    input.inputMode = ['bdopay', 'maya', 'gotyme', 'maribank', 'pnb', 'securitybank'].includes(method) ? 'text' : 'numeric';
     const clean = normalizePaymentRef(input.value, method);
     if (input.value !== clean) input.value = clean;
   }
@@ -9501,7 +9527,7 @@ function resetForm(options = {}) {
     m.textContent = 'Select a date above to see real-time availability.';
   }
   $('gcashBox').classList.remove('show');
-  $('pnbBox').classList.remove('show');
+  $('pnbBox').classList.remove('show'); $('securitybankBox').classList.remove('show');
   const refWrap2 = $('gcashRefWrap');
   if (refWrap2) refWrap2.style.display = 'none';
   $('cashNote').style.display = 'none';
@@ -10191,7 +10217,7 @@ function hostBalancePaymentEnabledMethods() {
 }
 
 function hostBalancePaymentMethodIcon(method) {
-  return ({ gcash: 'GC', bdopay: 'BDO', maya: 'M', bpi: 'BPI', gotyme: 'GT', maribank: 'MB', pnb: 'PNB' }[method] || 'Pay');
+  return ({ gcash: 'GC', bdopay: 'BDO', maya: 'M', bpi: 'BPI', gotyme: 'GT', maribank: 'MB', pnb: 'PNB', securitybank: 'SB' }[method] || 'Pay');
 }
 
 function hostBalancePaymentReferencePlaceholder(method) {
@@ -10213,6 +10239,7 @@ function hostBalancePaymentMethodNote(method) {
     gotyme: 'Pay from GoTyme to the GCash recipient and enter the complete transaction reference.',
     maribank: 'Pay from MariBank to the GCash recipient and enter the complete transaction reference.',
     pnb: 'Use the configured PNB payment details and upload the complete successful receipt.',
+    securitybank: 'Use the configured Security Bank payment details and upload the complete successful receipt.',
   })[method] || 'Use a new transaction and upload its complete successful receipt.';
 }
 
@@ -11175,6 +11202,7 @@ async function openPlaySignup(courtId, date, h, courtName) {
     paymentMethods.gotyme  ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'gotyme' ? 'on' : ''}" data-m="gotyme" role="button" tabindex="0" aria-pressed="${defaultPayMethod === 'gotyme' ? 'true' : 'false'}" onkeydown="paymentOptionKeydown(event)"  onclick="opPickPay('gotyme')">${paymentMethodBrandMarkHtml('gotyme', 'po-ico pm-brand-mark--compact') || '<span class="po-ico">GT</span>'}<span class="po-lbl">GoTyme → GCash</span><span class="po-sub">Pay from GoTyme</span></div>` : '',
     paymentMethods.maribank ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'maribank' ? 'on' : ''}" data-m="maribank" role="button" tabindex="0" aria-pressed="${defaultPayMethod === 'maribank' ? 'true' : 'false'}" onkeydown="paymentOptionKeydown(event)" onclick="opPickPay('maribank')">${paymentMethodBrandMarkHtml('maribank', 'po-ico pm-brand-mark--compact') || '<span class="po-ico">MB</span>'}<span class="po-lbl">MariBank → GCash</span><span class="po-sub">Pay from MariBank</span></div>` : '',
     paymentMethods.pnb     ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'pnb' ? 'on' : ''}" data-m="pnb" role="button" tabindex="0" aria-pressed="${defaultPayMethod === 'pnb' ? 'true' : 'false'}" onkeydown="paymentOptionKeydown(event)"     onclick="opPickPay('pnb')">${paymentMethodBrandMarkHtml('pnb', 'po-ico pm-brand-mark--compact')}<span class="po-lbl">PNB</span><span class="po-sub">Scan QR · enter ref #</span></div>` : '',
+    paymentMethods.securitybank     ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'securitybank' ? 'on' : ''}" data-m="securitybank" role="button" tabindex="0" aria-pressed="${defaultPayMethod === 'securitybank' ? 'true' : 'false'}" onkeydown="paymentOptionKeydown(event)"     onclick="opPickPay('securitybank')">${paymentMethodBrandMarkHtml('securitybank', 'po-ico pm-brand-mark--compact')}<span class="po-lbl">Security Bank</span><span class="po-sub">Bank transfer</span></div>` : '',
     paymentMethods.cash    ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'cash' ? 'on' : ''}" data-m="cash" role="button" tabindex="0" aria-pressed="${defaultPayMethod === 'cash' ? 'true' : 'false'}" onkeydown="paymentOptionKeydown(event)"    onclick="opPickPay('cash')">${paymentMethodBrandMarkHtml('cash', 'po-ico pm-brand-mark--compact')}<span class="po-lbl">Cash</span><span class="po-sub">Pay at front desk</span></div>` : '',
   ].filter(Boolean);
   if (paymentMethods.bpi) {
@@ -11282,7 +11310,7 @@ function opPickPay(method) {
         <label>${method === 'bpi' ? 'BPI Confirmation No. *' : 'Reference # (after sending) *'}</label>
         <span id="opRefCount" style="font-size:.65rem;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap">${refCountText}</span>
       </div>
-      <input type="text" class="fi" id="opGcashRef" placeholder="${method === 'gcash' ? 'e.g. 1234567890123' : method === 'bdopay' ? 'e.g. BN-20260627-91811670' : method === 'maya' ? 'e.g. B6DC F633 F08C' : method === 'bpi' ? 'e.g. 1783397488347' : 'Enter the complete transaction reference'}" inputmode="${['bdopay', 'maya', 'gotyme', 'maribank', 'pnb'].includes(method) ? 'text' : 'numeric'}"
+      <input type="text" class="fi" id="opGcashRef" placeholder="${method === 'gcash' ? 'e.g. 1234567890123' : method === 'bdopay' ? 'e.g. BN-20260627-91811670' : method === 'maya' ? 'e.g. B6DC F633 F08C' : method === 'bpi' ? 'e.g. 1783397488347' : 'Enter the complete transaction reference'}" inputmode="${['bdopay', 'maya', 'gotyme', 'maribank', 'pnb', 'securitybank'].includes(method) ? 'text' : 'numeric'}"
         maxlength="${paymentRefMaxLength(method)}"
         style="margin:0;font-family:monospace;letter-spacing:1px"
         oninput="syncOpenPlayRefInput('${method}')"
@@ -11298,6 +11326,7 @@ function opPickPay(method) {
       gotyme: { icon: paymentMethodBrandMarkHtml('gotyme', 'pm-brand-mark--small') || 'GT', label: 'GoTyme → GCash', receiver: paymentReceiverSettings.gcash },
       maribank: { icon: paymentMethodBrandMarkHtml('maribank', 'pm-brand-mark--small') || 'MB', label: 'MariBank → GCash', receiver: paymentReceiverSettings.gcash },
       pnb: { icon: paymentMethodBrandMarkHtml('pnb', 'pm-brand-mark--small'), label: 'PNB', receiver: paymentReceiverSettings.pnb },
+      securitybank: { icon: paymentMethodBrandMarkHtml('securitybank', 'pm-brand-mark--small'), label: 'Security Bank', receiver: paymentReceiverSettings.securitybank },
     }[method];
     const receiver = meta.receiver;
     const methodWarning = method === 'bdopay'
@@ -11308,8 +11337,8 @@ function opPickPay(method) {
         ? 'Pay from BPI to this GCash/G-Xchange recipient. Enter the BPI Confirmation No.; the receipt stays pending for court-owner review.'
       : method === 'gcash'
         ? 'Pay from GCash to this GCash recipient. Receipts that pass every automated check confirm automatically; otherwise they stay pending for court-owner review.'
-        : method === 'pnb'
-          ? 'Use the configured PNB recipient. Your receipt stays pending for court-owner review.'
+        : ['pnb', 'securitybank'].includes(method)
+          ? `Use the configured ${meta.label} recipient. Your receipt stays pending for court-owner review.`
           : `Pay using ${meta.label}. Receipts that pass every automated check confirm automatically; otherwise they stay pending for court-owner review.`;
     const displayReceiverName = paymentReceiverKey(method) === 'gcash'
       ? (maskGcashOwnerName(receiver.name) || 'Court owner account')
@@ -11317,7 +11346,7 @@ function opPickPay(method) {
     const copyValue = (receiver.number || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     const qrDisplay = receiver.qrImage
       ? `<img class="op-qr-img qr-clickable" src="${receiver.qrImage}" alt="${meta.label} QR" onclick="openQrZoomFromImg(this,'${meta.label} QR')" />`
-      : `<div class="op-qr-placeholder">📸<br>No QR</div>`;
+      : method === 'securitybank' ? meta.icon : `<div class="op-qr-placeholder">📸<br>No QR</div>`;
     const dpControlsHtml = openPlayDpControlsHtml(opTotal);
     info.innerHTML = `
       <div class="op-payment-combo">
@@ -11326,7 +11355,7 @@ function opPickPay(method) {
           <div class="op-send-panel">
             <div class="op-send-title">${meta.icon} Send ${meta.label} Payment To</div>
             ${receiver.number ? `<div class="op-number-row">
-              <span class="op-number">${receiver.number}</span>
+              <span class="op-number">${esc(receiver.number)}</span>
               <button type="button" class="op-mini-btn" onclick="copyToClipboard('${copyValue}')">Copy</button>
             </div>` : ''}
             <div class="op-send-name">${esc(displayReceiverName)}</div>
@@ -11340,7 +11369,7 @@ function opPickPay(method) {
           <div>
             <div class="op-send-title">${meta.icon} Send ${meta.label} Payment To</div>
             ${receiver.number ? `<div class="op-number-row">
-              <span class="op-number">${receiver.number}</span>
+              <span class="op-number">${esc(receiver.number)}</span>
               <button type="button" class="op-mini-btn" onclick="copyToClipboard('${copyValue}')">📋 Copy</button>
             </div>` : ''}
             <div class="op-send-name">${esc(displayReceiverName)}</div>
@@ -11665,7 +11694,7 @@ async function submitOpenPlay() {
 }
 </script>
 <script src="supabase.min.js"></script>
-<script src="supabase-config.js?v=20260908-court-promo"></script>
+<script src="supabase-config.js?v=20260909-security-bank"></script>
 
 <!-- MOBILE STICKY BOOK NOW BAR -->
 <div id="mobileBookBar" class="mobile-book-bar" style="display:none">

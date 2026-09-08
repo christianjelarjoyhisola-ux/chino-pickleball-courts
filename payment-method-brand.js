@@ -9,6 +9,7 @@
     gotyme: 'assets/payment-methods/gotyme.png',
     maribank: 'assets/payment-methods/maribank.png',
     pnb: 'assets/payment-methods/pnb.png',
+    securitybank: 'assets/payment-methods/security-bank.svg',
     cash: 'assets/payment-methods/cash.svg',
   });
 
