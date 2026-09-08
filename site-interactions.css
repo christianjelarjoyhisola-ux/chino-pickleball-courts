@@ -3,7 +3,10 @@ html, body {
   touch-action: manipulation;
   overscroll-behavior: none;
 }
-html { overflow-x: clip; }
+/* Clip sideways overflow without turning body into a nested scroll container.
+   A full-height body with overflow-x:hidden traps wheel scroll when chaining
+   is disabled above. The document must remain the page's vertical scroller. */
+html, body { overflow-x: clip; }
 button, a, input, select, textarea, label, [role="button"],
 .bk-modal-body, .modal-body, #splashScreen {
   touch-action: manipulation;
