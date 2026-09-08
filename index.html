@@ -4003,6 +4003,7 @@ try {
           <div class="gcash bpay-card" id="securitybankBox">
             <div class="gc-header"><span class="pm-brand-mark pm-brand-mark--small pm-brand-mark--securitybank" data-payment-method="securitybank" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/security-bank.svg" width="32" height="32" alt="" decoding="async" /></span><span class="gc-header-lbl">Security Bank Transfer</span></div>
             <div class="bpay-card-head"><div class="bpay-amount-due"><span>Amount to pay</span><strong id="sbDownAmt">--</strong></div></div>
+            <div id="securitybankQrWrap" style="display:none;text-align:center;padding:18px 20px 0"><button type="button" class="btn btn-ghost" onclick="openQrZoomFromImg(document.getElementById('securitybankQrImg'),'Security Bank QR')" aria-label="Enlarge Security Bank payment QR code" style="padding:6px;background:#fff;border-radius:12px"><img id="securitybankQrImg" alt="Security Bank payment QR code" style="display:block;width:200px;max-width:100%;height:200px;object-fit:contain" /></button><div class="bpay-help">Tap QR to enlarge</div></div>
             <div class="bpay-recipient-info" style="padding:18px 20px">
               <div class="bpay-send-title">ACCOUNT NUMBER</div>
               <div class="gc-num-row" style="justify-content:flex-start;flex-wrap:wrap"><div class="gc-num" id="sbMerchantNumber" style="font-size:1.1rem;overflow-wrap:anywhere">—</div><button type="button" class="gc-copy-btn" onclick="copyPaymentNumber('securitybank')">Copy</button></div>
@@ -6004,7 +6005,7 @@ function applyPaymentSettings(settings) {
       name: settings.gcash_merchant_name || sharedMerchantName,
       qrImage: settings.gcash_qr_image || '',
     },
-    securitybank: { number: settings.securitybank_merchant_number || '', name: settings.securitybank_merchant_name || '', qrImage: '' },
+    securitybank: { number: settings.securitybank_merchant_number || '', name: settings.securitybank_merchant_name || '', qrImage: settings.securitybank_qr_image || '' },
     pnb: {
       number: settings.pnb_merchant_number || '',
       name: settings.pnb_merchant_name || '',
@@ -6036,6 +6037,9 @@ function applyPaymentSettings(settings) {
   paymentMethods.securitybank = settings.payment_method_securitybank === '1' && !!paymentReceiverSettings.securitybank.name.trim() && !!paymentReceiverSettings.securitybank.number.trim();
   $('sbMerchantNumber').textContent = paymentReceiverSettings.securitybank.number;
   $('sbMerchantName').textContent = paymentReceiverSettings.securitybank.name;
+  const securitybankQr = paymentReceiverSettings.securitybank.qrImage;
+  $('securitybankQrImg').src = securitybankQr;
+  $('securitybankQrWrap').style.display = securitybankQr ? '' : 'none';
   paymentMethods.pnb = settings.payment_method_pnb === '1' && receiverReady('pnb');
   paymentAcceptanceMode = 'full_payment_only';
 

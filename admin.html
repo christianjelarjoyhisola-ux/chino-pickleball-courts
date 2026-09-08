@@ -6413,6 +6413,16 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(45, 62, 79, .1
             <div class="fg" style="flex:1"><label class="fl" for="securitybankNumInput">Account number</label><input type="text" class="fi" id="securitybankNumInput" placeholder="Enter account number" inputmode="numeric" autocomplete="off" maxlength="40" /></div>
             <div class="fg" style="flex:1"><label class="fl" for="securitybankNameInput">Account name</label><input type="text" class="fi" id="securitybankNameInput" placeholder="Enter account name" autocomplete="off" maxlength="150" /></div>
           </div>
+          <div class="fg" style="margin:0 0 14px">
+            <label class="fl" for="securitybankQrFile">Security Bank QR code image</label>
+            <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap">
+              <div id="securitybankQrPreviewWrap" style="display:none">
+                <img id="securitybankQrPreview" alt="Security Bank QR preview" style="width:140px;height:140px;object-fit:contain;border-radius:10px;border:1px solid var(--border);background:#fff;padding:6px" />
+                <button type="button" class="btn btn-sm btn-ghost" onclick="removeQr('securitybank')" style="display:block;margin-top:8px">Remove QR</button>
+              </div>
+              <div><input type="file" class="fi" id="securitybankQrFile" accept="image/png,image/jpeg,image/webp" onchange="handleQrUpload('securitybank',event)" aria-describedby="securitybankQrHint" /><p id="securitybankQrHint" style="font-size:.74rem;color:var(--muted);line-height:1.5;margin:6px 0 0">Upload a clear PNG, JPG, or WebP, up to 5 MB. Saves automatically.</p></div>
+            </div>
+          </div>
           <p style="font-size:.78rem;line-height:1.6;color:var(--muted);margin:0">Customers transfer to this Security Bank account and upload a receipt. Review the payment before confirming the booking.</p>
         </div>
         <!-- PNB Section -->
@@ -14469,6 +14479,9 @@ async function renderPaymentSettings() {
     $('gcashQrPreview').src = gcashQr;
     $('gcashQrPreviewWrap').style.display = '';
   }
+  const securitybankQr = settings.securitybank_qr_image || '';
+  $('securitybankQrPreview').src = securitybankQr;
+  $('securitybankQrPreviewWrap').style.display = securitybankQr ? '' : 'none';
   const pnbQr = settings.pnb_qr_image || '';
   if (pnbQr && $('pnbQrPreview')) {
     $('pnbQrPreview').src = pnbQr;
@@ -15554,11 +15567,11 @@ async function removePlatformQr() {
 
 async function removeQr(type) {
   if (!Auth.can('payments', sess.role)) { toast('You do not have access to edit payment settings.', 'err'); return; }
-  if (!['gcash', 'pnb'].includes(type)) return;
-  const key = type === 'gcash' ? 'gcash_qr_image' : 'pnb_qr_image';
-  const previewId = type === 'gcash' ? 'gcashQrPreview' : 'pnbQrPreview';
-  const wrapId = type === 'gcash' ? 'gcashQrPreviewWrap' : 'pnbQrPreviewWrap';
-  const fileId = type === 'gcash' ? 'gcashQrFile' : 'pnbQrFile';
+  if (!['gcash', 'pnb', 'securitybank'].includes(type)) return;
+  const key = `${type}_qr_image`;
+  const previewId = `${type}QrPreview`;
+  const wrapId = `${type}QrPreviewWrap`;
+  const fileId = `${type}QrFile`;
   try {
     await DB.saveSetting(key, '');
     $(previewId).src = '';
@@ -15572,24 +15585,23 @@ async function removeQr(type) {
 
 function handleQrUpload(type, e) {
   if (!Auth.can('payments', sess.role)) { toast('You do not have access to edit payment settings.', 'err'); e.target.value = ''; return; }
-  if (!['gcash', 'pnb'].includes(type)) { e.target.value = ''; return; }
+  if (!['gcash', 'pnb', 'securitybank'].includes(type)) { e.target.value = ''; return; }
   const file = e.target.files[0];
   if (!file) return;
+  if (type === 'securitybank' && (!['image/png','image/jpeg','image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024)) {
+    toast('Choose a PNG, JPG, or WebP QR image up to 5 MB.', 'err'); e.target.value = ''; return;
+  }
   const reader = new FileReader();
+  reader.onerror = () => { toast('Unable to read this image. Please try again.', 'err'); e.target.value = ''; };
   reader.onload = async ev => {
     const data = ev.target.result;
-    const key = type === 'gcash' ? 'gcash_qr_image' : 'pnb_qr_image';
-    if (type === 'gcash') {
-      $('gcashQrPreview').src = data;
-      $('gcashQrPreviewWrap').style.display = '';
-    } else {
-      $('pnbQrPreview').src = data;
-      $('pnbQrPreviewWrap').style.display = '';
-    }
+    const key = `${type}_qr_image`;
     // Auto-save to DB
     try {
       await DB.saveSetting(key, data);
-      toast(`✅ ${type.toUpperCase()} QR saved! Customers will see it instantly.`, 'ok');
+      $(`${type}QrPreview`).src = data;
+      $(`${type}QrPreviewWrap`).style.display = '';
+      toast(`✅ ${type === 'securitybank' ? 'Security Bank' : type.toUpperCase()} QR saved! Customers will see it instantly.`, 'ok');
     } catch (err) {
       console.error('Failed to auto-save QR:', err);
       toast('Failed to save QR code. Please try again.', 'err');
