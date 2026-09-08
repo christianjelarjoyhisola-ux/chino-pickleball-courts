@@ -157,7 +157,7 @@ body.dark .nav { background:rgba(9,21,33,.94); }
 /* SECTIONS */
 .sec { max-width:1080px; margin:0 auto; padding:40px 20px; }
 .sec-hd { margin-bottom:26px; }
-.sec-hd h2 { font-size:1.9rem; margin-bottom:4px; }
+.sec-hd h1,.sec-hd h2 { font-size:1.9rem; margin-bottom:4px; }
 .sec-hd p { color:var(--muted); font-size:.88rem; }
 .find-time-entry {
   display:flex; align-items:center; justify-content:space-between; gap:14px;
@@ -3448,7 +3448,7 @@ body.host-mode .courts { padding-bottom:140px; }
 @media(prefers-reduced-motion:reduce) { .host-balance-progress::after { animation:none; width:100%; background:var(--lime); } }
 
 </style>
-<link rel="stylesheet" href="brand-theme.css?v=20260908-booking-motion">
+<link rel="stylesheet" href="brand-theme.css?v=20260908-direct-courts">
 </head>
 <body class="dark">
 <script>
@@ -3697,15 +3697,10 @@ try {
   </div>
 </nav>
 
-<section class="chino-welcome" aria-labelledby="chinoWelcomeTitle">
-  <div class="chino-welcome-copy"><span class="chino-eyebrow">CHINO PICKLEBALL COURTS</span><h1 id="chinoWelcomeTitle">See you on<br>the court.</h1><p>A little friendly competition. A lot to look forward to.<br>Find your next game below.</p><a href="#courts" class="chino-welcome-link">Explore available courts <span aria-hidden="true">↗</span></a></div>
-  <img src="assets/chino-courts.png" alt="Blue pickleball courts framed by charcoal walls beneath the evening sky at CHINO" fetchpriority="high" width="1320" height="981">
-</section>
-
 <!-- COURTS -->
 <div class="sec" id="courts" style="padding-top:24px">
   <div class="sec-hd">
-    <span class="chino-eyebrow">MAKE TIME TO PLAY</span><h2>Find your court.</h2>
+    <span class="chino-eyebrow">MAKE TIME TO PLAY</span><h1>Find your court.</h1>
     <p>Select a date, choose a court and time, then book.</p>
   </div>
   <div class="find-time-entry">
