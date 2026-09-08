@@ -459,7 +459,7 @@ ${
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;margin-top:20px;"><tr><td align="center" style="background:${BRAND.neon};border-radius:9px;"><a href="${
     escapeHtml(manageUrl)
   }" style="display:block;padding:14px 18px;font-size:14px;line-height:1.2;font-weight:700;text-decoration:none;color:${BRAND.black};">View booking</a></td></tr></table>
-<div style="margin-top:16px;text-align:center;font-size:12px;line-height:1.5;"><a href="${mapsUrl}" style="color:${BRAND.muted};text-decoration:underline;">${
+<div style="margin-top:16px;text-align:center;font-size:14px;line-height:1.5;"><div style="margin-bottom:4px;font-size:10px;font-weight:700;letter-spacing:1px;color:${BRAND.muted};">COURT ADDRESS</div><a href="${mapsUrl}" style="color:${BRAND.neon};text-decoration:underline;">${
     escapeHtml(location)
   }</a></div>
 </td></tr></table></td></tr></table></body></html>`;
@@ -483,7 +483,7 @@ ${
       plain(payload.fullName || "Player")
     }, your reservation is confirmed.\nBooking reference: ${rawRef}\n\nSCHEDULE\n${schedules}\n\nTotal paid: ${
       formatPhpPlain(paid)
-    }\n${balanceText}\n\nView booking: ${manageUrl}\n${location}\n${mapsUrl}`,
+    }\n${balanceText}\n\nView booking: ${manageUrl}\nCourt address: ${location}\nDirections: ${mapsUrl}`,
   };
 }
 
