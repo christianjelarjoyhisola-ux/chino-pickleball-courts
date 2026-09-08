@@ -16,3 +16,18 @@ button, [role="button"] { -webkit-user-select:none; user-select:none; }
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
   select, textarea { font-size:16px !important; }
 }
+
+.court-scroll-hint {
+  position:fixed; left:50%; bottom:calc(18px + env(safe-area-inset-bottom));
+  transform:translateX(-50%); z-index:200; display:flex; align-items:center; gap:10px;
+  max-width:calc(100vw - 32px); min-height:44px; padding:10px 16px;
+  border:1px solid #83b8ee; border-radius:999px; background:#14283b; color:#f4f7fb;
+  box-shadow:0 5px 22px rgba(0,0,0,.28); font:600 12px/1.4 Arial,sans-serif;
+  white-space:nowrap; cursor:pointer;
+}
+.court-scroll-hint[hidden] { display:none; }
+.court-scroll-hint:focus-visible { outline:3px solid #b5d7f5; outline-offset:3px; }
+.court-scroll-arrow { color:#b5d7f5; font-size:20px; animation:courtScrollNudge 1.8s ease-in-out infinite; }
+#courtsGrid > .cc { scroll-margin-top:180px; }
+@keyframes courtScrollNudge { 0%,100% { transform:translateY(-2px); opacity:.55; } 50% { transform:translateY(3px); opacity:1; } }
+@media (prefers-reduced-motion:reduce) { .court-scroll-arrow { animation:none; } }
