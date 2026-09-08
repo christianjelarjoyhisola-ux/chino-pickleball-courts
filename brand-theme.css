@@ -169,18 +169,18 @@ img[src="logochino.jpg"] {
 .pr-splash-enter { display:flex; align-items:center; justify-content:center; width:min(420px,100%); min-height:60px; flex:0 0 auto; padding:12px 24px; border:1px solid rgba(155,207,234,.55); border-radius:10px; background:linear-gradient(110deg,#285f91,#237b9a); color:#fff; font:400 clamp(1.4rem,5vw,1.7rem)/1.1 'Bebas Neue','Arial Narrow',sans-serif; letter-spacing:.09em; text-transform:uppercase; cursor:pointer; box-shadow:inset 0 1px 1px rgba(255,255,255,.16),0 8px 24px rgba(0,0,0,.16); transition:background .2s,transform .2s,box-shadow .2s; }
 .pr-splash-enter { position:relative; overflow:hidden; isolation:isolate; }
 .pr-splash-enter-label { position:relative; z-index:1; }
-/* One gentle sweep on arrival keeps the main action calm and readable. */
+/* A gentle repeating sweep pauses between passes to keep the label readable. */
 .pr-splash-enter::after {
   content:""; position:absolute; z-index:0; pointer-events:none;
   top:-55%; left:0; width:35%; height:210%;
   background:linear-gradient(90deg,transparent,rgba(229,246,255,.28),transparent);
   opacity:0; transform:translateX(-160%) skewX(-18deg);
-  animation:chino-booking-sheen 1.7s cubic-bezier(.25,.46,.45,.94) .8s 1 both;
+  animation:chino-booking-sheen 3.8s cubic-bezier(.25,.46,.45,.94) .8s infinite both;
 }
 @keyframes chino-booking-sheen {
   0% { opacity:0; transform:translateX(-160%) skewX(-18deg); }
-  18%,72% { opacity:.8; }
-  100% { opacity:0; transform:translateX(380%) skewX(-18deg); }
+  8%,32% { opacity:.8; }
+  45%,100% { opacity:0; transform:translateX(380%) skewX(-18deg); }
 }
 #splashScreen.dismissed .pr-splash-enter::after { animation:none; }
 .pr-splash-enter:hover { background:linear-gradient(110deg,#3476ad,#2a8da9); color:#fff; transform:translateY(-1px); box-shadow:inset 0 1px 1px rgba(255,255,255,.2),0 10px 28px rgba(0,0,0,.2); }
