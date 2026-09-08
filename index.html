@@ -10861,7 +10861,7 @@ function updateSplashSoundButton(isPlaying) {
   button.setAttribute('aria-pressed', String(isPlaying));
   button.setAttribute('aria-label', isPlaying ? 'Stop welcome music' : 'Play welcome music');
   const label = button.querySelector('.pr-splash-sound-label');
-  if (label) label.textContent = isPlaying ? 'RAGE ON' : 'Play music';
+  if (label) label.textContent = isPlaying ? 'Stop music' : 'Play music';
 }
 
 function fadeSplashMusic(audio, from, to, duration, onComplete) {
