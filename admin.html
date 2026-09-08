@@ -6956,9 +6956,9 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(45, 62, 79, .1
         <label class="grs-select-all"><input id="grsSelectAll" type="checkbox" onchange="grsToggleAll(this.checked)"><span>Select all eligible schedules</span></label>
         <div class="grs-bulk"><div><label class="fl" for="grsBulkDate">New date for selected schedules</label><input class="fi" id="grsBulkDate" type="date" onchange="grsApplyBulkDate()"></div><button class="btn btn-g" id="grsApplyDate" hidden type="button" onclick="grsApplyBulkDate()">Apply date</button></div>
       </div>
+      <div class="fg grs-note" style="margin:0 0 16px"><label class="fl" for="grsNote">Reason for rescheduling</label><textarea class="fi" id="grsNote" rows="2" maxlength="1000" placeholder="For example: Player requested a different time, rain, or court maintenance."></textarea><p class="grs-availability">Saved in Booking Details and included in the update email. Required for started or finished bookings.</p></div>
       <div id="grsSharedTimes" class="grs-shared-times" hidden></div>
       <div id="grsItems" class="grs-items"></div>
-      <div class="fg grs-note"><label class="fl" for="grsNote">Reason / note <span>(sent with the update)</span></label><textarea class="fi" id="grsNote" rows="2" maxlength="1000" placeholder="Required when moving a started or finished booking."></textarea></div>
       <p class="grs-save-error" id="grsSaveError" role="alert" hidden></p>
     </div>
     <footer class="m-foot grs-footer">
@@ -8483,6 +8483,23 @@ function openOwnerBookingPreview(ref) {
 function balanceNotificationLabel(value) {
   return ({ reminder_3d:'3-day reminder', reminder_2d:'2-day reminder', reminder_1d:'Final reminder', forfeited:'Forfeiture notice', manual:'Manual notice' })[value] || value;
 }
+function renderAdminRescheduleHistory(rows, bookings) {
+  if(!rows.length) return '';
+  const schedule=value=>{
+    const slots=(value?.slots || []).map(Number).filter(Number.isFinite).sort((a,b)=>a-b);
+    return `${value?.date ? fmtD(value.date) : '--'}${slots.length ? ' · '+fmtHour(slots[0])+' – '+fmtHour(slots[slots.length-1]+1) : ''}`;
+  };
+  return `<div class="booking-detail-section"><h3>Reschedule history</h3>${rows.map(row=>{
+    const booking=bookings.find(item=>String(item.ref)===String(row.booking_ref));
+    const time=new Date(row.created_at);
+    const changedAt=Number.isNaN(time.getTime())?'':time.toLocaleString('en-PH',{timeZone:'Asia/Manila',month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'});
+    return `<div class="booking-reschedule-history-item" style="padding:12px 0;border-bottom:1px solid var(--border);overflow-wrap:anywhere">
+      <strong>${esc(booking?.courtName || row.booking_ref)}</strong><div style="color:var(--text3);font-size:.72rem;margin-top:4px">${esc(changedAt)} · PH time</div>
+      <div style="font-size:.78rem;margin-top:8px"><span style="color:var(--text3)">From:</span> ${esc(schedule(row.old_schedule))}<br><span style="color:var(--text3)">To:</span> ${esc(schedule(row.new_schedule))}</div>
+      <div style="margin-top:9px;font-size:.8rem"><strong>Reason:</strong><div style="white-space:pre-wrap;margin-top:4px">${esc(row.reason || 'No reason recorded for this change.')}</div></div>
+    </div>`;
+  }).join('')}</div>`;
+}
 async function openBookingDetails(ref) {
   const modal = $('bookingDetailsModal');
   const body = $('bookingDetailsBody');
@@ -8493,6 +8510,12 @@ async function openBookingDetails(ref) {
     const b = await getBookingGroupByRef(ref);
     if (!b) throw new Error('Booking not found.');
     const bookingKey = b.groupRef || b.displayRef || b.ref;
+    const historyBookings=b.allItems || b.items || [b];
+    let rescheduleHistory='';
+    if(DB.getAdminRescheduleHistory) {
+      try { rescheduleHistory=renderAdminRescheduleHistory(await DB.getAdminRescheduleHistory(historyBookings.map(item=>item.ref)),historyBookings); }
+      catch (_) { rescheduleHistory='<div class="booking-detail-section"><h3>Reschedule history</h3><p>History could not be loaded. Reopen Booking Details to retry.</p></div>'; }
+    }
     const notifications = b.hostBooking && DB.getBookingBalanceNotifications ? await DB.getBookingBalanceNotifications(bookingKey) : [];
     const total = Number(b.total || 0);
     const paid = window.BookingBalance?.paidAmount?.(b) || 0;
@@ -8532,6 +8555,7 @@ async function openBookingDetails(ref) {
         <div class="booking-detail-row"><span>Payment state</span><strong>${pendingBalance ? 'Balance receipt awaiting review' : esc(payStatusText(b.paymentStatus))}</strong></div>
         <div class="booking-detail-row"><span>Policy</span><strong>Final and non-refundable</strong></div>
       </div>
+      ${rescheduleHistory}
       ${b.hostBooking ? `<div class="booking-detail-section"><h3>Email history</h3><div class="booking-notice-list">${notices}</div></div>` : ''}`;
     const actionRef = b.primaryRef || b.ref;
     const hasReceipt = (b.gcashRef || (b.receiptStatus && b.receiptStatus !== 'none')) && isDigitalPayment(b.paymentMethod);

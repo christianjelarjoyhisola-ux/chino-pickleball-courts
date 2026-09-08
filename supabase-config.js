@@ -1624,6 +1624,16 @@ window.DB = {
     return data;
   },
 
+  async getAdminRescheduleHistory(refs) {
+    const keys=[...new Set((refs || []).map(String).filter(Boolean))];
+    if(!keys.length) return [];
+    const {data,error}=await _sb.from('admin_booking_reschedule_history')
+      .select('id,booking_ref,created_at,reason,old_schedule,new_schedule')
+      .in('booking_ref',keys).order('created_at',{ascending:false}).limit(100);
+    if(error) throw new Error('Reschedule history could not be loaded.');
+    return data || [];
+  },
+
   async getBookingRescheduleOptions(ref, email, itemRefs, date) {
     const bookingRef = String(ref || '').trim().toUpperCase();
     const bookingEmail = String(email || '').trim().toLowerCase();
@@ -4539,6 +4549,10 @@ window.DB = {
     async getBookingByRef(ref) { return readDb().bookings.find(b => String(b.ref) === String(ref)) || null; },
     async getAdminRescheduleOptions(ref, date) { return buildLocalAdminRescheduleOptions(ref,date); },
     async rescheduleBookingsTransaction(ref, changes) { return applyLocalAdminGroupedReschedule(ref,changes); },
+    async getAdminRescheduleHistory(refs) {
+      return (readDb().adminRescheduleHistory || []).filter(row=>refs.includes(row.bookingRef)).reverse().slice(0,100)
+        .map(row=>({booking_ref:row.bookingRef,created_at:row.createdAt,reason:row.reason,old_schedule:row.oldSchedule,new_schedule:row.newSchedule}));
+    },
     async rescheduleBookingTransaction(ref, schedule) {
       const options = buildLocalAdminRescheduleOptions(ref,schedule?.date);
       const expectedSlots = [...(schedule.expectedSlots || [])].map(Number).sort((a,b) => a-b);
