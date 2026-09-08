@@ -692,7 +692,10 @@ function expectedMerchantForProvider(
     };
   }
   if (provider === "securitybank") {
-    return { number: settings.securitybank_merchant_number || "", name: settings.securitybank_merchant_name || "" };
+    return {
+      number: settings.securitybank_merchant_number || "",
+      name: settings.securitybank_merchant_name || "",
+    };
   }
   if (provider === "pnb") {
     return {
@@ -2891,7 +2894,9 @@ Deno.serve(async (req) => {
         duplicateFlag: "DUPLICATE_INVOICE",
       });
     }
-    if (provider === "maya" && extractedInstapayRefNo && !providerVerification) {
+    if (
+      provider === "maya" && extractedInstapayRefNo && !providerVerification
+    ) {
       dedupeKeys.push({
         key: `maya_instapay:${extractedInstapayRefNo}`,
         providerKey: "maya_instapay",
@@ -2911,11 +2916,16 @@ Deno.serve(async (req) => {
 
     let duplicateClear = true;
     for (const item of dedupeKeys) {
-      const { data: existingRef } = await db
+      const { data: existingRef, error: referenceLookupError } = await db
         .from("used_gcash_refs")
         .select("booking_ref,claim_scope,claim_owner_id")
         .eq("gcash_ref", item.key)
         .maybeSingle();
+      if (referenceLookupError) {
+        duplicateClear = false;
+        flags.push("DUPLICATE_CHECK_UNAVAILABLE");
+        continue;
+      }
       if (existingRef && !ledgerClaimBelongsToBooking(existingRef)) {
         duplicateClear = false;
         flags.push(item.duplicateFlag);
@@ -2957,6 +2967,13 @@ Deno.serve(async (req) => {
       : providerVerification?.provider === "bdopay"
       ? providerVerification.recipientComparison.name === "exact" &&
         providerVerification.recipientComparison.account === "exact"
+      : providerVerification?.provider === "securitybank"
+      ? ["exact", "initial_compatible"].includes(
+        providerVerification.recipientComparison,
+      ) &&
+        ["exact", "suffix_match"].includes(
+          providerVerification.recipientAccountComparison,
+        )
       : providerVerification?.provider === "bpi"
       ? providerVerification.recipientComparison === "exact" &&
         providerVerification.recipientAccountComparison === "exact"
@@ -2990,7 +3007,9 @@ Deno.serve(async (req) => {
         ? "auto_approved"
         : "manual_review";
     let confidence = result === "auto_approved" ? ocrConfidence : 0.5;
-    const route = provider === "gcash"
+    const route = provider === "securitybank"
+      ? "gcash_to_securitybank"
+      : provider === "gcash"
       ? "gcash"
       : provider === "bdopay" || provider === "maya" || provider === "bpi" ||
           provider === "gotyme" ||
@@ -3017,6 +3036,15 @@ Deno.serve(async (req) => {
       instapayRefNo: extractedInstapayRefNo,
       bpiConfirmationNo: provider === "bpi" ? extractedRef : null,
       bpiTransactionRefNo: extractedBpiTransactionRefNo,
+      securitybankInvoiceNo: providerParse?.provider === "securitybank"
+        ? providerParse.receipt.invoice.value
+        : null,
+      securitybankTransferFee: providerParse?.provider === "securitybank"
+        ? providerParse.receipt.transferFee
+        : null,
+      securitybankTotal: providerParse?.provider === "securitybank"
+        ? providerParse.receipt.total
+        : null,
       amount: extractedAmount,
       amountReliable: amountExtraction?.reliable ?? (extractedAmount != null),
       amountAmbiguous: amountExtraction?.ambiguous ?? false,
@@ -3076,7 +3104,9 @@ Deno.serve(async (req) => {
         ? {
           reference: bankParse.reference,
           invoice: "invoice" in bankParse ? bankParse.invoice : null,
-          transferFee: "transferFee" in bankParse ? bankParse.transferFee : null,
+          transferFee: "transferFee" in bankParse
+            ? bankParse.transferFee
+            : null,
           railReference: "railReference" in bankParse
             ? bankParse.railReference
             : null,
@@ -3096,12 +3126,15 @@ Deno.serve(async (req) => {
               providerVerification?.provider === "maya" ||
               providerVerification?.provider === "bdopay" ||
               providerVerification?.provider === "gotyme" ||
-              providerVerification?.provider === "maribank"
+              providerVerification?.provider === "maribank" ||
+              providerVerification?.provider === "securitybank"
             ? providerVerification.recipientComparison
             : null,
-          recipientAccountComparison: providerVerification?.provider === "bpi"
-            ? providerVerification.recipientAccountComparison
-            : null,
+          recipientAccountComparison:
+            providerVerification?.provider === "bpi" ||
+              providerVerification?.provider === "securitybank"
+              ? providerVerification.recipientAccountComparison
+              : null,
           issues: bankParse.issues,
         }
         : null,

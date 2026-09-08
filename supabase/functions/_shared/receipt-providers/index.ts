@@ -1,4 +1,10 @@
 import {
+  parseSecurityBankReceipt,
+  type SecurityBankReceiptParse,
+  type SecurityBankReceiptVerificationEvidence,
+  verifySecurityBankReceipt,
+} from "./securitybank.ts";
+import {
   type BdoPayReceiptParse,
   type BdoPayReceiptVerificationEvidence,
   parseBdoPayToGcashReceipt,
@@ -43,7 +49,8 @@ export type DedicatedReceiptProvider =
   | "maya"
   | "bpi"
   | "gotyme"
-  | "maribank";
+  | "maribank"
+  | "securitybank";
 
 export type GcashProviderReceiptParse = {
   provider: "gcash";
@@ -81,6 +88,12 @@ export type MayaProviderReceiptParse = {
 };
 
 export type ProviderReceiptParse =
+  | {
+    provider: "securitybank";
+    destinationProvider: "securitybank";
+    parserVersion: "gcash_to_securitybank_v1";
+    receipt: SecurityBankReceiptParse;
+  }
   | GcashProviderReceiptParse
   | BdoPayProviderReceiptParse
   | MayaProviderReceiptParse
@@ -97,6 +110,7 @@ export type GcashReceiptVerificationEvidence = {
 };
 
 export type ProviderReceiptVerificationEvidence =
+  | SecurityBankReceiptVerificationEvidence
   | GcashReceiptVerificationEvidence
   | BdoPayReceiptVerificationEvidence
   | MayaReceiptVerificationEvidence
@@ -117,7 +131,7 @@ export function isDedicatedReceiptProvider(
 ): provider is DedicatedReceiptProvider {
   return provider === "gcash" || provider === "bdopay" ||
     provider === "maya" || provider === "gotyme" || provider === "maribank" ||
-    provider === "bpi";
+    provider === "bpi" || provider === "securitybank";
 }
 
 export function parseProviderReceipt(
@@ -126,6 +140,13 @@ export function parseProviderReceipt(
   options: { typedReference?: string } = {},
 ): ProviderReceiptParse {
   switch (provider) {
+    case "securitybank":
+      return {
+        provider,
+        destinationProvider: "securitybank",
+        parserVersion: "gcash_to_securitybank_v1",
+        receipt: parseSecurityBankReceipt(rawText, options),
+      };
     case "gcash":
       return {
         provider,
@@ -297,6 +318,8 @@ export function verifyProviderReceipt(
   context: ReceiptVerificationContext,
 ): ProviderReceiptVerificationEvidence {
   switch (parsed.provider) {
+    case "securitybank":
+      return verifySecurityBankReceipt(parsed.receipt, context);
     case "gcash":
       return verifyGcashReceipt(parsed, context);
     case "bdopay":

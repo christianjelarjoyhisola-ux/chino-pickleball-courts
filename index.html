@@ -4009,7 +4009,7 @@ try {
               <div class="gc-num-row" style="justify-content:flex-start;flex-wrap:wrap"><div class="gc-num" id="sbMerchantNumber" style="font-size:1.1rem;overflow-wrap:anywhere">—</div><button type="button" class="gc-copy-btn" onclick="copyPaymentNumber('securitybank')">Copy</button></div>
               <div class="bpay-send-title" style="margin-top:14px">ACCOUNT NAME</div><div class="bpay-send-name" id="sbMerchantName">—</div>
             </div>
-            <div class="bpay-help" style="padding:0 20px 18px">Transfer the exact amount to this Security Bank account. Enter your transaction reference and upload the successful receipt below. Your booking stays pending until the owner reviews payment.</div>
+            <div class="bpay-help" style="padding:0 20px 18px">Transfer the exact amount to this Security Bank account. Enter your transaction reference and upload the successful receipt below. Clear, matching GCash bank-transfer receipts can confirm automatically. Anything uncertain stays pending for owner review.</div>
           </div>
           <!-- PNB section -->
           <div class="gcash bpay-card" id="pnbBox">
@@ -8212,7 +8212,7 @@ function pickPay(m) {
       gotyme: 'Pay from GoTyme to the GCash recipient shown. Clean receipts can confirm automatically; anything doubtful stays pending for owner review.',
       maribank: 'Pay from MariBank to the GCash recipient shown. Clean receipts can confirm automatically; anything doubtful stays pending for owner review.',
       pnb: 'Use the configured PNB payment details. Your receipt stays pending for court-owner review.',
-      securitybank: 'Use the configured Security Bank payment details. Your receipt stays pending for court-owner review.',
+      securitybank: 'Transfer to the Security Bank account shown. Matching GCash bank-transfer receipts can confirm automatically; anything uncertain stays pending for owner review.',
       cash: 'Cash bookings are paid at the front desk and confirmed by staff.',
     };
     methodNote.innerHTML = Array.isArray(notes[m]) ? notes[m].map(esc).join('<br>') : esc(notes[m] || '');
@@ -8368,6 +8368,7 @@ function isBpiConfirmationValid(ref) {
 }
 
 function paymentRefHelpText(method) {
+  if (method === 'securitybank') return 'For a GCash bank transfer, enter the 13-digit Ref No., not the InstaPay Invoice No. The transfer amount must match your payment; the bank fee is separate.';
   if (method === 'gcash') return 'GCash reference must be exactly 13 digits.';
   if (method === 'bdopay') return 'Enter the BDO Pay Reference no. in BN-YYYYMMDD-######## format, not the invoice number. We verify the invoice from the receipt.';
   if (method === 'maya') return 'Enter the Maya Reference ID, e.g. B6DC F633 F08C. Do not enter the InstaPay Ref. No.';
@@ -11342,7 +11343,7 @@ function opPickPay(method) {
       : method === 'gcash'
         ? 'Pay from GCash to this GCash recipient. Receipts that pass every automated check confirm automatically; otherwise they stay pending for court-owner review.'
         : ['pnb', 'securitybank'].includes(method)
-          ? `Use the configured ${meta.label} recipient. Your receipt stays pending for court-owner review.`
+          ? (method === 'securitybank' ? 'Matching GCash bank-transfer receipts can confirm automatically. Any issue stays pending for owner review.' : `Use the configured ${meta.label} recipient. Your receipt stays pending for court-owner review.`)
           : `Pay using ${meta.label}. Receipts that pass every automated check confirm automatically; otherwise they stay pending for court-owner review.`;
     const displayReceiverName = paymentReceiverKey(method) === 'gcash'
       ? (maskGcashOwnerName(receiver.name) || 'Court owner account')

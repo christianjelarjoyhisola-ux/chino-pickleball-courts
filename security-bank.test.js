@@ -82,7 +82,7 @@ test('owner settings reject missing bank details and preserve leading zeroes whe
   assert.equal(saved.get('securitybank_merchant_name'),'CHINO Account');
 });
 
-test('Security Bank references keep letters and never enter automatic receipt approval', () => {
+test('Security Bank preserves references and dispatches through its dedicated parser', () => {
   const ctx = vm.createContext({});
   vm.runInContext(fn('index.html','paymentRefMaxLength') + fn('index.html','normalizePaymentRef'),ctx);
   assert.equal(ctx.normalizePaymentRef('SB-123ABC456','securitybank'),'SB-123ABC456');
@@ -90,5 +90,6 @@ test('Security Bank references keep letters and never enter automatic receipt ap
   assert.match(verifier,/provider === "securitybank"[\s\S]*?settings.securitybank_merchant_number/);
   assert.match(verifier,/if \(!isDedicatedReceiptProvider\(provider\)\)[\s\S]*?flags.push\("PROVIDER_REVIEW_REQUIRED"\)/);
   const registry = read('supabase/functions/_shared/receipt-providers/index.ts');
-  assert.doesNotMatch(registry,/"securitybank"/);
+  assert.match(registry,/case "securitybank"/);
+  assert.match(registry,/verifySecurityBankReceipt/);
 });
