@@ -248,3 +248,12 @@ Deno.test("provider registry routes Security Bank through its own verifier", () 
   assert(result.destinationProvider === "securitybank");
   assert(result.flags.length === 0, JSON.stringify(result.flags));
 });
+
+Deno.test("Security Bank receipt-only checkout extracts its own reference without a typed value", () => {
+  const parsed = parseSecurityBankReceipt(RECEIPT);
+  assert(parsed.reference.typedMatch === "not_provided");
+  assert(parsed.reference.value === context.typedReference);
+  assert(check(RECEIPT, { typedReference: "" }).flags.length === 0);
+  assert(check(RECEIPT.replace("2044841788110", "unreadable"), { typedReference: "" }).flags.includes("REF_UNREADABLE"));
+  assert(check(RECEIPT, { typedReference: "9999999999999" }).flags.includes("REF_MISMATCH"));
+});

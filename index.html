@@ -3800,15 +3800,15 @@ try {
 
     <!-- Slot reservation countdown -->
     <div id="slotCountdown">
-      <span class="scd-text">Complete your booking within <span id="scdTime" class="scd-inline-time">15:00</span></span>
-      <span class="scd-timer" id="scdTimerBig">15:00</span>
+      <span class="scd-text">Complete your booking within <span id="scdTime" class="scd-inline-time">10:00</span></span>
+      <span class="scd-timer" id="scdTimerBig">10:00</span>
     </div>
 
     <div class="booking-intro" id="bookingIntro" aria-hidden="true">
       <div class="booking-intro-card" id="bookingIntroCard" tabindex="-1" role="group" aria-labelledby="bookingIntroTitle" aria-describedby="bookingIntroCopy">
-        <div class="booking-intro-kicker">15-minute checkout</div>
-        <div class="booking-intro-title" id="bookingIntroTitle">Complete your booking within 15 minutes</div>
-        <div class="booking-intro-timer" id="bookingIntroTimer">15:00</div>
+        <div class="booking-intro-kicker">10-minute checkout</div>
+        <div class="booking-intro-title" id="bookingIntroTitle">Complete your booking within 10 minutes</div>
+        <div class="booking-intro-timer" id="bookingIntroTimer">10:00</div>
         <p class="booking-intro-copy" id="bookingIntroCopy">Keep an eye on the timer at the top of the booking form.</p>
       </div>
     </div>
@@ -4017,7 +4017,7 @@ try {
             <div class="payment-guide">
               <div class="payment-guide-step"><b>1</b><span>Scan QR or use account.</span></div>
               <div class="payment-guide-step"><b>2</b><span>Pay exact amount, fees separate.</span></div>
-              <div class="payment-guide-step"><b>3</b><span>Save the reference number.</span></div>
+              <div class="payment-guide-step"><b>3</b><span>Save the complete receipt.</span></div>
               <div class="payment-guide-step"><b>4</b><span>Upload the complete receipt.</span></div>
             </div>
           </div>
@@ -4076,21 +4076,8 @@ try {
                 <span aria-hidden="true">📸</span>
                 <strong>Upload your proof of payment below.</strong>
               </div>
-              <div class="bpay-ref-head">
-                <label class="bpay-ref-label">
-                  🔖 Reference # <span id="refMethodLabel" style="color:var(--muted);text-transform:none;font-size:.68rem;font-weight:500;letter-spacing:0"></span>
-                </label>
-                <span id="gcRefCount" style="font-size:.62rem;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap">0 digits</span>
-              </div>
-              <div class="bpay-ref-row">
-                <input type="text" class="fi" id="bGcashRef" placeholder="e.g. 1234567890123"
-                  style="flex:1;" maxlength="13" autocomplete="off"
-                  oninput="updateRefCount()" inputmode="numeric" />
-                <button type="button" class="gc-copy-btn" onclick="pasteRef()" style="background:var(--input);color:var(--text);border:1px solid var(--border);flex-shrink:0;">📋 Paste</button>
-              </div>
-              <div class="bpay-help" id="bRefHelp">
-                GCash reference must be exactly 13 digits.
-              </div>
+              <input type="hidden" id="bGcashRef" value="" />
+              <p class="bpay-help">Upload the complete receipt. We’ll read the payment reference automatically.</p>
 
               <!-- Receipt screenshot upload (owner-reviewed verification) -->
               <div class="bpay-receipt" id="bReceiptUploadRegion" aria-busy="false">
@@ -6613,7 +6600,7 @@ let _reservationIntroTimeout = null;
 let _reservationIntroFinishTimeout = null;
 let _reservationIntroToken = 0;
 let _bookingLaunchInFlight = false;
-const RESERVATION_MINUTES = 15;
+const RESERVATION_MINUTES = 10;
 const RESERVATION_INTRO_MS = 5000;
 const RESERVATION_INTRO_EXIT_MS = 1000;
 const GUEST_RESUME_KEY = 'pb_guest_booking_resume_v1';
@@ -6749,7 +6736,7 @@ async function maybeResumeGuestBooking() {
       releaseBookingHoldRef(ref).catch(() => {})
     ));
     clearGuestBookingResume();
-    toast('Your saved reservation expired after 15 minutes, so the slots were released. Please select a time again.', 'inf');
+    toast('Your saved reservation expired after 10 minutes, so the slots were released. Please select a time again.', 'inf');
     return;
   }
 
@@ -6929,7 +6916,7 @@ function showBookingIntro() {
   setBookingIntroContentInert(true);
   intro.setAttribute('aria-hidden', 'false');
   const announcement = $('bookingCountdownAnnouncement');
-  if (announcement) announcement.textContent = 'Complete your booking within 15 minutes. Keep an eye on the timer at the top of the booking form.';
+  if (announcement) announcement.textContent = 'Complete your booking within 10 minutes. Keep an eye on the timer at the top of the booking form.';
   requestAnimationFrame(() => card.focus({ preventScroll: true }));
   const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
   const introPauseMs = reducedMotion
@@ -6984,7 +6971,7 @@ function isPlaceholderBookingHold(b) {
 function isHeldVerifying(b) {
   if (b.status !== 'verifying') return false;
   // Genuine customer rows may stay verifying while receipt processing finishes.
-  // Only the temporary checkout identity is allowed to age out after 15 minutes.
+  // Only the temporary checkout identity is allowed to age out after 10 minutes.
   if (!isPlaceholderBookingHold(b)) return true;
   if (!b.createdAt) return true; // no timestamp → treat as fresh hold
   return (Date.now() - new Date(b.createdAt).getTime()) < RESERVATION_MINUTES * 60 * 1000;
@@ -7535,6 +7522,11 @@ async function wizNext() {
     wizGoTo(5);
   } else if (wizStep === 5) {
     const payMethod = $('bPay')?.value || '';
+    if (isDigitalPayMethod(payMethod) && !_receiptFile) {
+      bookingValidationError('Please attach your payment receipt here.', 'bReceiptDrop', 5);
+      setBookingReceiptUploadMessage('failed', 'Receipt required — tap above to attach your proof of payment.');
+      return;
+    }
     const retryableUpload = isDigitalPayMethod(payMethod) &&
       _receiptUploadState?.status === 'failed' &&
       receiptUploadStateMatchesCurrentContext(_receiptUploadState);
@@ -8244,8 +8236,7 @@ function pickPay(m) {
   if (refWrap) refWrap.style.display = digitalPay ? '' : 'none';
   $('cashNote').style.display = m === 'cash' ? '' : 'none';
   if ($('refMethodLabel')) $('refMethodLabel').textContent = digitalPay ? `— ${paymentMethodName(m)}` : '';
-  if (digitalPay) $('bGcashRef')?.setAttribute('required','');
-  else $('bGcashRef')?.removeAttribute('required');
+  $('bGcashRef')?.removeAttribute('required');
   syncBookingRefUi(m);
   updatePaymentAmountUI();
   if (digitalPay && _receiptFile && previousMethod !== m) {
@@ -8264,7 +8255,7 @@ function syncGcashSharedPanel(method) {
     gcash: {
       header: 'GCash Payment',
       title: 'Send GCash Payment To',
-      guide: ['Open or scan in GCash.', 'Pay the exact amount.', 'Save the reference number.', 'Upload the complete receipt.'],
+      guide: ['Open or scan in GCash.', 'Pay the exact amount.', 'Save the complete receipt.', 'Upload the complete receipt.'],
       help: 'GCash → GCash. Clean receipts can confirm automatically; anything doubtful stays pending for owner review.',
     },
     bdopay: {
@@ -8306,7 +8297,9 @@ function syncGcashSharedPanel(method) {
   $('gcashBox')?.querySelectorAll('.payment-guide-step span span.payment-guide-long').forEach((el, i) => { if (profile.guide[i]) el.textContent = profile.guide[i]; });
   $('gcashBox')?.querySelectorAll('.payment-guide-step span span.payment-guide-short').forEach((el, i) => { if (profile.guide[i]) el.textContent = profile.guide[i]; });
   const receiptHelp = $('bReceiptRequired');
-  if (receiptHelp) receiptHelp.textContent = profile.help;
+  if (receiptHelp) receiptHelp.textContent = method === 'securitybank'
+    ? 'GCash → Security Bank. Upload the complete receipt; we read the reference automatically. Anything uncertain stays pending for owner review.'
+    : method === 'pnb' ? 'Upload the complete PNB receipt for owner review.' : profile.help;
 }
 
 function copyPaymentNumber(method = 'gcash') {
@@ -8398,7 +8391,7 @@ function syncBookingRefUi(method = $('bPay')?.value || 'gcash') {
     const clean = normalizePaymentRef(input.value, method);
     if (input.value !== clean) input.value = clean;
   }
-  const refLabel = document.querySelector('.bpay-ref-label');
+  const refLabel = document.querySelector('.bpay-ref-head .bpay-ref-label');
   if (refLabel) {
     refLabel.innerHTML = `${method === 'bpi' ? 'BPI Confirmation No.' : 'Reference #'} <span id="refMethodLabel" style="color:var(--muted);text-transform:none;font-size:.68rem;font-weight:500;letter-spacing:0">${method ? '&mdash; ' + paymentMethodName(method) : ''}</span>`;
   }
@@ -8533,10 +8526,10 @@ async function submitBookingLegacy(e) {
     submitBtn.textContent = 'Saving booking...';
   }
   const payMethod = $('bPay').value;
-  const gcashRef  = $('bGcashRef')?.value?.trim() || '';
+  const gcashRef = ''; // Reference is extracted server-side from the receipt.
   const hasPaymentMethod = ALL_PAYMENT_METHODS.some(m => paymentMethods[m]);
   const digitalPay = isDigitalPayMethod(payMethod);
-  const gcashNeedsCheckout = false; // Manual QR flow: customer pays via QR and enters ref number
+  const gcashNeedsCheckout = false; // QR flow: customer pays and uploads the complete receipt
   const checks = [
     [!court, 'Please select a court.', 'courtDisp', 1],
     [!$('bDate').value, 'Please select a date.', 'bDate', 2],
@@ -8552,11 +8545,6 @@ async function submitBookingLegacy(e) {
     [!payMethod, 'Please select a payment method.', 'payMethodBlock', 4],
     [!!payMethod && !paymentMethods[payMethod], 'Selected payment method is no longer available.', 'payMethodBlock', 4],
     [!$('bookingPolicyAgree')?.checked, 'Please agree to the booking and payment policy before confirming.', $('bookingPolicyAgree')?.closest('.booking-policy-check'), 5],
-    [digitalPay && !gcashRef, payMethod === 'bpi' ? 'Please enter your BPI Confirmation No. after paying.' : 'Please enter your payment reference number after paying.', 'bGcashRef', 5],
-    [payMethod === 'gcash' && !isGcashRefValid(gcashRef), 'GCash reference number must be exactly 13 digits.', 'bGcashRef', 5],
-    [payMethod === 'bdopay' && !isBdoPayRefValid(gcashRef), 'BDO Pay reference must look like BN-YYYYMMDD-########. Do not enter the invoice number.', 'bGcashRef', 5],
-    [payMethod === 'maya' && !isMayaRefValid(gcashRef), 'Maya Reference ID must look like B6DC F633 F08C. Do not enter the InstaPay Ref. No.', 'bGcashRef', 5],
-    [payMethod === 'bpi' && !isBpiConfirmationValid(gcashRef), 'Enter the BPI Confirmation No. from the receipt, not the Transaction Ref. No.', 'bGcashRef', 5],
     [digitalPay && !_receiptFile, () => {
       // Scroll to and flash the upload zone so the user knows exactly what's missing.
       const drop = $('bReceiptDrop');
@@ -8789,7 +8777,7 @@ async function submitBooking(e) {
   const items = uniqueBookingSelections(activeBookingItems());
   const bookingDate = bookingItemsDate(items);
   const payMethod = $('bPay').value;
-  const gcashRef  = $('bGcashRef')?.value?.trim() || '';
+  const gcashRef = ''; // Reference is extracted server-side from the receipt.
   const hasPaymentMethod = ALL_PAYMENT_METHODS.some(m => paymentMethods[m]);
   const digitalPay = isDigitalPayMethod(payMethod);
   const repairItem = items.find(item => getCourtRepair(item.courtName, item.date));
@@ -8809,11 +8797,6 @@ async function submitBooking(e) {
     [!payMethod, 'Please select a payment method.', 'payMethodBlock', 4],
     [!!payMethod && !paymentMethods[payMethod], 'Selected payment method is no longer available.', 'payMethodBlock', 4],
     [!$('bookingPolicyAgree')?.checked, 'Please agree to the booking and payment policy before confirming.', $('bookingPolicyAgree')?.closest('.booking-policy-check'), 5],
-    [digitalPay && !gcashRef, payMethod === 'bpi' ? 'Please enter your BPI Confirmation No. after paying.' : 'Please enter your payment reference number after paying.', 'bGcashRef', 5],
-    [payMethod === 'gcash' && !isGcashRefValid(gcashRef), 'GCash reference number must be exactly 13 digits.', 'bGcashRef', 5],
-    [payMethod === 'bdopay' && !isBdoPayRefValid(gcashRef), 'BDO Pay reference must look like BN-YYYYMMDD-########. Do not enter the invoice number.', 'bGcashRef', 5],
-    [payMethod === 'maya' && !isMayaRefValid(gcashRef), 'Maya Reference ID must look like B6DC F633 F08C. Do not enter the InstaPay Ref. No.', 'bGcashRef', 5],
-    [payMethod === 'bpi' && !isBpiConfirmationValid(gcashRef), 'Enter the BPI Confirmation No. from the receipt, not the Transaction Ref. No.', 'bGcashRef', 5],
     [digitalPay && !_receiptFile, () => {
       const drop = $('bReceiptDrop');
       if (drop) markBookingInvalid(drop, 5);
@@ -9213,7 +9196,7 @@ function setBookingReceiptContinueState(kind = 'idle') {
   if (retryableFailure) button.disabled = false;
   if (ready && consentAgreed) button.disabled = false;
   if (!file) {
-    button.disabled = true;
+    button.disabled = false;
     button.textContent = 'Attach Receipt to Continue';
   } else if (!bookingRef) {
     button.disabled = true;
@@ -11710,7 +11693,7 @@ async function submitOpenPlay() {
 }
 </script>
 <script src="supabase.min.js"></script>
-<script src="supabase-config.js?v=20260909-security-bank"></script>
+<script src="supabase-config.js?v=20260909-receipt-only"></script>
 
 <!-- MOBILE STICKY BOOK NOW BAR -->
 <div id="mobileBookBar" class="mobile-book-bar" style="display:none">

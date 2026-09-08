@@ -438,3 +438,36 @@ test('the default test command includes receipt checkpoint lifecycle coverage', 
   const packageJson = JSON.parse(read('package.json'));
   assert.match(String(packageJson.scripts?.test || ''), /receipt-upload-gating\.test\.js/);
 });
+
+test('missing receipt Continue guides the customer without submitting a booking', async () => {
+  const helper = page.slice(page.indexOf('async function wizNext()'), page.indexOf('function wizBack()'));
+  const calls = [];
+  await new Function('calls', `
+    const wizStep = 5, _receiptFile = null;
+    const $ = () => ({value:'securitybank'});
+    const isDigitalPayMethod = () => true;
+    const bookingValidationError = (...args) => calls.push(args);
+    const setBookingReceiptUploadMessage = (...args) => calls.push(args);
+    const submitBooking = () => { throw new Error('Must not submit without a receipt'); };
+    ${helper}
+    return wizNext();
+  `)(calls);
+  assert.equal(calls[0][1], 'bReceiptDrop');
+  assert.equal(calls[0][2], 5);
+  assert.equal(calls[1][0], 'failed');
+});
+
+test('missing receipt button remains clickable, but uploading remains locked', () => {
+  const helper = page.slice(page.indexOf('function setBookingReceiptContinueState'), page.indexOf('function beginAutomaticReceiptUpload'));
+  const run = new Function('file', 'uploadState', `
+    const button = {classList:{toggle(){},remove(){}},setAttribute(){}};
+    const $ = id => id === 'wizNextBtn' ? button : id === 'bPay' ? {value:'securitybank'} : {checked:true};
+    const wizStep=5, _bookingSubmissionInFlight=false, _reservedRef='TEST', _receiptFile=file, _receiptUploadState=uploadState;
+    const isDigitalPayMethod=()=>true, receiptUploadStateMatchesCurrentContext=()=>true, bookingReceiptUploadReady=()=>false;
+    ${helper}
+    setBookingReceiptContinueState(uploadState.status);
+    return button;
+  `);
+  assert.equal(run(null, {status:'idle'}).disabled, false);
+  assert.equal(run({}, {status:'uploading'}).disabled, true);
+});

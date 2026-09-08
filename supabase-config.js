@@ -746,7 +746,7 @@ function rowToDeletedBookingArchive(r) {
   };
 }
 
-const PB_RESERVATION_HOLD_MINUTES = 15;
+const PB_RESERVATION_HOLD_MINUTES = 10;
 const PB_PUBLIC_COURT_OPENING_DATE = '2026-01-01';
 
 function _pbManilaToday() {

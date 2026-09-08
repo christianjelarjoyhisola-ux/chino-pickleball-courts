@@ -633,3 +633,13 @@ Deno.test("unknown provider dispatch fails closed", () => {
     "unknown providers must throw before parsing",
   );
 });
+
+Deno.test("receipt-only GCash checkout retains labelled-reference and amount checks", () => {
+  const parsed = parseProviderReceipt("gcash", GCASH_OCR);
+  const result = verifyProviderReceipt(parsed, { ...CONTEXT, typedReference: "" });
+  assert(!result.flags.includes("REF_FORMAT_INVALID"), "A typed reference is optional");
+  assert(parsed.receipt.reference.typedMatch === "not_provided", "Do not invent a typed match");
+  assert(!!parsed.receipt.reference.value, "Reference must come from OCR");
+  const missing = parseProviderReceipt("gcash", "Sent via GCash\nAmount\n1080.00");
+  assert(verifyProviderReceipt(missing, { ...CONTEXT, typedReference: "" }).flags.includes("REF_UNREADABLE"), "Missing reference must stay pending");
+});

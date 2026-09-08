@@ -141,7 +141,9 @@ export function parseSecurityBankReceipt(
       value: reference,
       raw: refField.value,
       confidence: reference ? "high" as const : "low" as const,
-      typedMatch: !/^\d{13}$/.test(typed)
+      typedMatch: !typed
+        ? "not_provided" as const
+        : !/^\d{13}$/.test(typed)
         ? "typed_invalid" as const
         : !reference
         ? "ocr_missing" as const
@@ -196,7 +198,7 @@ export function verifySecurityBankReceipt(
   }
   if (!parsed.indicators.instaPay) add("INSTAPAY_QRPH_UNREADABLE");
   if (!parsed.reference.value) add("REF_UNREADABLE");
-  if (parsed.reference.typedMatch !== "match") {
+  if (!["match", "not_provided"].includes(parsed.reference.typedMatch)) {
     add(
       parsed.reference.typedMatch === "typed_invalid"
         ? "REF_FORMAT_INVALID"

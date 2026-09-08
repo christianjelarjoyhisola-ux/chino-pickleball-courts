@@ -212,7 +212,7 @@ function verifyGcashReceipt(
     /\D/g,
     "",
   );
-  if (typedReference.length !== 13) addUnique(flags, "REF_FORMAT_INVALID");
+  if (typedReference && typedReference.length !== 13) addUnique(flags, "REF_FORMAT_INVALID");
   if (!receipt.reference.value) addUnique(flags, "REF_UNREADABLE");
   if (receipt.reference.typedMatch === "mismatch") {
     addUnique(flags, "REF_MISMATCH");

@@ -2714,13 +2714,13 @@ Deno.serve(async (req) => {
     for (const flag of providerVerification?.flags || []) {
       if (!flags.includes(flag)) flags.push(flag);
     }
-    if (provider === "bdopay" && !isBdoPayReference(typedRef)) {
+    if (typedRef && provider === "bdopay" && !isBdoPayReference(typedRef)) {
       flags.push("REF_FORMAT_INVALID");
     }
-    if (provider === "maya" && !isMayaReference(typedRef)) {
+    if (typedRef && provider === "maya" && !isMayaReference(typedRef)) {
       flags.push("REF_FORMAT_INVALID");
     }
-    if (provider === "bpi" && !isBpiConfirmationNo(typedRef)) {
+    if (typedRef && provider === "bpi" && !isBpiConfirmationNo(typedRef)) {
       flags.push("REF_FORMAT_INVALID");
     }
 
@@ -2940,7 +2940,9 @@ Deno.serve(async (req) => {
         !providerParse.receipt.indicators.competingProviderBrand
       : false;
     const referenceMatch =
-      providerParse?.receipt.reference.typedMatch === "match";
+      (providerParse?.receipt.reference.typedMatch === "match" ||
+        (!typedRef && providerParse?.receipt.reference.typedMatch === "not_provided" &&
+          !!extractedRef && providerParse.receipt.reference.confidence === "high"));
     const amountMatch = extractedAmount != null && expectedAmount > 0 &&
       closeMoney(extractedAmount, expectedAmount) &&
       amountExtraction?.reliable === true &&
@@ -3179,6 +3181,7 @@ Deno.serve(async (req) => {
         ? { balancePaymentId: String(hostBalancePayment?.id || "") }
         : {}),
       submittedReference: typedRef,
+      referenceInputMode: typedRef ? "manual" : "receipt_only",
       dedupeKeys: dedupeKeys.map(({ key, providerKey }) => ({
         key,
         providerKey,
@@ -3229,7 +3232,7 @@ Deno.serve(async (req) => {
             p_lease_key: receiptLeaseKey,
             p_lease_token: receiptLeaseToken,
             p_provider: provider,
-            p_payment_reference: typedRef,
+            p_payment_reference: typedRef || extractedRef || "",
             p_payment_status: autoPaymentStatus,
             p_receipt_image_url: objectPath,
             p_receipt_image_hash: imageHash,
@@ -3288,7 +3291,7 @@ Deno.serve(async (req) => {
             p_lease_key: receiptLeaseKey,
             p_lease_token: receiptLeaseToken,
             p_provider: provider,
-            p_payment_reference: typedRef,
+            p_payment_reference: typedRef || extractedRef || "",
             p_receipt_image_url: objectPath,
             p_receipt_image_hash: imageHash,
             p_receipt_phash: phash,
