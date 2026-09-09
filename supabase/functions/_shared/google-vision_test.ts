@@ -7,6 +7,10 @@ import {
   receiptImageDimensions,
   receiptImageSafeToDecode,
 } from "./google-vision.ts";
+import {
+  parseGotymeToGcashReceipt,
+  verifyGotymeToGcashReceipt,
+} from "./receipt-providers/gotyme.ts";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -265,6 +269,105 @@ Deno.test("retains every split reference and masked-name word without correcting
     googleVisionLayoutText({ pages: [visionPage(words)] }, original),
     "To KR****E L** C*\n**** 9W07\nG-Xchange, Inc (GCash)\nFrom SHEEJAN E*****\nReference No. ITO260909 055941016",
     "all observed characters stay unchanged, including zero in masked account",
+  );
+});
+
+Deno.test("native token boundaries preserve split masked names through GoTyme verification", () => {
+  const text = "Transferred\nP265.00\nInstaPay Instant\nTo\nFrom\n" +
+    "KR****E L** C*\n****9WO7\nG-Xchange, Inc (GCash)\nSHEEJAN E*****\n" +
+    "********4162\nGoTyme Bank\nAmount\nFee\nTotal\nTrace ID\nReference No.\nDate\n" +
+    "P265.00\nP0.00\nP265.00\n941016\nITO260909055941016\n09 Sep 2026 at 1:59 PM";
+  const words = [
+    visionWord("Transferred", 400, 10),
+    visionWord("P265.00", 400, 50),
+    visionWord("InstaPay Instant", 400, 100),
+    visionWord("To", 20, 200),
+    visionWord("From", 20, 340),
+    visionWord("KR", 500, 200),
+    visionWord("****", 516, 200),
+    visionWord("E", 548, 200),
+    visionWord("L", 570, 200),
+    visionWord("**", 578, 200),
+    visionWord("C", 610, 200),
+    visionWord("*", 618, 200),
+    visionWord("****", 600, 240),
+    visionWord("9WO7", 632, 240),
+    visionWord("G-Xchange, Inc (GCash)", 500, 280),
+    visionWord("SHEEJAN E*****", 500, 340),
+    visionWord("********4162", 500, 380),
+    visionWord("GoTyme Bank", 500, 420),
+    visionWord("Amount", 20, 460),
+    visionWord("Fee", 20, 500),
+    visionWord("Total", 20, 540),
+    visionWord("Trace ID", 20, 580),
+    visionWord("Reference No.", 20, 620),
+    visionWord("Date", 20, 660),
+    visionWord("P265.00", 600, 460),
+    visionWord("P0.00", 600, 500),
+    visionWord("P265.00", 600, 540),
+    visionWord("941016", 600, 580),
+    visionWord("ITO260909", 500, 620),
+    visionWord("055941016", 572, 620),
+    visionWord("09 Sep 2026 at 1:59 PM", 500, 660),
+  ];
+  const layout = googleVisionLayoutText({ pages: [visionPage(words)] }, text);
+  assert(layout, "valid complete geometry yields alternate text");
+  assert(
+    layout.includes("To KR****E L** C*"),
+    "native name token boundaries retained",
+  );
+  assert(
+    layout.includes("Reference No. ITO260909055941016"),
+    "native reference token retained",
+  );
+  const parsed = parseGotymeToGcashReceipt(layout);
+  assertEquals(
+    parsed.recipient.nameRaw,
+    "KR****E L** C*",
+    "parser sees the observed masked name",
+  );
+  const verified = verifyGotymeToGcashReceipt(parsed, {
+    expectedAmount: 265,
+    pricingAvailable: true,
+    amountTolerance: 0.01,
+    expectedRecipientNumber: "09609422169",
+    expectedRecipientName: "KRISTIE LOU CACHUELA",
+    expectedRecipientAccount: "TESTMERCHANT9WO7",
+    bookingStartedAt: "2026-09-09T05:58:00.000Z",
+    bookingStartedDate: "2026-09-09",
+    paymentWindowMinutes: 15,
+    earlyToleranceMinutes: 2,
+  });
+  assertEquals(
+    verified.recipientComparison.name,
+    "masked_compatible",
+    "name anchors match without injected spaces",
+  );
+  assertEquals(
+    verified.flags.length,
+    0,
+    "complete observed receipt evidence verifies",
+  );
+});
+
+Deno.test("native spaces and row boundaries cannot be erased by geometric proximity", () => {
+  const words = [
+    visionWord("KR", 20, 20),
+    visionWord("****", 36, 20),
+    visionWord("E", 68, 20),
+    visionWord("L", 100, 20),
+    visionWord("**", 108, 20),
+    visionWord("C", 150, 60),
+    visionWord("*", 158, 100),
+  ];
+  const layout = googleVisionLayoutText(
+    { pages: [visionPage(words)] },
+    "KR **** E L** C*",
+  );
+  assertEquals(
+    layout,
+    "KR **** E L**\nC\n*",
+    "observed spaces stay, and a native token never bridges visual rows",
   );
 });
 

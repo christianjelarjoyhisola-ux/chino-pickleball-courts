@@ -332,8 +332,9 @@ export function googleVisionLayoutText(
     !annotation || !originalText.trim() || !Array.isArray(annotation.pages) ||
     !annotation.pages.length
   ) return undefined;
-  const pageTexts: string[] = [];
-  const observedWords: string[] = [];
+  type LayoutRow = { top: number; bottom: number; words: LayoutWord[] };
+  const pageRows: LayoutRow[][] = [];
+  const observedWords: LayoutWord[] = [];
   for (const rawPage of annotation.pages) {
     const page = record(rawPage);
     if (!page || !Array.isArray(page.blocks)) return undefined;
@@ -353,11 +354,10 @@ export function googleVisionLayoutText(
           const word = layoutWord(rawWord, page, words.length);
           if (!word) return undefined;
           words.push(word);
-          observedWords.push(word.text);
+          observedWords.push(word);
         }
       }
     }
-    type LayoutRow = { top: number; bottom: number; words: LayoutWord[] };
     const rows: LayoutRow[] = [];
     words.sort((a, b) =>
       (a.top + a.bottom) - (b.top + b.bottom) ||
@@ -386,24 +386,52 @@ export function googleVisionLayoutText(
       }
     }
     rows.sort((a, b) => a.top - b.top);
-    pageTexts.push(
-      rows.map((row) =>
-        row.words.sort((a, b) => a.left - b.left || a.order - b.order).map((
-          word,
-        ) => word.text).join(" ")
-      ).join("\n"),
-    );
+    pageRows.push(rows);
   }
   // Partial hierarchy data must not hide evidence present in the original OCR.
   const characters = (text: string) =>
     [...text.replace(/\s/g, "")].sort().join("");
   if (
     !observedWords.length ||
-    characters(observedWords.join("")) !== characters(originalText)
+    characters(observedWords.map((word) => word.text).join("")) !==
+      characters(originalText)
   ) {
     return undefined;
   }
-  return pageTexts.join("\n\f\n");
+  // Vision can split a single native token into several Word nodes, especially
+  // masked names and punctuation. Preserve only joins directly demonstrated by
+  // the original text; never decide spacing using expected receipt values.
+  const joinsPrevious = new Set<LayoutWord>();
+  const nativeCharacters = originalText.replace(/\s/g, "");
+  if (
+    observedWords.map((word) => word.text).join("").replace(/\s/g, "") ===
+      nativeCharacters
+  ) {
+    const spaceBoundaries = new Set<number>();
+    let offset = 0;
+    for (const character of originalText) {
+      if (/\s/.test(character)) spaceBoundaries.add(offset);
+      else offset += character.length;
+    }
+    offset = 0;
+    observedWords.forEach((word, index) => {
+      if (index > 0 && !spaceBoundaries.has(offset)) joinsPrevious.add(word);
+      offset += word.text.replace(/\s/g, "").length;
+    });
+  }
+  return pageRows.map((rows) =>
+    rows.map((row) => {
+      row.words.sort((a, b) => a.left - b.left || a.order - b.order);
+      return row.words.map((word, index) => {
+        const previous = row.words[index - 1];
+        const separator = !previous ||
+            (joinsPrevious.has(word) && previous.order + 1 === word.order)
+          ? ""
+          : " ";
+        return separator + word.text;
+      }).join("");
+    }).join("\n")
+  ).join("\n\f\n");
 }
 
 type GoogleVisionOcrOptions = {
