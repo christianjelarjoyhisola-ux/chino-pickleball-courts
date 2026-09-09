@@ -7,6 +7,8 @@
 <link rel="icon" type="image/jpeg" href="logochino.jpg">
 <link rel="stylesheet" href="payment-method-brand.css?v=20260901-payment-icons-v2" />
 <link rel="stylesheet" href="availability-graphic.css?v=20260909-official-logo-v1" />
+<link rel="stylesheet" href="dashboard-court-activity.css?v=20260909-activity-v1" />
+<script src="dashboard-court-activity.js?v=20260909-activity-v1"></script>
 <script src="payment-method-brand.js?v=20260909-security-bank"></script>
 <script src="chart.min.js"></script>
 <script src="booking-balance.js?v=20260831-payment-state-v7"></script>
@@ -5037,6 +5039,15 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(45, 62, 79, .1
         <div class="sc"><div class="sc-lbl">Most Booked</div><div class="sc-val" style="font-size:1rem;margin-top:4px" id="dMost">—</div><div class="sc-ic">🏆</div></div>
       </div>
 
+      <section class="court-activity" id="courtActivity" aria-labelledby="courtActivityTitle" aria-busy="true">
+        <header class="ca-header">
+          <div class="ca-heading"><span class="ca-eyebrow">Your courts, at a glance</span><h3 id="courtActivityTitle">Court Activity</h3><p>Scheduled play · Philippine time</p></div>
+          <div class="ca-tools"><span id="courtActivityUpdated" class="ca-updated" role="status">Loading schedule…</span><button type="button" class="ca-refresh" id="courtActivityRefresh" aria-label="Refresh court activity" onclick="refreshCourtActivity()">↻</button><button type="button" class="ca-all" data-perm="bookings" onclick="goto('bookings')">View bookings <span aria-hidden="true">↗</span></button></div>
+        </header>
+        <div id="courtActivityBody" class="ca-grid"><p class="ca-loading">Loading your court schedule…</p></div>
+        <footer class="ca-footer"><span>Based on confirmed booking times; arrival is not tracked.</span><span id="courtActivityPending"></span></footer>
+      </section>
+
       <div class="dash-mobile-actions">
         <button class="btn btn-p" data-perm="bookings" onclick="openNewBookingModal()">+ Booking</button>
         <button class="btn btn-g" data-perm="bookings" onclick="goto('bookings')">Bookings</button>
@@ -9183,6 +9194,102 @@ async function renderPaddleInsights({force=false}={}){
 /* ==============================================
    DASHBOARD
    ============================================== */
+let _courtActivityBookings = null;
+let _courtActivitySyncedAt = 0;
+let _courtActivityRefreshPromise = null;
+let _courtActivityTimer = null;
+let _courtActivityError = false;
+
+function courtActivityCard(item, kind) {
+  const initial = Array.from(item.fullName || 'Guest')[0];
+  const minutes = kind === 'playing' ? item.minutesUntilEnd : item.minutesUntilStart;
+  const countdown = minutes < 60 ? `${Math.max(1, Math.ceil(minutes))} min` : `${Math.floor(minutes / 60)}h${minutes % 60 >= 1 ? ` ${Math.ceil(minutes % 60)}m` : ''}`;
+  const timing = kind === 'playing' ? `${countdown} left` : item.date === phDateKeyFromTimestamp(new Date()) ? `In ${countdown}` : item.dateLabel;
+  const progress = Math.max(0, Math.min(100, (Date.now() - item.startMs) / (item.endMs - item.startMs) * 100));
+  return `<article class="ca-booking"><div class="ca-booking-top"><span class="ca-court">${esc(item.courtName)}</span><span class="ca-timing">${esc(timing)}</span></div>
+    <div class="ca-person"><span class="ca-avatar" aria-hidden="true">${esc(initial)}</span><div><strong>${esc(item.fullName || 'Guest')}</strong><span>${esc(item.startLabel)} – ${esc(item.endLabel)}${kind === 'playing' && item.date !== phDateKeyFromTimestamp(new Date()) ? ' · Overnight' : ''}</span></div></div>
+    ${kind === 'playing' ? `<div class="ca-progress" aria-hidden="true"><span style="width:${progress}%"></span></div>` : ''}
+    <div class="ca-booking-bottom"><span class="ca-confirmed">Confirmed</span>${item.ref ? `<button type="button" data-activity-ref="${esc(item.ref)}" data-activity-start="${item.startMs}" aria-label="View booking for ${esc(item.fullName || 'Guest')} on ${esc(item.courtName)}">Details <span aria-hidden="true">↗</span></button>` : ''}</div></article>`;
+}
+
+function renderCourtActivity() {
+  const body = $('courtActivityBody');
+  if (!body || !_courtActivityBookings) return;
+  if (!window.ChinoCourtActivity) {
+    body.innerHTML = '<p class="ca-loading">Schedule unavailable. Reload the page to try again.</p>';
+    $('courtActivityUpdated').textContent = 'Could not load schedule';
+    $('courtActivity').setAttribute('aria-busy','false');
+    return;
+  }
+  const expanded = new Set([...body.querySelectorAll('details[open]')].map(el => el.dataset.lane));
+  const focused = body.contains(document.activeElement) ? document.activeElement : null;
+  const focusRef = focused?.dataset.activityRef;
+  const focusStart = focused?.dataset.activityStart;
+  const focusLane = focused?.closest('details')?.dataset.lane;
+  const snapshot = window.ChinoCourtActivity.buildSnapshot(_courtActivityBookings);
+  const lanes = [
+    { key: 'playing', title: 'Playing Now', caption: 'Currently on the schedule', empty: 'No games in progress', detail: 'The courts are between scheduled games.' },
+    { key: 'next', title: 'Up Next', caption: 'The next players to expect', empty: 'No next game scheduled', detail: 'New confirmed bookings will appear here.' },
+    { key: 'upcoming', title: 'Upcoming', caption: 'Coming up in the next 7 days', empty: 'You’re all caught up', detail: 'No other confirmed games in the next 7 days.' },
+  ];
+  body.innerHTML = lanes.map(lane => {
+    const items = snapshot[lane.key];
+    return `<section class="ca-lane ca-${lane.key}" aria-labelledby="ca-${lane.key}-title"><header class="ca-lane-head"><div><h4 id="ca-${lane.key}-title"><span class="ca-dot" aria-hidden="true"></span>${lane.title}</h4><p>${lane.caption}</p></div><span class="ca-count" aria-label="${items.length} scheduled sessions">${items.length}</span></header><div class="ca-list">${items.length ? items.slice(0,2).map(item => courtActivityCard(item,lane.key)).join('') + (items.length > 2 ? `<details class="ca-more" data-lane="${lane.key}"${expanded.has(lane.key) ? ' open' : ''}><summary>Show ${items.length-2} more</summary>${items.slice(2).map(item => courtActivityCard(item,lane.key)).join('')}</details>` : '') : `<div class="ca-empty"><span class="ca-empty-court" aria-hidden="true"></span><strong>${lane.empty}</strong><p>${lane.detail}</p></div>`}</div></section>`;
+  }).join('');
+  if (focused) {
+    const replacement = focusRef
+      ? [...body.querySelectorAll('button[data-activity-ref]')].find(el => el.dataset.activityRef === focusRef && el.dataset.activityStart === focusStart)
+      : [...body.querySelectorAll('details')].find(el => el.dataset.lane === focusLane)?.querySelector('summary');
+    const enclosingDetails = replacement?.closest('details');
+    if (enclosingDetails) enclosingDetails.open = true;
+    (replacement || $('courtActivityRefresh'))?.focus({preventScroll:true});
+  }
+  $('courtActivityUpdated').textContent = _courtActivityError ? 'Update delayed · showing last schedule' : `Updated ${new Date(_courtActivitySyncedAt).toLocaleTimeString('en-PH',{timeZone:'Asia/Manila',hour:'numeric',minute:'2-digit'})} PH`;
+  $('courtActivityPending').textContent = snapshot.pending.length ? `${snapshot.pending.length} awaiting confirmation` : 'Confirmed reservations only';
+  $('courtActivity').setAttribute('aria-busy','false');
+}
+
+function setCourtActivityBookings(bookings) {
+  _courtActivityBookings = bookings;
+  _courtActivitySyncedAt = Date.now();
+  _courtActivityError = false;
+  renderCourtActivity();
+  if (!_courtActivityTimer) _courtActivityTimer = setInterval(() => {
+    if (document.hidden || _curSection !== 'dash' || $('courtActivityBody')?.contains(document.activeElement)) return;
+    if (Date.now() - _courtActivitySyncedAt >= 60000) void refreshCourtActivity();
+    else renderCourtActivity();
+  }, 30000);
+}
+
+async function refreshCourtActivity() {
+  if (_courtActivityRefreshPromise) return _courtActivityRefreshPromise;
+  const button = $('courtActivityRefresh');
+  if (button) button.disabled = true;
+  $('courtActivity')?.setAttribute('aria-busy','true');
+  _courtActivityRefreshPromise = (async () => {
+    try {
+      setCourtActivityBookings(await DB.getCourtActivityBookings());
+    } catch (_) {
+      _courtActivityError = true;
+      if (_courtActivityBookings) renderCourtActivity();
+      else { $('courtActivityBody').innerHTML = '<p class="ca-loading">Schedule unavailable. Use refresh to try again.</p>'; $('courtActivityUpdated').textContent = 'Could not load schedule'; }
+    } finally {
+      $('courtActivity')?.setAttribute('aria-busy','false');
+      if (button) button.disabled = false;
+      _courtActivityRefreshPromise = null;
+    }
+  })();
+  return _courtActivityRefreshPromise;
+}
+
+document.getElementById('courtActivityBody')?.addEventListener('click', event => {
+  const button = event.target.closest('button[data-activity-ref]');
+  if (button) void openBookingDetails(button.dataset.activityRef);
+});
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && _curSection === 'dash' && _courtActivityBookings) void refreshCourtActivity();
+});
+
 function dashboardDailyCounts(transactions, now = new Date()) {
   const today = phDateKeyFromTimestamp(now);
   return {
@@ -9194,6 +9301,7 @@ async function renderDash(){
   // The private platform-allocation position comes from the authoritative
   // remittance RPC. It loads alongside the operational dashboard metrics.
   renderMaintFee();
+  void refreshCourtActivity();
 
   const [bks, settings]=await Promise.all([DB.getBookings(), DB.getSettings()]);
   const feeCfg=getPlatformFeeConfig(settings);
@@ -18893,7 +19001,7 @@ async function checkAgreementGate(session) {
 
 <script src="supabase.min.js"></script>
 <script src="open-play-rating.js?v=20260729-head-to-head-v1"></script>
-<script src="supabase-config.js?v=20260909-all-courts-promo"></script>
+<script src="supabase-config.js?v=20260909-court-activity-v1"></script>
 <script src="qrcode.min.js?v=1.5.4"></script>
 <script src="availability-graphic.js?v=20260909-domain-v1"></script>
 <script src="play-manager.js?v=20260909-official-logo-v1"></script>

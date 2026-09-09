@@ -760,6 +760,31 @@ function _pbManilaToday() {
   return `${parts.year}-${parts.month}-${parts.day}`;
 }
 
+function _pbCourtActivityWindow() {
+  const today = Date.parse(`${_pbManilaToday()}T00:00:00Z`);
+  return {
+    fromDate: new Date(today - 86400000).toISOString().slice(0, 10),
+    toDate: new Date(today + 6 * 86400000).toISOString().slice(0, 10),
+  };
+}
+
+function _pbCourtActivityBooking(row) {
+  return {
+    ref: row.ref,
+    groupRef: row.groupRef ?? row.booking_group_ref ?? null,
+    fullName: row.fullName ?? row.full_name ?? '',
+    email: row.email || '',
+    courtId: row.courtId ?? row.court_id,
+    courtName: row.courtName ?? row.court_name ?? '',
+    date: row.date,
+    slots: Array.isArray(row.slots) ? [...row.slots] : [],
+    startTime: row.startTime ?? row.start_time,
+    endTime: row.endTime ?? row.end_time,
+    duration: Number(row.duration || 0),
+    status: row.status,
+  };
+}
+
 function _pbMinimumPublicBookingDate() {
   const today = _pbManilaToday();
   return today > PB_PUBLIC_COURT_OPENING_DATE ? today : PB_PUBLIC_COURT_OPENING_DATE;
@@ -1306,6 +1331,31 @@ window.DB = {
       }
       return data.map(rowToBooking);
     });
+  },
+
+  async getCourtActivityBookings() {
+    if (!PB_PRIVATE_DATA_SURFACE || !['owner', 'court_owner', 'staff'].includes(await _pbCurrentAccountRole())) {
+      throw new Error('An active dashboard account is required to load court activity.');
+    }
+    const { fromDate, toDate } = _pbCourtActivityWindow();
+    const rows = [];
+    const pageSize = 1000;
+    // Read the operational window directly; historic bookings and the shared cache cannot hide newer slots.
+    for (let from = 0; ; from += pageSize) {
+      const { data, error } = await _sb.from('bookings')
+        .select('ref,booking_group_ref,full_name,email,court_id,court_name,date,slots,start_time,end_time,duration,status')
+        .gte('date', fromDate)
+        .lte('date', toDate)
+        .in('status', ['confirmed', 'pending', 'verifying'])
+        .order('date', { ascending: true })
+        .order('ref', { ascending: true })
+        .range(from, from + pageSize - 1);
+      if (error) throw error;
+      if (!Array.isArray(data)) throw new Error('Court activity returned an invalid response. Please try again.');
+      rows.push(...data);
+      if (data.length < pageSize) break;
+    }
+    return rows.map(_pbCourtActivityBooking);
   },
 
   async getInsightBookings() {
@@ -4412,6 +4462,19 @@ window.DB = {
         .filter(b => !opts.hostUserId || String(b.hostUserId) === String(opts.hostUserId))
         .filter(b => !opts.activeOnly || (b.status !== 'cancelled' && b.status !== 'forfeited'))
         .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+    },
+    async getCourtActivityBookings() {
+      const session = window.Auth?.getSession?.();
+      if (!PB_PRIVATE_DATA_SURFACE || !session || !['owner', 'court_owner', 'staff'].includes(session.role)
+          || (session.status && session.status !== 'active')) {
+        throw new Error('An active dashboard account is required to load court activity.');
+      }
+      const { fromDate, toDate } = _pbCourtActivityWindow();
+      return readDb().bookings
+        .filter(row => row.date >= fromDate && row.date <= toDate)
+        .filter(row => ['confirmed', 'pending', 'verifying'].includes(row.status))
+        .map(_pbCourtActivityBooking)
+        .sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.ref).localeCompare(String(b.ref)));
     },
     async getInsightBookings() {
       const session = window.Auth?.getSession?.();
