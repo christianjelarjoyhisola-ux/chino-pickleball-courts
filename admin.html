@@ -7798,6 +7798,13 @@ function receiptDetailsHtml(b){
   const gcash = ex.gcash || null;
   const bankTransfer = ex.bankTransfer || null;
   const recipientCheck = gcash?.recipientComparison || {};
+  const bankReceiptProvider = ({
+    gotyme_to_gcash_v1: 'gotyme',
+    maribank_to_gcash_v1: 'maribank',
+  })[String(ex.parserVersion || '').toLowerCase()];
+  const showBankReceipt = bankTransfer && bankReceiptProvider &&
+    bankTransfer.provider === bankReceiptProvider && ex.provider === bankReceiptProvider;
+  const bankUsesQrAccount = ['full', 'masked'].includes(bankTransfer?.recipient?.accountVisibility);
   const parserLabel = ({
     gcash_v1: 'Dedicated GCash v1',
     bdopay_to_gcash_v1: 'Dedicated BDO Pay to GCash v1',
@@ -7860,6 +7867,25 @@ function receiptDetailsHtml(b){
       ['Recipient Phone', receiptDetailValue(gcashPhoneCheckLabel(recipientCheck.phone)), true],
       ['Recipient Name', receiptDetailValue(gcashNameCheckLabel(recipientCheck.name, gcash.receiver?.name?.raw)), true],
       ['Receipt Type', receiptDetailValue(gcash.indicators?.classification === 'gcash' ? 'GCash Send Money receipt' : 'Needs review'), true],
+    ] : []),
+    ...(showBankReceipt ? [
+      ['Payment Route', receiptDetailValue(bankReceiptProvider === 'gotyme' ? 'GoTyme Bank → GCash' : 'MariBank → GCash'), true],
+      ['Recipient Name', receiptDetailValue(bankTransfer.recipient?.nameRaw), true],
+      ['Recipient Account Read', receiptDetailValue(bankTransfer.recipient?.accountRaw), true],
+      ...(bankUsesQrAccount ? [
+        ['Saved GCash QR Account Ending', receiptDetailValue(String(ex.expectedReceiverAccount || '').slice(-4)), true],
+        ['Destination Check', receiptDetailValue(({
+          exact: 'Matches saved GCash QR',
+          suffix_only: 'Visible ending matches saved GCash QR',
+          mismatch: 'Does not match — check original receipt',
+          missing: 'Account not read — owner review required',
+          not_configured: 'GCash QR account not configured',
+        })[bankTransfer.recipientComparison?.account] || 'Owner review required'), true],
+      ] : [
+        ['Destination Check', receiptDetailValue(gcashPhoneCheckLabel(bankTransfer.recipientComparison?.phone)), true],
+      ]),
+      ['Name Check', receiptDetailValue(gcashNameCheckLabel(bankTransfer.recipientComparison?.name)), true],
+      ['InstaPay Trace ID (not payment ref)', receiptDetailValue(bankTransfer.railReference?.value), true],
     ] : []),
     ...(bankTransfer && String(ex.parserVersion || '').toLowerCase() === 'maya_to_gcash_v1' ? [
       ['Maya Reference ID', receiptDetailValue(bankTransfer.reference?.value), true],
