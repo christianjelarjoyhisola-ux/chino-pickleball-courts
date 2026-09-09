@@ -12,7 +12,32 @@
   const escape = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
   const words = value => String(value ?? '').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ').trim();
   const roleLabel = value => ({ owner: 'System Owner', court_owner: 'Court Owner', staff: 'Court Staff', host: 'Host' }[value] || words(value) || 'System');
-  const activityTitle = item => item.action === 'page_view' && SECTIONS[item.targetId] ? `Viewed ${SECTIONS[item.targetId]}` : words(item.summary || item.action) || 'Activity';
+  function notificationActivity(item) {
+    const details = item.details || {};
+    const client = item.source === 'client_reported' && item.action === 'dispatchBookingRescheduleNotifications';
+    const server = ['server_reported', 'server_event'].includes(item.source) &&
+      (details.endpoint === 'booking-reschedule-notifications' ||
+        (item.targetType === 'edge_function' && item.targetId === 'booking-reschedule-notifications'));
+    return client || server ? { client, retry: server && (details.action || item.action) === 'retry' } : null;
+  }
+  function activityTitle(item) {
+    const notification = notificationActivity(item);
+    if (notification) {
+      if (notification.retry) return 'Requested another attempt to send booking-change messages';
+      if (item.outcome === 'skipped') return 'Checked for booking-change messages';
+      if (item.outcome === 'success') return 'Booking-change message request succeeded';
+      if (item.outcome === 'failed') return 'Booking-change message request failed';
+      if (item.outcome === 'denied') return 'Booking-change message request denied';
+      return 'Started a booking-change message check';
+    }
+    if (item.action === 'page_view' && SECTIONS[item.targetId]) return `Viewed ${SECTIONS[item.targetId]}`;
+    if (['server_reported', 'server_event'].includes(item.source) && item.details?.event === 'edge_request') return 'Service request';
+    return words(item.summary || item.action) || 'Activity';
+  }
+  function activityTarget(item) {
+    if (notificationActivity(item)) return 'Messages about requests to change a booking date or time';
+    return [words(item.targetType), item.targetId].filter(Boolean).join(' · ') || 'Workspace';
+  }
   function dateLabel(value, includeTime = true) {
     const date = new Date(value);
     if (!value || !Number.isFinite(date.getTime())) return 'Date unavailable';
@@ -21,11 +46,25 @@
   function sourceLabel(item) {
     if (item.source === 'database_change') return { label: 'Saved change', kind: 'saved', explanation: 'Recorded from a database change.' };
     if (item.source === 'auth_event') return { label: 'Account event', kind: 'event', explanation: 'Recorded by the authentication service.' };
-    if (item.source === 'server_reported' || item.source === 'server_event') return { label: 'Server event', kind: 'event', explanation: 'Recorded by the server.' };
+    const notification = notificationActivity(item);
+    const note = notification ? ' These checks can run automatically while the dashboard is open. The account identifies the session used; this record does not establish a manual click or a booking change.' : '';
+    if (notification?.client && item.outcome === 'skipped') return { label: 'Nothing to send', kind: 'view', explanation: 'The browser reported that no booking-change messages were ready to send. This is a normal check result.' + note };
+    if (item.source === 'server_reported' || item.source === 'server_event') {
+      const result = {
+        attempted: ['Request started', 'event', 'The server recorded the start of this request. Its result is recorded separately.'],
+        attempt: ['Request started', 'event', 'The server recorded the start of this request. Its result is recorded separately.'],
+        success: ['Request succeeded', 'event', 'The server returned a successful response. This alone does not confirm that a message was delivered or a booking was changed.'],
+        failed: ['Request failed', 'attempt', 'The server recorded a failed request.'],
+        denied: ['Access denied', 'attempt', 'The server denied this request.'],
+        skipped: ['Skipped', 'view', 'The server reported that this request was skipped.'],
+      }[item.outcome];
+      return result ? { label: result[0], kind: result[1], explanation: result[2] + note }
+        : { label: 'Server event', kind: 'event', explanation: 'Recorded by the server.' + note };
+    }
     if (item.outcome === 'view' || item.outcome === 'viewed' || item.action === 'page_view') return { label: 'Viewed', kind: 'view', explanation: 'Reported by the browser. This does not confirm a saved change.' };
-    if (item.outcome === 'success') return { label: 'Reported success', kind: 'event', explanation: 'The browser received a successful response. Saved changes have their own database records.' };
-    if (item.outcome === 'failed') return { label: 'Reported failure', kind: 'attempt', explanation: 'The browser reported that this request failed.' };
-    if (item.outcome === 'skipped') return { label: 'Not completed', kind: 'attempt', explanation: 'The browser reported that this action was skipped or did not complete.' };
+    if (item.outcome === 'success') return { label: 'Reported success', kind: 'event', explanation: 'The browser received a successful response. Saved changes have their own database records.' + note };
+    if (item.outcome === 'failed') return { label: 'Reported failure', kind: 'attempt', explanation: 'The browser reported that this request failed.' + note };
+    if (item.outcome === 'skipped') return { label: 'Skipped', kind: 'view', explanation: 'The browser reported that this action was skipped. Skipping an action does not by itself mean a failure.' };
     if (item.outcome === 'denied') return { label: 'Reported denial', kind: 'attempt', explanation: 'The browser reported that access to this action was denied.' };
     return { label: 'Attempt', kind: 'attempt', explanation: 'Reported by the browser. A click or request does not confirm that it completed.' };
   }
@@ -95,12 +134,15 @@
 
   function itemMarkup(item, index) {
     const source = sourceLabel(item);
-    const target = [words(item.targetType), item.targetId].filter(Boolean).join(' · ') || 'Workspace';
+    const target = activityTarget(item);
     return `<tr><td data-label="When"><time datetime="${escape(item.occurredAt)}">${escape(dateLabel(item.occurredAt))}</time></td><td data-label="Operator"><strong>${escape(item.actorName || 'System')}</strong><small>${escape(roleLabel(item.actorRole))}</small></td><td data-label="Activity"><strong>${escape(activityTitle(item))}</strong><small>${escape(target)}</small></td><td data-label="Record"><span class="aa-badge aa-${source.kind}">${source.label}</span></td><td><button class="aa-detail-btn" type="button" data-aa-detail="${index}" aria-label="View details for ${escape(activityTitle(item))}">Details <span aria-hidden="true">↗</span></button></td></tr>`;
   }
   function pretty(value) { return value === undefined || value === null ? '—' : typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value); }
   function detailMarkup(item) {
     const source = sourceLabel(item);
+    const notification = notificationActivity(item);
+    const action = notification ? (notification.retry ? 'Retry booking-change messages' : 'Check booking-change messages') : words(item.action) || 'Activity';
+    const eventInformation = { ...(item.details || {}), recordedAction: item.action, recordedOutcome: item.outcome };
     const before = item.before && typeof item.before === 'object' ? item.before : {};
     const after = item.after && typeof item.after === 'object' ? item.after : {};
     const changedFields = Array.isArray(item.changedFields) ? item.changedFields.filter(key => typeof key === 'string') : [];
@@ -109,12 +151,12 @@
       const hidden = /\[REDACTED\]/i.test(pretty(before[key]) + pretty(after[key]));
       return `<section class="aa-change"><h5>${escape(words(key))}</h5>${hidden ? '<p class="aa-detail-note aa-hidden-values">This field changed. Sensitive values are hidden.</p>' : ''}<div><div><span>Before</span><pre>${escape(pretty(before[key]))}</pre></div><div><span>After</span><pre>${escape(pretty(after[key]))}</pre></div></div></section>`;
     }).join('');
-    return `<div class="aa-detail-summary"><span class="aa-badge aa-${source.kind}">${source.label}</span><h3>${escape(activityTitle(item))}</h3><p>${escape(source.explanation)}</p><dl><div><dt>Operator</dt><dd>${escape(item.actorName || 'System')} · ${escape(roleLabel(item.actorRole))}</dd></div><div><dt>Philippine time</dt><dd>${escape(dateLabel(item.occurredAt))}</dd></div><div><dt>Action</dt><dd>${escape(words(item.action) || 'Activity')}</dd></div><div><dt>Result</dt><dd>${escape(words(item.outcome) || 'Recorded')}</dd></div><div><dt>Target</dt><dd>${escape([words(item.targetType), item.targetId].filter(Boolean).join(' · ') || 'Workspace')}</dd></div><div><dt>Record ID</dt><dd>${escape(item.id)}</dd></div></dl></div>${keys.length ? `<div class="aa-changes"><h4>What changed</h4>${changes}</div>` : '<p class="aa-detail-note">No before-and-after change is attached to this event.</p>'}${item.details && Object.keys(item.details).length ? `<details class="aa-event-details"><summary>Event information</summary><pre>${escape(pretty(item.details))}</pre></details>` : ''}`;
+    return `<div class="aa-detail-summary"><span class="aa-badge aa-${source.kind}">${source.label}</span><h3>${escape(activityTitle(item))}</h3><p>${escape(source.explanation)}</p><dl><div><dt>Operator</dt><dd>${escape(item.actorName || 'System')} · ${escape(roleLabel(item.actorRole))}</dd></div><div><dt>Philippine time</dt><dd>${escape(dateLabel(item.occurredAt))}</dd></div><div><dt>Action</dt><dd>${escape(action)}</dd></div><div><dt>Result</dt><dd>${escape(source.label)}</dd></div><div><dt>Target</dt><dd>${escape(activityTarget(item))}</dd></div><div><dt>Record ID</dt><dd>${escape(item.id)}</dd></div></dl></div>${keys.length ? `<div class="aa-changes"><h4>What changed</h4>${changes}</div>` : '<p class="aa-detail-note">No before-and-after change is attached to this event.</p>'}<details class="aa-event-details"><summary>Event information</summary><pre>${escape(pretty(eventInformation))}</pre></details>`;
   }
 
   function create({ root, db, getSession, canOwner, isLocalData = () => false }) {
     const find = name => root.querySelector(`[data-aa="${name}"]`);
-    root.innerHTML = `<section class="aa-panel" aria-labelledby="activityHistoryTitle"><header class="aa-header"><div><span class="aa-eyebrow">System owner only</span><h2 id="activityHistoryTitle">Activity History</h2><p>Changes, views and action attempts across your workspace.</p></div><button class="aa-button" type="button" data-aa="refresh">↻ <span>Refresh</span></button></header><div class="aa-scope"><span class="aa-scope-icon" aria-hidden="true">◷</span><p data-aa="started">History begins when activity recording is enabled. Earlier actions are not reconstructed.</p></div><form class="aa-filters" data-aa="filters"><label>From date<input type="date" name="fromDate" data-aa="fromDate"></label><label>To date<input type="date" name="toDate" data-aa="toDate"></label><label>Operator<select name="actorId" data-aa="actor"><option value="">All operators</option></select></label><label>Category<select name="category" data-aa="category"><option value="">All categories</option>${CATEGORIES.map(category => `<option value="${category}">${escape(words(category))}</option>`).join('')}</select></label><button class="aa-button aa-primary" type="submit">Apply filters</button><button class="aa-reset" type="button" data-aa="reset">Reset</button></form><div class="aa-meta"><span data-aa="count">No records loaded</span><span>Philippine time · newest first</span></div><div data-aa="status" class="aa-status" role="status" aria-live="polite"></div><div class="aa-table-wrap" data-aa="list"><table class="aa-table"><thead><tr><th>When</th><th>Operator</th><th>Activity</th><th>Record</th><th><span class="aa-sr-only">Details</span></th></tr></thead><tbody data-aa="rows"></tbody></table></div><footer class="aa-footer"><p>Saved changes are recorded by the database. Browser attempts do not confirm completion.</p><button class="aa-button" type="button" data-aa="more" hidden>Load older activity</button></footer></section><dialog class="aa-dialog" data-aa="dialog" aria-labelledby="activityDetailTitle"><header><h2 id="activityDetailTitle">Activity details</h2><button class="aa-button" type="button" data-aa="close" aria-label="Close activity details">Close</button></header><div class="aa-dialog-body" data-aa="detail"></div></dialog>`;
+    root.innerHTML = `<section class="aa-panel" aria-labelledby="activityHistoryTitle"><header class="aa-header"><div><span class="aa-eyebrow">System owner only</span><h2 id="activityHistoryTitle">Activity History</h2><p>Saved changes, page views, and service checks.</p></div><button class="aa-button" type="button" data-aa="refresh">↻ <span>Refresh</span></button></header><div class="aa-scope"><span class="aa-scope-icon" aria-hidden="true">◷</span><p data-aa="started">History begins when activity recording is enabled. Earlier actions are not reconstructed.</p></div><form class="aa-filters" data-aa="filters"><label>From date<input type="date" name="fromDate" data-aa="fromDate"></label><label>To date<input type="date" name="toDate" data-aa="toDate"></label><label>Operator<select name="actorId" data-aa="actor"><option value="">All operators</option></select></label><label>Category<select name="category" data-aa="category"><option value="">All categories</option>${CATEGORIES.map(category => `<option value="${category}">${escape(words(category))}</option>`).join('')}</select></label><button class="aa-button aa-primary" type="submit">Apply filters</button><button class="aa-reset" type="button" data-aa="reset">Reset</button></form><div class="aa-meta"><span data-aa="count">No records loaded</span><span>Philippine time · newest first</span></div><div data-aa="status" class="aa-status" role="status" aria-live="polite"></div><div class="aa-table-wrap" data-aa="list"><table class="aa-table"><thead><tr><th>When</th><th>Operator</th><th>Activity</th><th>Record</th><th><span class="aa-sr-only">Details</span></th></tr></thead><tbody data-aa="rows"></tbody></table></div><footer class="aa-footer"><p>Service checks can run automatically under a signed-in account. Saved changes show recorded changes to your data.</p><button class="aa-button" type="button" data-aa="more" hidden>Load older activity</button></footer></section><dialog class="aa-dialog" data-aa="dialog" aria-labelledby="activityDetailTitle"><header><h2 id="activityDetailTitle">Activity details</h2><button class="aa-button" type="button" data-aa="close" aria-label="Close activity details">Close</button></header><div class="aa-dialog-body" data-aa="detail"></div></dialog>`;
     let filters = {}, disposed = false, dialogTrigger = null, dialogTriggerIndex = null;
     const store = createStore({ db, getSession, canOwner, onChange: render });
     function render(state) {

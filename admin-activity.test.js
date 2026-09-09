@@ -213,3 +213,50 @@ test('admin owner-only navigation denies direct activity routes before loader is
   assert.match(admin, /_adminSessionInvalidated=true;\s*_adminActivity\?\.clear\(\)/);
   assert.match(admin, /function logout\(\)\{ _adminActivity\?\.clear\(\); Auth.logout\(\); \}/);
 });
+
+
+test('an empty booking-change message check is clearly labelled without claiming a manual action', () => {
+  const record = item('notification-empty', { source: 'client_reported', action: 'dispatchBookingRescheduleNotifications', outcome: 'skipped', summary: 'Reported result: dispatchBookingRescheduleNotifications', targetType: '', targetId: '', details: { page: 'dash', event: 'action_result' } });
+  const label = Activity.sourceLabel(record);
+  assert.equal(label.label, 'Nothing to send');
+  assert.equal(label.kind, 'view');
+  assert.match(label.explanation, /no booking-change messages were ready/);
+  assert.match(label.explanation, /can run automatically/);
+  const row = Activity.itemMarkup(record, 0);
+  assert.match(row, /Checked for booking-change messages/);
+  assert.doesNotMatch(row, /Not completed|dispatch Booking|Server reported edge request/);
+  const detail = Activity.detailMarkup(record);
+  assert.ok(detail.includes('<dt>Result</dt><dd>Nothing to send'));
+  assert.match(detail, /Check booking-change messages/);
+  assert.match(detail, /dispatchBookingRescheduleNotifications/); // Original action stays available for audit.
+  assert.match(detail, /recordedOutcome/);
+  assert.equal(record.outcome, 'skipped');
+});
+
+test('notification server request stages preserve outcomes and never claim message delivery', () => {
+  for (const [outcome, expected] of [['attempted', 'Request started'], ['success', 'Request succeeded'], ['failed', 'Request failed'], ['denied', 'Access denied']]) {
+    const record = item('server', { source: 'server_reported', action: 'dispatch', outcome, targetType: 'reschedule_request', targetId: 'booking-reschedule-notifications', details: { endpoint: 'booking-reschedule-notifications', event: 'edge_request', action: 'dispatch' } });
+    assert.equal(Activity.sourceLabel(record).label, expected);
+    assert.match(Activity.sourceLabel(record).explanation, /can run automatically/);
+    assert.match(Activity.itemMarkup(record, 0), /booking-change message/i);
+    assert.doesNotMatch(Activity.itemMarkup(record, 0), /messages sent|booking changed|Server reported edge request/i);
+    assert.ok(Activity.detailMarkup(record).includes('<dt>Result</dt><dd>' + expected));
+  }
+  const retry = item('retry', { source: 'server_reported', action: 'retry', outcome: 'failed', details: { endpoint: 'booking-reschedule-notifications', event: 'edge_request', action: 'retry' } });
+  assert.match(Activity.itemMarkup(retry, 0), /Requested another attempt to send booking-change messages/);
+  assert.equal(Activity.sourceLabel(retry).label, 'Request failed');
+  assert.doesNotMatch(Activity.itemMarkup(retry, 0), /Automatic/);
+});
+
+test('generic skipped actions and unrelated saved changes keep their original meanings', () => {
+  assert.equal(Activity.sourceLabel({ source: 'client_reported', action: 'saveCourt', outcome: 'skipped' }).label, 'Skipped');
+  const saved = item('saved', { source: 'database_change', action: 'dispatchBookingRescheduleNotifications', summary: 'Updated court settings', outcome: 'success' });
+  assert.equal(Activity.sourceLabel(saved).label, 'Saved change');
+  assert.match(Activity.itemMarkup(saved, 0), /Updated court settings/);
+  const unrelated = item('other', { source: 'client_reported', action: 'other', summary: 'dispatchBookingRescheduleNotifications', outcome: 'skipped' });
+  assert.equal(Activity.sourceLabel(unrelated).label, 'Skipped');
+  const server = item('server', { source: 'server_reported', action: 'post', outcome: 'success', details: { event: 'edge_request', endpoint: 'integration-status' } });
+  assert.equal(Activity.sourceLabel(server).label, 'Request succeeded');
+  assert.match(Activity.itemMarkup(server, 0), /Service request/);
+  assert.doesNotMatch(Activity.itemMarkup(server, 0), /booking-change/);
+});
