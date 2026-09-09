@@ -5,6 +5,7 @@ export type ReceiptImageContentType =
 
 export type GoogleVisionOcrResult = {
   text: string;
+  layoutText?: string;
   confidence: number;
   confidenceSource: "native" | "heuristic" | "none";
 };
@@ -194,6 +195,7 @@ export function googleVisionConfidenceDetails(
       ? { confidence: 0.5, source: "heuristic" }
       : { confidence: 0, source: "none" };
   }
+
   const pages = Array.isArray(annotation.pages)
     ? annotation.pages as Array<Record<string, unknown>>
     : [];
@@ -227,6 +229,181 @@ export function googleVisionConfidenceDetails(
     : text.length > 0
     ? { confidence: 0.5, source: "heuristic" }
     : { confidence: 0, source: "none" };
+}
+
+type LayoutWord = {
+  text: string;
+  left: number;
+  top: number;
+  bottom: number;
+  order: number;
+};
+
+function record(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function layoutWord(
+  value: unknown,
+  page: Record<string, unknown>,
+  order: number,
+): LayoutWord | null {
+  const word = record(value);
+  if (!word || !Array.isArray(word.symbols) || !word.symbols.length) {
+    return null;
+  }
+  const symbols = word.symbols.map(record);
+  if (
+    symbols.some((symbol) => typeof symbol?.text !== "string" || !symbol.text)
+  ) {
+    return null;
+  }
+  const text = symbols.map((symbol) => symbol!.text as string).join("");
+  if (!text.trim() || /[\r\n\f]/.test(text)) return null;
+  const box = record(word.boundingBox);
+  if (!box) return null;
+  const normalized = !Array.isArray(box.vertices);
+  const vertices = normalized ? box.normalizedVertices : box.vertices;
+  if (!Array.isArray(vertices) || vertices.length !== 4) return null;
+  const width = page.width;
+  const height = page.height;
+  if (
+    normalized && (
+      typeof width !== "number" || !Number.isFinite(width) || width <= 0 ||
+      typeof height !== "number" || !Number.isFinite(height) || height <= 0
+    )
+  ) return null;
+  const points: Array<{ x: number; y: number }> = [];
+  for (const vertex of vertices) {
+    const point = record(vertex);
+    if (!point) return null;
+    // Protobuf JSON omits zero-valued coordinates; a missing vertex is different.
+    const x = point.x === undefined ? 0 : point.x;
+    const y = point.y === undefined ? 0 : point.y;
+    if (
+      typeof x !== "number" || typeof y !== "number" ||
+      !Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0 ||
+      (normalized && (x > 1 || y > 1))
+    ) return null;
+    points.push({
+      x: x * (normalized ? width as number : 1),
+      y: y * (normalized ? height as number : 1),
+    });
+  }
+  const [a, b, c, d] = points;
+  // Vision's vertex order is top-left, top-right, bottom-right, bottom-left in
+  // natural reading orientation. Avoid inventing row order for rotated text.
+  if (b.x <= a.x || c.x <= d.x || d.y <= a.y || c.y <= b.y) return null;
+  const top = Math.min(...points.map((point) => point.y));
+  const bottom = Math.max(...points.map((point) => point.y));
+  const wordHeight = bottom - top;
+  if (
+    Math.abs(a.y - b.y) > wordHeight * 0.25 ||
+    Math.abs(c.y - d.y) > wordHeight * 0.25
+  ) return null;
+  if (
+    (typeof width === "number" && points.some((point) => point.x > width)) ||
+    (typeof height === "number" && points.some((point) => point.y > height))
+  ) {
+    return null;
+  }
+  return {
+    text,
+    left: Math.min(...points.map((point) => point.x)),
+    top,
+    bottom,
+    order,
+  };
+}
+
+/**
+ * Alternate reading order for upright receipts whose labels and values were
+ * emitted as separate columns. No characters or words are inferred or removed.
+ * Uses the documented Page -> Block -> Paragraph -> Word -> Symbol hierarchy:
+ * https://docs.cloud.google.com/vision/docs/reference/rest/v1/AnnotateImageResponse#Word
+ */
+export function googleVisionLayoutText(
+  annotation: Record<string, unknown> | null,
+  originalText: string,
+): string | undefined {
+  if (
+    !annotation || !originalText.trim() || !Array.isArray(annotation.pages) ||
+    !annotation.pages.length
+  ) return undefined;
+  const pageTexts: string[] = [];
+  const observedWords: string[] = [];
+  for (const rawPage of annotation.pages) {
+    const page = record(rawPage);
+    if (!page || !Array.isArray(page.blocks)) return undefined;
+    const words: LayoutWord[] = [];
+    for (const rawBlock of page.blocks) {
+      const block = record(rawBlock);
+      if (!block) return undefined;
+      // Non-text blocks may legitimately have no paragraphs.
+      if (block.paragraphs === undefined && block.blockType !== "TEXT") {
+        continue;
+      }
+      if (!Array.isArray(block.paragraphs)) return undefined;
+      for (const rawParagraph of block.paragraphs) {
+        const paragraph = record(rawParagraph);
+        if (!paragraph || !Array.isArray(paragraph.words)) return undefined;
+        for (const rawWord of paragraph.words) {
+          const word = layoutWord(rawWord, page, words.length);
+          if (!word) return undefined;
+          words.push(word);
+          observedWords.push(word.text);
+        }
+      }
+    }
+    type LayoutRow = { top: number; bottom: number; words: LayoutWord[] };
+    const rows: LayoutRow[] = [];
+    words.sort((a, b) =>
+      (a.top + a.bottom) - (b.top + b.bottom) ||
+      a.left - b.left || a.order - b.order
+    );
+    for (const word of words) {
+      const matches = rows.filter((row) => {
+        const overlap = Math.min(row.bottom, word.bottom) -
+          Math.max(row.top, word.top);
+        const minHeight = Math.min(
+          row.bottom - row.top,
+          word.bottom - word.top,
+        );
+        return overlap >= minHeight * 0.5 &&
+          Math.abs((row.top + row.bottom) - (word.top + word.bottom)) / 2 <=
+            minHeight * 0.45;
+      });
+      if (matches.length > 1) return undefined;
+      const row = matches[0];
+      if (row) {
+        row.top = Math.max(row.top, word.top);
+        row.bottom = Math.min(row.bottom, word.bottom);
+        row.words.push(word);
+      } else {
+        rows.push({ top: word.top, bottom: word.bottom, words: [word] });
+      }
+    }
+    rows.sort((a, b) => a.top - b.top);
+    pageTexts.push(
+      rows.map((row) =>
+        row.words.sort((a, b) => a.left - b.left || a.order - b.order).map((
+          word,
+        ) => word.text).join(" ")
+      ).join("\n"),
+    );
+  }
+  // Partial hierarchy data must not hide evidence present in the original OCR.
+  const characters = (text: string) =>
+    [...text.replace(/\s/g, "")].sort().join("");
+  if (
+    !observedWords.length ||
+    characters(observedWords.join("")) !== characters(originalText)
+  ) {
+    return undefined;
+  }
+  return pageTexts.join("\n\f\n");
 }
 
 type GoogleVisionOcrOptions = {
@@ -315,6 +492,7 @@ export async function googleVisionOcr(
   const confidence = googleVisionConfidenceDetails(fullText, text);
   return {
     text,
+    layoutText: googleVisionLayoutText(fullText, text),
     confidence: confidence.confidence,
     confidenceSource: confidence.source,
   };

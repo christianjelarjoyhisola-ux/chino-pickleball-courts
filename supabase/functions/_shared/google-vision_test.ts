@@ -2,6 +2,7 @@ import {
   detectReceiptImageContentType,
   googleVisionConfidence,
   googleVisionConfidenceDetails,
+  googleVisionLayoutText,
   googleVisionOcr,
   receiptImageDimensions,
   receiptImageSafeToDecode,
@@ -178,4 +179,215 @@ Deno.test("marks text-length confidence as heuristic, never native", () => {
   );
   assertEquals(result.confidence, 0.9, "heuristic confidence");
   assertEquals(result.source, "heuristic", "heuristic provenance");
+});
+
+function visionWord(
+  text: string,
+  x: number,
+  y: number,
+  width = text.length * 8,
+) {
+  return {
+    symbols: [...text].map((text) => ({ text })),
+    boundingBox: {
+      vertices: [{ x, y }, { x: x + width, y }, {
+        x: x + width,
+        y: y + 20,
+      }, { x, y: y + 20 }],
+    },
+  };
+}
+
+function visionPage(words: ReturnType<typeof visionWord>[]) {
+  return { width: 1000, height: 2000, blocks: [{ paragraphs: [{ words }] }] };
+}
+
+Deno.test("reconstructs receipt label and value columns without changing native OCR", async () => {
+  const text = "Amount\nFee\nTotal\nTrace ID\nReference No.\nDate\n" +
+    "P265.00\nP0.00\nP265.00\n941016\nITO260909055941016\n09 Sep 2026 at 1:59 PM";
+  const fullTextAnnotation = {
+    text,
+    pages: [visionPage([
+      visionWord("Amount", 20, 20),
+      visionWord("Fee", 20, 60),
+      visionWord("Total", 20, 100),
+      visionWord("Trace", 20, 140),
+      visionWord("ID", 70, 140),
+      visionWord("Reference", 20, 180),
+      visionWord("No.", 100, 180),
+      visionWord("Date", 20, 220),
+      visionWord("P265.00", 800, 21),
+      visionWord("P0.00", 820, 61),
+      visionWord("P265.00", 800, 101),
+      visionWord("941016", 800, 141),
+      visionWord("ITO260909055941016", 650, 181),
+      visionWord("09 Sep 2026 at 1:59 PM", 600, 221),
+    ])],
+  };
+  const fetcher =
+    (async () =>
+      new Response(JSON.stringify({ responses: [{ fullTextAnnotation }] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })) as typeof fetch;
+  const result = await googleVisionOcr("test-key", "QUJD", { fetcher });
+  assertEquals(result.text, text, "native OCR retained for audit");
+  assertEquals(
+    result.layoutText,
+    "Amount P265.00\nFee P0.00\nTotal P265.00\nTrace ID 941016\n" +
+      "Reference No. ITO260909055941016\nDate 09 Sep 2026 at 1:59 PM",
+    "geometry restores label-value associations",
+  );
+});
+
+Deno.test("retains every split reference and masked-name word without correcting characters", () => {
+  const words = [
+    visionWord("To", 10, 10),
+    visionWord("From", 10, 130),
+    visionWord("Reference", 10, 200),
+    visionWord("No.", 90, 200),
+    visionWord("C*", 700, 10),
+    visionWord("L**", 660, 10),
+    visionWord("KR****E", 590, 10),
+    visionWord("****", 580, 50),
+    visionWord("9W07", 620, 50),
+    visionWord("G-Xchange,", 500, 90),
+    visionWord("Inc", 590, 90),
+    visionWord("(GCash)", 630, 90),
+    visionWord("SHEEJAN", 550, 130),
+    visionWord("E*****", 620, 130),
+    visionWord("ITO260909", 560, 200),
+    visionWord("055941016", 640, 200),
+  ];
+  const original = words.map((word) => word.symbols.map((s) => s.text).join(""))
+    .join("\n");
+  assertEquals(
+    googleVisionLayoutText({ pages: [visionPage(words)] }, original),
+    "To KR****E L** C*\n**** 9W07\nG-Xchange, Inc (GCash)\nFrom SHEEJAN E*****\nReference No. ITO260909 055941016",
+    "all observed characters stay unchanged, including zero in masked account",
+  );
+});
+
+Deno.test("missing, invalid or rotated geometry falls back without dropping a word", () => {
+  const validWord = visionWord("P265.00", 600, 100);
+  const badWords: unknown[] = [
+    { symbols: validWord.symbols },
+    { ...validWord, boundingBox: { vertices: [] } },
+    { ...validWord, boundingBox: { vertices: [null, {}, {}, {}] } },
+    {
+      ...validWord,
+      boundingBox: { vertices: [{ x: "600", y: 100 }, {}, {}, {}] },
+    },
+    visionWord("P265.00", -10, 100),
+    visionWord("P265.00", 990, 100),
+    visionWord("P265.00", 600, Number.NaN),
+    { ...validWord, symbols: [{ text: null }] },
+    {
+      ...validWord,
+      boundingBox: {
+        vertices: [
+          { x: 600, y: 100 },
+          { x: 600, y: 200 },
+          { x: 580, y: 200 },
+          { x: 580, y: 100 },
+        ],
+      },
+    },
+  ];
+  for (const badWord of badWords) {
+    const annotation = {
+      pages: [{
+        width: 1000,
+        height: 2000,
+        blocks: [{
+          paragraphs: [{
+            words: [visionWord("Amount", 10, 100), badWord],
+          }],
+        }],
+      }],
+    };
+    assertEquals(
+      googleVisionLayoutText(annotation, "Amount\nP265.00"),
+      undefined,
+      "no partial reconstruction",
+    );
+  }
+  assertEquals(
+    googleVisionLayoutText(null, "Amount P265.00"),
+    undefined,
+    "absent annotation",
+  );
+  assertEquals(
+    googleVisionLayoutText({ pages: [] }, "Amount P265.00"),
+    undefined,
+    "absent pages",
+  );
+});
+
+Deno.test("partial word hierarchy cannot remove evidence from original OCR", () => {
+  const page = visionPage([
+    visionWord("Amount", 20, 20),
+    visionWord("P265.00", 200, 20),
+  ]);
+  assertEquals(
+    googleVisionLayoutText(
+      { pages: [page] },
+      "Amount P265.00\nTransfer Failed",
+    ),
+    undefined,
+    "unrepresented native evidence invalidates alternate text",
+  );
+  assertEquals(
+    googleVisionLayoutText({ pages: [page] }, "Amount P260.00"),
+    undefined,
+    "symbol disagreement cannot replace original evidence",
+  );
+});
+
+Deno.test("multiple OCR pages never combine into one label-value row", () => {
+  const annotation = {
+    pages: [
+      visionPage([visionWord("Amount", 20, 20)]),
+      visionPage([visionWord("P265.00", 200, 20)]),
+    ],
+  };
+  assertEquals(
+    googleVisionLayoutText(annotation, "Amount\nP265.00"),
+    "Amount\n\f\nP265.00",
+    "explicit page separator",
+  );
+});
+
+Deno.test("supports documented zero coordinates and normalized word boxes", () => {
+  const annotation = {
+    pages: [{
+      width: 1000,
+      height: 2000,
+      blocks: [{
+        paragraphs: [{
+          words: [{
+            symbols: [{ text: "Amount" }],
+            boundingBox: {
+              vertices: [{}, { x: 60 }, { x: 60, y: 20 }, { y: 20 }],
+            },
+          }, {
+            symbols: [{ text: "P265.00" }],
+            boundingBox: {
+              normalizedVertices: [
+                { x: 0.8 },
+                { x: 0.9 },
+                { x: 0.9, y: 0.01 },
+                { x: 0.8, y: 0.01 },
+              ],
+            },
+          }],
+        }],
+      }],
+    }],
+  };
+  assertEquals(
+    googleVisionLayoutText(annotation, "Amount\nP265.00"),
+    "Amount P265.00",
+    "zero axis values are valid",
+  );
 });

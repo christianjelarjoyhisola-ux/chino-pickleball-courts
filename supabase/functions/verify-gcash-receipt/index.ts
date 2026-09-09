@@ -51,6 +51,7 @@ import {
   receiptImageSafeToDecode,
 } from "../_shared/google-vision.ts";
 import { extractReceiptAmount } from "../_shared/receipt-amount.ts";
+import { receiptHasEditorMetadata } from "../_shared/receipt-image-metadata.ts";
 import {
   activeReceiptRole,
   bookingAccessTokenMatches,
@@ -91,6 +92,8 @@ type OcrProvider = "google_vision" | "none";
 
 type OcrResult = {
   text: string;
+  originalText?: string;
+  layoutApplied?: boolean;
   confidence: number;
   confidenceSource: "native" | "heuristic" | "none";
   provider: OcrProvider;
@@ -1022,14 +1025,10 @@ function looksLikeGcashReceipt(text: string): boolean {
   return score >= 2;
 }
 
-// Best-effort JPEG "edited in image software" detector (soft signal only).
-function editedBySoftware(bytes: Uint8Array): boolean {
-  // Scan the first 64KB for editor signatures embedded in EXIF/XMP.
-  const slice = bytes.subarray(0, Math.min(bytes.length, 65536));
-  let s = "";
-  for (let i = 0; i < slice.length; i++) s += String.fromCharCode(slice[i]);
-  return /(adobe\s*photoshop|gimp|pixlr|snapseed|picsart|lightroom|inkscape)/i
-    .test(s);
+// Metadata is only a review signal. Compressed pixel bytes are never evidence
+// of an editor; random bytes in genuine screenshots can spell "gimp".
+async function editedBySoftware(bytes: Uint8Array): Promise<boolean> {
+  return await receiptHasEditorMetadata(bytes);
 }
 
 // Google Vision is the only OCR engine used for receipt verification.
@@ -1075,17 +1074,23 @@ async function runOCR(
   if (visionKey) {
     try {
       const v = await googleVisionOcr(visionKey, base64);
-      const gaps = ocrCriticalGaps(v.text, provider, typedRef);
-      if (v.text && gaps.length === 0) {
+      // GoTyme's two-column transfer cards can place every label before its
+      // value in plain OCR order. Use validated word geometry for that source
+      // only, and retain Google's untouched text for the immutable audit.
+      const layoutApplied = provider === "gotyme" && !!v.layoutText?.trim();
+      const text = layoutApplied && v.layoutText ? v.layoutText : v.text;
+      const result = { ...v, text, originalText: v.text, layoutApplied };
+      const gaps = ocrCriticalGaps(text, provider, typedRef);
+      if (text && gaps.length === 0) {
         return {
-          ...v,
+          ...result,
           provider: "google_vision",
           primaryProvider: "google_vision",
         };
       }
-      if (v.text) {
+      if (text) {
         return {
-          ...v,
+          ...result,
           provider: "google_vision",
           primaryProvider: "google_vision",
           fallbackReason: gaps.length
@@ -1095,7 +1100,7 @@ async function runOCR(
       }
       console.error("Vision OCR returned no text:", gaps.join(","));
       return {
-        ...v,
+        ...result,
         provider: "google_vision",
         primaryProvider: "google_vision",
       };
@@ -2587,6 +2592,8 @@ Deno.serve(async (req) => {
       provider,
     );
     let ocrText = "";
+    let ocrOriginalText = "";
+    let ocrLayoutApplied = false;
     let ocrConfidence = 0;
     let ocrConfidenceSource: OcrResult["confidenceSource"] = "none";
     let ocrProvider: OcrResult["provider"] = "none";
@@ -2597,6 +2604,8 @@ Deno.serve(async (req) => {
     try {
       const ocr = await runOCR(visionKey, imageBase64, provider, typedRef);
       ocrText = ocr.text;
+      ocrOriginalText = ocr.originalText ?? ocr.text;
+      ocrLayoutApplied = ocr.layoutApplied === true;
       ocrConfidence = ocr.confidence;
       ocrConfidenceSource = ocr.confidenceSource;
       ocrProvider = ocr.provider;
@@ -2697,7 +2706,8 @@ Deno.serve(async (req) => {
           amountTolerance: 0.01,
           expectedRecipientNumber: expectedNumber,
           expectedRecipientName: expectedName,
-          expectedRecipientAccount: provider === "bdopay" || provider === "bpi"
+          expectedRecipientAccount: provider === "bdopay" || provider === "bpi" ||
+              provider === "gotyme" || provider === "maribank"
             ? settings.gcash_qr_receipt_destination_token ||
               settings.bdopay_receipt_destination_token || ""
             : "",
@@ -2854,7 +2864,7 @@ Deno.serve(async (req) => {
     ) {
       flags.push("AMOUNT_MISMATCH");
     }
-    if (editedBySoftware(bytes)) flags.push("EDITED_METADATA");
+    if (await editedBySoftware(bytes)) flags.push("EDITED_METADATA");
 
     // Every provider-specific auto-approval requires a high-quality native OCR
     // read. Generic/legacy parsers remain review-only.
@@ -2979,10 +2989,18 @@ Deno.serve(async (req) => {
       : providerVerification?.provider === "bpi"
       ? providerVerification.recipientComparison === "exact" &&
         providerVerification.recipientAccountComparison === "exact"
-      : providerVerification
-      ? ["exact", "last4_only"].includes(
+      : providerVerification?.provider === "gotyme" ||
+          providerVerification?.provider === "maribank"
+      // QR transfers may print an alphanumeric destination token instead of
+      // the GCash phone. Require its configured identity and compatible name;
+      // never treat the sender account or a conflicting visible number as proof.
+      ? (["exact", "last4_only"].includes(
         providerVerification.recipientComparison.phone,
-      ) &&
+      ) || ["exact", "suffix_only"].includes(
+        providerVerification.recipientComparison.account,
+      )) &&
+        providerVerification.recipientComparison.phone !== "mismatch" &&
+        providerVerification.recipientComparison.account !== "mismatch" &&
         ["exact", "masked_compatible"].includes(
           providerVerification.recipientComparison.name,
         )
@@ -3137,6 +3155,9 @@ Deno.serve(async (req) => {
             providerVerification?.provider === "bpi" ||
               providerVerification?.provider === "securitybank"
               ? providerVerification.recipientAccountComparison
+              : providerVerification?.provider === "gotyme" ||
+                  providerVerification?.provider === "maribank"
+              ? providerVerification.recipientComparison.account
               : null,
           issues: bankParse.issues,
         }
@@ -3148,12 +3169,14 @@ Deno.serve(async (req) => {
       ocrConfidence,
       ocrConfidenceSource,
       ocrTextLength: ocrText.length,
+      ocrTextLayout: ocrLayoutApplied ? "google_rows" : "original",
       expectedReceiverNumber:
         provider === "bdopay" || provider === "maya" || provider === "bpi"
           ? null
           : expectedNumber || null,
       expectedReceiverName: expectedName || null,
-      expectedReceiverAccount: provider === "bdopay" || provider === "bpi"
+      expectedReceiverAccount: provider === "bdopay" || provider === "bpi" ||
+          provider === "gotyme" || provider === "maribank"
         ? settings.gcash_qr_receipt_destination_token ||
           settings.bdopay_receipt_destination_token || null
         : null,
@@ -3242,7 +3265,7 @@ Deno.serve(async (req) => {
             p_receipt_extracted: extracted,
             p_receipt_confidence: confidence,
             p_receipt_verified_at: receiptVerifiedAt,
-            p_raw_ocr_text: ocrText || null,
+            p_raw_ocr_text: ocrOriginalText || ocrText || null,
           },
         );
         if (finalizeError) {
@@ -3300,7 +3323,7 @@ Deno.serve(async (req) => {
             p_receipt_extracted: extracted,
             p_receipt_confidence: confidence,
             p_receipt_verified_at: receiptVerifiedAt,
-            p_raw_ocr_text: ocrText || null,
+            p_raw_ocr_text: ocrOriginalText || ocrText || null,
           });
 
         const reviewResponse = await finalizeReview();
@@ -3477,7 +3500,7 @@ Deno.serve(async (req) => {
           confidence,
           image_hash: imageHash,
           phash,
-          raw_ocr_text: ocrText || null,
+          raw_ocr_text: ocrOriginalText || ocrText || null,
         })
         .select("id")
         .single();
