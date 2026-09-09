@@ -32,15 +32,16 @@ function deferred() {
 
 test('failed Insights refresh clears previous numbers, notes and actionable recommendation', async () => {
   const h = harness({ getInsightInputs: async () => { throw new Error('blocked dates unavailable'); } });
-  for (const id of ['prInsightBookedNote', 'prInsightExpectedNote', 'prInsightActionNote']) h.get(id).textContent = 'Old 90% result';
+  for (const id of ['prInsightTodayNote', 'prInsightBookedNote', 'prInsightExpectedNote', 'prInsightActionNote']) h.get(id).textContent = 'Old 90% result';
   h.run('_prInsightSnapshot={recommendation:{id:"old-action"}}');
   await h.run('renderPaddleInsights({force:true})');
   assert.equal(h.get('prInsightBooked').textContent, '—');
+  assert.equal(h.get('prInsightToday').textContent, '—');
   assert.equal(h.get('prInsightActionCount').textContent, 'Paused');
   assert.equal(h.get('prInsights').attributes['aria-busy'], 'false');
   assert.equal(h.get('prInsightRefresh').disabled, false);
   assert.equal(h.run('_prInsightSnapshot'), null);
-  for (const id of ['prInsightBookedNote', 'prInsightExpectedNote', 'prInsightActionNote']) assert.doesNotMatch(h.get(id).textContent, /90%/);
+  for (const id of ['prInsightTodayNote', 'prInsightBookedNote', 'prInsightExpectedNote', 'prInsightActionNote']) assert.doesNotMatch(h.get(id).textContent, /90%/);
   assert.match(h.get('prInsightAction').innerHTML, /Recommendations paused/);
   assert.doesNotMatch(h.get('prInsightAction').innerHTML, /Collecting reliable history|Copy CHINO/);
 });
@@ -51,6 +52,77 @@ test('missing strict loader never falls back to incomplete general booking reads
   await h.run('renderPaddleInsights()');
   assert.equal(generalReads, 0);
   assert.equal(h.get('prInsightActionCount').textContent, 'Paused');
+});
+
+test('first-day bookings remain visible while forecasts clearly explain their learning period', () => {
+  const h = harness();
+  h.run('renderPaddleInsightHeatmap=()=>{}; renderPaddleInsightAction=()=>{};');
+  h.context.snapshot = {
+    period: { today: '2026-09-09', from: null, to: '2026-09-08', learning_days: 0,
+      minimum_learning_days: 30, forecast_from: '2026-09-10', forecast_to: '2026-10-07' },
+    kpis: { confirmed_today_hours: 6, confirmed_today_reservations: 5, booked_next_28_hours: 3,
+      sellable_next_28_hours: 800, booked_next_28_pct: 0.375, expected_total_fill_pct: null },
+    data_quality: { today_schedule_conflict_hours: 1 },
+  };
+  h.run('renderPaddleInsightSnapshot(snapshot,"All courts")');
+  assert.equal(h.get('prInsightToday').textContent, '6 hr');
+  assert.match(h.get('prInsightTodayNote').textContent, /5 confirmed reservations/);
+  assert.match(h.get('prInsightTodayNote').textContent, /1 hr outside current availability/);
+  assert.equal(h.get('prInsightBooked').textContent, '3 hr');
+  assert.equal(h.get('prInsightExpected').textContent, 'Learning');
+  assert.match(h.get('prInsightExpectedNote').textContent, /0 of 30 history days.*midnight PH/);
+  assert.match(h.get('prInsightStatus').innerHTML, /join history after midnight PH/);
+  assert.match(h.get('prInsightMapSummary').textContent, /6 confirmed court-hours today/);
+  assert.doesNotMatch(h.get('prInsightExpectedNote').textContent, /Begins after the first/);
+});
+
+test('upcoming-only bookings show reservations without inventing a forecast or today bookings', () => {
+  const h = harness();
+  h.run('renderPaddleInsightHeatmap=()=>{}; renderPaddleInsightAction=()=>{};');
+  h.context.snapshot = {
+    period: { today: '2026-09-09', from: null, learning_days: 0, forecast_from: '2026-09-10', forecast_to: '2026-10-07' },
+    kpis: { confirmed_today_hours: 0, confirmed_today_reservations: 0, booked_next_28_hours: 2, expected_total_fill_pct: null },
+  };
+  h.run('renderPaddleInsightSnapshot(snapshot,"Court 1")');
+  assert.equal(h.get('prInsightToday').textContent, '0 hr');
+  assert.equal(h.get('prInsightBooked').textContent, '2 hr');
+  assert.equal(h.get('prInsightExpected').textContent, 'Learning');
+  assert.match(h.get('prInsightExpectedNote').textContent, /0 of 30 history days/);
+  assert.doesNotMatch(h.get('prInsightExpectedNote').textContent, /today’s sessions join/);
+});
+
+test('initial mobile map and Court Pick explain their distinct evidence requirements', () => {
+  const h = harness();
+  h.context.snapshot = {
+    period: { today: '2026-09-09', from: null, learning_days: 0, minimum_learning_days: 30,
+      minimum_recommendation_comparable_days: 8 },
+    heatmap: [{ weekday: 1, start_hour: 17, comparable_days: 0, available_hours: 0 }],
+  };
+  h.run('_prInsightSnapshot=snapshot; renderPaddleInsightMobileMap(); renderPaddleInsightAction(snapshot);');
+  assert.match(h.get('prInsightMobileMap').innerHTML, /0 \/ 4/);
+  assert.match(h.get('prInsightMobileMap').innerHTML, /aria-valuemax="4"/);
+  assert.match(h.get('prInsightMobileMap').innerHTML, /after midnight PH/);
+  assert.match(h.get('prInsightAction').innerHTML, /30 past calendar days and 8 comparable/);
+});
+
+test('blocked courts retain actual reservations and explain unavailable forecasts instead of implying no bookings', () => {
+  const h = harness();
+  h.run('renderPaddleInsightHeatmap=()=>{};');
+  h.context.snapshot = {
+    period: { today: '2026-09-09', from: null, learning_days: 0, forecast_from: '2026-09-10', forecast_to: '2026-10-07' },
+    kpis: { confirmed_today_hours: 6, confirmed_today_reservations: 5, reserved_next_28_hours: 3,
+      booked_next_28_hours: 0, sellable_next_28_hours: 0, expected_total_fill_pct: null },
+    data_quality: { today_schedule_conflict_hours: 6, future_schedule_conflict_hours: 3 },
+  };
+  h.run('renderPaddleInsightSnapshot(snapshot,"All courts")');
+  assert.equal(h.get('prInsightToday').textContent, '6 hr');
+  assert.equal(h.get('prInsightBooked').textContent, '3 hr');
+  assert.match(h.get('prInsightBookedNote').textContent, /No available court-hours.*3 booked hr retained/);
+  assert.equal(h.get('prInsightExpected').textContent, 'Unavailable');
+  assert.match(h.get('prInsightExpectedNote').textContent, /No available hours/);
+  assert.equal(h.get('prInsightActionCount').textContent, 'Paused');
+  assert.match(h.get('prInsightAction').innerHTML, /Existing reservations remain recorded/);
+  assert.doesNotMatch(h.get('prInsightAction').innerHTML, /Copy CHINO|first qualifying/);
 });
 
 test('overlapping refreshes render only the newest complete input set', async () => {

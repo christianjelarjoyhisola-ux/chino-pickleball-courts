@@ -280,19 +280,48 @@
     const slots = Array.from({ length: closeHour - openHour }, (_, index) => openHour + index);
     const allCourtMap = new Map(allCourts.map(court => [String(court.id), court]));
     const courtCreatedDates = new Map(allCourts.map(court => [String(court.id), manilaDateKey(court.createdAt || court.created_at || '')]));
+    const qualifyPrivateCourtRow = row => {
+      const courtId = String(row.courtId || row.court_id);
+      const court = allCourtMap.get(courtId);
+      const date = dateOnly(row.date);
+      const createdDate = courtCreatedDates.get(courtId);
+      const pieces = !court || date < openingDate || blockedDates.has(date) || (createdDate && createdDate > date) ? []
+        : normalizedSlots(row).filter(piece => piece.hour >= openHour && piece.hour < closeHour
+          && isSellableHour(date, piece.hour, courtId, input.settings));
+      return { row, pieces };
+    };
     const venueRows = uniqueSuccessfulRows(input.bookings, throughDate, null)
-      .filter(row => dateOnly(row.date) >= openingDate)
-      .map(row => {
-        const courtId = String(row.courtId || row.court_id);
-        const court = allCourtMap.get(courtId);
-        const date = dateOnly(row.date);
-        const createdDate = courtCreatedDates.get(courtId);
-        const pieces = !court || blockedDates.has(date) || (createdDate && createdDate > date) ? []
-          : normalizedSlots(row).filter(piece => piece.hour >= openHour && piece.hour < closeHour
-            && isSellableHour(date, piece.hour, courtId, input.settings));
-        return { row, pieces };
-      }).filter(item => item.pieces.length > 0);
+      .map(qualifyPrivateCourtRow).filter(item => item.pieces.length > 0);
     const eligibleRows = venueRows.filter(({ row }) => courtMap.has(String(row.courtId || row.court_id)));
+    const todayRows = uniqueSuccessfulRows(
+      (Array.isArray(input.bookings) ? input.bookings : []).filter(row => dateOnly(row.date) === today), today, input.courtId,
+    ).map(row => {
+      const courtId = String(row.courtId || row.court_id);
+      const createdDate = courtCreatedDates.get(courtId);
+      // Today's ledger stays factual even when the owner changes availability
+      // after accepting a reservation. Report conflicting schedule hours below.
+      const pieces = !courtMap.has(courtId) || today < openingDate || (createdDate && createdDate > today)
+        ? [] : normalizedSlots(row);
+      return { row, pieces };
+    }).filter(item => item.pieces.length > 0);
+    const todayOccupied = new Map();
+    const todayScheduleConflicts = new Map();
+    const todayReservations = new Set();
+    todayRows.forEach(({ row, pieces }) => {
+      const courtId = String(row.courtId || row.court_id);
+      pieces.forEach(piece => {
+        const key = `${courtId}:${piece.hour}`;
+        // Legacy fractional pieces begin at the hour, so overlapping pieces
+        // occupy their longest duration, rather than adding the same time twice.
+        const occupied = Math.min(1, Math.max(number(todayOccupied.get(key)), piece.hours));
+        todayOccupied.set(key, occupied);
+        if (courtMap.get(courtId).blocked || blockedDates.has(today) || piece.hour < openHour || piece.hour >= closeHour
+          || !isSellableHour(today, piece.hour, courtId, input.settings)) {
+          todayScheduleConflicts.set(key, occupied);
+        }
+      });
+      todayReservations.add(String(row.groupRef || row.booking_group_ref || row.ref));
+    });
     // A newly filtered court learns against the venue's operating history even
     // when that court has not won a booking yet. Per-court creation dates still
     // prevent capacity from being counted before the court existed.
@@ -363,6 +392,8 @@
     });
 
     const futureOccupied = new Map();
+    const futureReserved = new Map();
+    const futureScheduleConflicts = new Map();
     const futureFrom = [addDays(today, 1), openingDate].sort().pop();
     const futureEnd = addDays(today, FORECAST_DAYS);
     (Array.isArray(input.bookings) ? input.bookings : []).forEach(row => {
@@ -375,9 +406,19 @@
       if (!['pending', 'confirmed', 'completed', 'verifying'].includes(status) || expiredHold) return;
       const courtId = String(row.courtId || row.court_id);
       if (!courtMap.has(courtId)) return;
+      const parsedDate = new Date(`${date}T00:00:00Z`);
+      const actualDateValid = /^\d{4}-\d{2}-\d{2}$/.test(date) && !Number.isNaN(parsedDate.getTime())
+        && parsedDate.toISOString().slice(0, 10) === date && !(courtCreatedDates.get(courtId) > date);
       normalizedSlots(row).forEach(piece => {
         const key = `${courtId}:${date}:${piece.hour}`;
         futureOccupied.set(key, Math.min(1, number(futureOccupied.get(key)) + piece.hours));
+        if (!actualDateValid) return;
+        const occupied = Math.min(1, Math.max(number(futureReserved.get(key)), piece.hours));
+        futureReserved.set(key, occupied);
+        if (courtMap.get(courtId).blocked || blockedDates.has(date) || piece.hour < openHour || piece.hour >= closeHour
+          || !isSellableHour(date, piece.hour, courtId, input.settings)) {
+          futureScheduleConflicts.set(key, occupied);
+        }
       });
     });
 
@@ -467,6 +508,7 @@
 
     return {
       period: {
+        today,
         from: earliest,
         to: throughDate,
         generated_at: new Date().toISOString(),
@@ -481,6 +523,9 @@
         is_preopening: today < openingDate,
       },
       kpis: {
+        confirmed_today_hours: [...todayOccupied.values()].reduce((sum, hours) => sum + hours, 0),
+        confirmed_today_reservations: todayReservations.size,
+        reserved_next_28_hours: [...futureReserved.values()].reduce((sum, hours) => sum + hours, 0),
         booked_next_28_hours: bookedNext28,
         sellable_next_28_hours: totalFutureSellable,
         booked_next_28_pct: totalFutureSellable ? clamp(bookedNext28 * 100 / totalFutureSellable) : 0,
@@ -493,6 +538,8 @@
       signals,
       recommendation,
       data_quality: {
+        today_schedule_conflict_hours: [...todayScheduleConflicts.values()].reduce((sum, hours) => sum + hours, 0),
+        future_schedule_conflict_hours: [...futureScheduleConflicts.values()].reduce((sum, hours) => sum + hours, 0),
         successful_reservations: successfulReservations.size,
         successful_booking_rows: eligibleRows.length,
         current_schedule_note: 'Capacity uses the venue schedule currently saved in CHINO. Open Play, Maintenance, blocked dates, temporary holds, failed payments, and cancelled or forfeited bookings do not teach private-court demand.',

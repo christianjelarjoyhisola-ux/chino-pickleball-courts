@@ -223,3 +223,96 @@ test('local Insights applies the same owner-only scope and rejects inactive sess
     }
   }
 });
+
+function dayRefreshHarness(now = '2026-09-09T15:59:59Z') {
+  const admin = fs.readFileSync(path.join(__dirname, 'admin.html'), 'utf8');
+  const start = admin.indexOf('let _admRtDebounce=null;');
+  const end = admin.indexOf('let _prInsightSnapshot=null;', start);
+  const dateHelper = admin.match(/^function phDateKeyFromTimestamp\(value\) \{[\s\S]*?^\}/m);
+  assert.ok(start > 0 && end > start && dateHelper, 'load production date and refresh lifecycle');
+  let nowMs = Date.parse(now), timerId = 0;
+  const intervals = new Map(), timeouts = new Map(), listeners = new Map();
+  const addListener = (name, callback) => listeners.set(name, callback);
+  class ClockDate extends Date {
+    constructor(...args) { super(...(args.length ? args : [nowMs])); }
+    static now() { return nowMs; }
+  }
+  const context = vm.createContext({
+    Date: ClockDate,
+    _curSection: 'insights', _prInsightSnapshot: { period: { today: '2026-09-09' } },
+    document: { hidden: false, activeElement: null, querySelector: () => null, addEventListener: addListener },
+    window: { PB_USE_LOCAL_DATA: true, addEventListener: addListener },
+    setInterval(callback, delay) { const id = ++timerId; intervals.set(id, { callback, delay }); return id; },
+    clearInterval(id) { intervals.delete(id); },
+    setTimeout(callback, delay) { const id = ++timerId; timeouts.set(id, { callback, delay }); return id; },
+    clearTimeout(id) { timeouts.delete(id); },
+    pollBookingRescheduleRequests() {}, startBookingReschedulePolling() {}, stopBookingReschedulePolling() {},
+  });
+  vm.runInContext(dateHelper[0] + '\n' + admin.slice(start, end), context);
+  return {
+    context, intervals, timeouts, listeners,
+    run: code => vm.runInContext(code, context),
+    setNow: value => { nowMs = Date.parse(value); },
+  };
+}
+
+test('Insights queues one refresh at Philippine midnight and remains quiet after the snapshot catches up', () => {
+  const h = dayRefreshHarness();
+  h.run('startAdminRealtime()');
+  const timer = [...h.intervals.values()][0];
+  assert.equal(timer.delay, 60000);
+  timer.callback();
+  assert.equal(h.timeouts.size, 0, 'same Philippine date requires no refresh');
+  h.setNow('2026-09-09T16:00:00Z');
+  timer.callback();
+  assert.equal(h.timeouts.size, 1, 'midnight in Manila is still the previous UTC date');
+  assert.equal([...h.timeouts.values()][0].delay, 0);
+  const firstTimerId = [...h.timeouts.keys()][0];
+  timer.callback();
+  assert.deepEqual([...h.timeouts.keys()], [firstTimerId], 'already queued refresh is not rescheduled');
+  h.run("_admRtRefreshQueued=false; _prInsightSnapshot.period.today='2026-09-10'");
+  h.timeouts.clear();
+  h.setNow('2026-09-09T16:01:00Z');
+  timer.callback();
+  assert.equal(h.timeouts.size, 0, 'fresh snapshot prevents repeated minute refreshes');
+});
+
+test('Insights date checks defer while hidden, inactive, loading or already refreshing', () => {
+  for (const state of [
+    'document.hidden=true', "_curSection='dash'", '_admRtRefreshInFlight=true',
+    '_admRtRefreshQueued=true', '_prInsightSnapshot=null', '_prInsightSnapshot={period:{}}',
+  ]) {
+    const h = dayRefreshHarness('2026-09-09T16:00:00Z');
+    h.run(state);
+    h.run('refreshAdminInsightDate()');
+    assert.equal(h.timeouts.size, 0, state);
+  }
+});
+
+test('returning to visible Insights checks the Philippine date even without a database event', () => {
+  const h = dayRefreshHarness();
+  h.context.document.hidden = true;
+  h.setNow('2026-09-09T16:00:00Z');
+  h.listeners.get('visibilitychange')();
+  assert.equal(h.timeouts.size, 0);
+  h.context.document.hidden = false;
+  h.listeners.get('visibilitychange')();
+  assert.equal(h.timeouts.size, 1);
+  assert.equal(h.run('_admRtRefreshQueued'), true);
+});
+
+test('Insights day timer is unique and cleaned up across page lifecycle and realtime shutdown', () => {
+  const h = dayRefreshHarness();
+  h.run('startAdminRealtime(); startAdminRealtime()');
+  assert.equal(h.intervals.size, 1);
+  h.listeners.get('pagehide')({ persisted: true });
+  assert.equal(h.intervals.size, 0, 'back-forward cache entry stops the timer');
+  h.listeners.get('pageshow')({ persisted: true });
+  assert.equal(h.intervals.size, 1);
+  h.run('stopAdminRealtime()');
+  assert.equal(h.intervals.size, 0);
+  assert.equal(h.timeouts.size, 0);
+  h.run('startAdminRealtime()');
+  h.listeners.get('pagehide')({ persisted: false });
+  assert.equal(h.intervals.size, 0, 'normal navigation also stops the timer');
+});

@@ -117,6 +117,157 @@ test('Manila midnight includes yesterday but never trains on today', () => {
   assert.equal(snapshot.kpis.booked_next_28_hours, 0, 'today is neither historical evidence nor a future day');
 });
 
+test('day-one confirmed play is visible separately from future reservations and demand history', () => {
+  const snapshot = Insights.buildSnapshot(baseInput({
+    now: '2026-09-01T12:00:00+08:00',
+    bookings: [
+      booking({ ref: 'TODAY', date: '2026-09-01', slots: [8] }),
+      booking({ ref: 'FUTURE', date: '2026-09-02', slots: [8, 9] }),
+    ],
+  }));
+  assert.equal(snapshot.period.today, '2026-09-01');
+  assert.equal(snapshot.kpis.confirmed_today_hours, 1);
+  assert.equal(snapshot.kpis.confirmed_today_reservations, 1);
+  assert.equal(snapshot.kpis.booked_next_28_hours, 2);
+  assert.equal(snapshot.period.learning_days, 0);
+  assert.equal(snapshot.period.from, null);
+  assert.equal(snapshot.kpis.expected_total_fill_pct, null);
+  assert.equal(snapshot.data_quality.successful_reservations, 0, 'today does not teach historical demand');
+});
+
+test('today counts grouped reservations once while preserving each court-hour and capping overlap', () => {
+  const grouped = booking({ ref: 'GROUP-A', groupRef: 'GROUP', date: '2026-09-01', slots: [8, 8, 9] });
+  const snapshot = Insights.buildSnapshot(baseInput({
+    courts: [court(), court('court-2', 'Court 2')],
+    bookings: [
+      grouped,
+      { ...grouped },
+      booking({ ref: 'GROUP-B', groupRef: 'GROUP', courtId: 'court-2', date: '2026-09-01', slots: [8] }),
+      booking({ ref: 'GROUP-OVERLAP', groupRef: 'GROUP', date: '2026-09-01', slots: [9] }),
+      booking({ ref: 'OTHER', courtId: 'court-2', date: '2026-09-01', slots: [9], status: 'completed', paymentStatus: 'downpayment_paid' }),
+    ],
+  }));
+  assert.equal(snapshot.kpis.confirmed_today_hours, 4);
+  assert.equal(snapshot.kpis.confirmed_today_reservations, 2);
+});
+
+test('today excludes unpaid rows but preserves confirmed hours overlapping current availability', () => {
+  const snapshot = Insights.buildSnapshot(baseInput({
+    settings: {
+      open_hour: '8', close_hour: '11',
+      maintenance_config: { rules: [{ enabled: true, mode: 'specific', start: 9, end: 10, dates: ['2026-09-01'] }] },
+      open_play_config: { enabled: true, start: 10, end: 11, specificDates: ['2026-09-01'] },
+    },
+    bookings: [
+      booking({ ref: 'VALID', date: '2026-09-01', slots: [8] }),
+      booking({ ref: 'HOLD', date: '2026-09-01', status: 'verifying', isTemporaryHold: true }),
+      booking({ ref: 'REVIEW', date: '2026-09-01', status: 'verifying', paymentStatus: 'for_verification' }),
+      booking({ ref: 'UNPAID', date: '2026-09-01', paymentStatus: 'unpaid' }),
+      booking({ ref: 'CANCELLED', date: '2026-09-01', status: 'cancelled' }),
+      booking({ ref: 'MAINTENANCE', date: '2026-09-01', slots: [9] }),
+      booking({ ref: 'OPENPLAY', date: '2026-09-01', slots: [10] }),
+      booking({ ref: 'OUTSIDE', date: '2026-09-01', slots: [7] }),
+      booking({ ref: 'MISSING-COURT', date: '2026-09-01', courtId: 'unknown' }),
+    ],
+  }));
+  assert.equal(snapshot.kpis.confirmed_today_hours, 4);
+  assert.equal(snapshot.kpis.confirmed_today_reservations, 4);
+  assert.equal(snapshot.data_quality.today_schedule_conflict_hours, 3, 'maintenance, Open Play and outside-hours conflicts remain visible');
+});
+
+test('today honors court filtering, opening date and court existence without hiding blocked bookings', () => {
+  const input = baseInput({
+    courts: [court(), court('court-2', 'Court 2')],
+    bookings: [
+      booking({ ref: 'A', date: '2026-09-01', slots: [8, 9] }),
+      booking({ ref: 'B', date: '2026-09-01', courtId: 'court-2', slots: [9] }),
+    ],
+  });
+  const filtered = Insights.buildSnapshot({ ...input, courtId: 'court-2' });
+  assert.equal(filtered.kpis.confirmed_today_hours, 1);
+  assert.equal(filtered.kpis.confirmed_today_reservations, 1);
+  assert.equal(filtered.data_quality.today_schedule_conflict_hours, 0);
+  for (const overrides of [
+    { blockedDates: ['2026-09-01'] },
+    { courts: input.courts.map(value => ({ ...value, blocked: true })) },
+  ]) {
+    const snapshot = Insights.buildSnapshot({ ...input, ...overrides });
+    assert.equal(snapshot.kpis.confirmed_today_hours, 3);
+    assert.equal(snapshot.kpis.confirmed_today_reservations, 2);
+    assert.equal(snapshot.data_quality.today_schedule_conflict_hours, 3);
+  }
+  for (const overrides of [
+    { openingDate: '2026-09-02' },
+    { courts: input.courts.map(value => ({ ...value, createdAt: '2026-09-01T16:00:00Z' })) },
+    { courtId: 'unknown' },
+  ]) {
+    const snapshot = Insights.buildSnapshot({ ...input, ...overrides });
+    assert.equal(snapshot.kpis.confirmed_today_hours, 0);
+    assert.equal(snapshot.kpis.confirmed_today_reservations, 0);
+  }
+});
+
+test('partly blocked fractional bookings count each occupied portion only once', () => {
+  const row = booking({ ref: 'PARTIAL-A', groupRef: 'PARTIAL', date: '2026-09-01', slots: [], startTime: '8:00 AM', duration: 1.5 });
+  const snapshot = Insights.buildSnapshot(baseInput({
+    bookings: [row, { ...row }, booking({ ref: 'PARTIAL-B', groupRef: 'PARTIAL', date: '2026-09-01', slots: [], startTime: '9:00 AM', duration: 0.5 })],
+    settings: {
+      open_hour: '8', close_hour: '10',
+      maintenance_config: { rules: [{ enabled: true, mode: 'specific', start: 9, end: 10, dates: ['2026-09-01'] }] },
+    },
+  }));
+  assert.equal(snapshot.kpis.confirmed_today_hours, 1.5);
+  assert.equal(snapshot.kpis.confirmed_today_reservations, 1);
+  assert.equal(snapshot.data_quality.today_schedule_conflict_hours, 0.5);
+});
+
+test('six booked hours in five reservations stay visible when a later block overlaps one group hour', () => {
+  const snapshot = Insights.buildSnapshot(baseInput({
+    now: '2026-09-09T11:08:10Z',
+    courts: [court(), court('court-2'), court('court-3'), court('court-4')],
+    settings: {
+      open_hour: '15', close_hour: '23',
+      maintenance_config: { rules: [{ enabled: true, mode: 'specific', start: 22, end: 23, dates: ['2026-09-09'], courtIds: ['court-1', 'court-4'], label: 'blocked' }] },
+    },
+    bookings: [
+      booking({ ref: 'A', courtId: 'court-3', date: '2026-09-09', slots: [22] }),
+      booking({ ref: 'B', courtId: 'court-2', date: '2026-09-09', slots: [18] }),
+      booking({ ref: 'C', date: '2026-09-09', slots: [17] }),
+      booking({ ref: 'D', courtId: 'court-3', date: '2026-09-09', slots: [20] }),
+      booking({ ref: 'GROUP-A', groupRef: 'GROUP', courtId: 'court-4', date: '2026-09-09', slots: [22] }),
+      booking({ ref: 'GROUP-B', groupRef: 'GROUP', courtId: 'court-3', date: '2026-09-09', slots: [21] }),
+      booking({ ref: 'FUTURE-A', courtId: 'court-3', date: '2026-09-10', slots: [21] }),
+      booking({ ref: 'FUTURE-B', courtId: 'court-4', date: '2026-09-13', slots: [17, 18] }),
+    ],
+  }));
+  assert.equal(snapshot.kpis.confirmed_today_hours, 6);
+  assert.equal(snapshot.kpis.confirmed_today_reservations, 5);
+  assert.equal(snapshot.data_quality.today_schedule_conflict_hours, 1);
+  assert.equal(snapshot.kpis.booked_next_28_hours, 3);
+  assert.equal(snapshot.period.learning_days, 0);
+});
+
+test('Philippine midnight moves yesterday out of today totals and into history', () => {
+  const input = baseInput({
+    bookings: [
+      booking({ ref: 'FIRST-DAY', date: '2026-09-01', slots: [8] }),
+      booking({ ref: 'NEXT-DAY', date: '2026-09-02', slots: [8, 9] }),
+    ],
+  });
+  const before = Insights.buildSnapshot({ ...input, now: '2026-09-01T15:59:59Z' });
+  assert.equal(before.period.today, '2026-09-01');
+  assert.equal(before.kpis.confirmed_today_hours, 1);
+  assert.equal(before.period.learning_days, 0);
+  const after = Insights.buildSnapshot({ ...input, now: '2026-09-01T16:00:00Z' });
+  assert.equal(after.period.today, '2026-09-02');
+  assert.equal(after.kpis.confirmed_today_hours, 2);
+  assert.equal(after.kpis.confirmed_today_reservations, 1);
+  assert.equal(after.kpis.booked_next_28_hours, 0);
+  assert.equal(after.period.learning_days, 1);
+  assert.equal(after.data_quality.successful_reservations, 1);
+  assert.equal(after.kpis.expected_total_fill_pct, null, 'one day still does not establish a forecast');
+});
+
 test('only paid successful reservations teach demand', () => {
   const snapshot = Insights.buildSnapshot(baseInput({
     now: '2026-09-05T12:00:00+08:00',
@@ -203,7 +354,80 @@ test('receipt reviews reserve future capacity while only expired temporary holds
     ],
   }));
   assert.equal(snapshot.kpis.booked_next_28_hours, 4);
+  assert.equal(snapshot.kpis.reserved_next_28_hours, 4, 'actual reservations use the same active status and expiry rules');
   assert.equal(snapshot.period.learning_days, 0, 'future holds and receipt reviews never teach historical demand');
+});
+
+test('blocking every court keeps actual grouped future reservations visible without sellable capacity', () => {
+  const future = booking({ ref: 'GROUP-A', groupRef: 'GROUP', date: '2026-09-02', slots: [8, 9] });
+  const input = baseInput({
+    courts: [{ ...court(), blocked: true }, { ...court('court-2'), blocked: true }],
+    bookings: [
+      booking({ ref: 'HISTORY', date: '2026-07-01' }),
+      future, { ...future },
+      booking({ ref: 'GROUP-B', groupRef: 'GROUP', courtId: 'court-2', date: '2026-09-03', slots: [9] }),
+    ],
+  });
+  const snapshot = Insights.buildSnapshot(input);
+  assert.equal(snapshot.kpis.reserved_next_28_hours, 3);
+  assert.equal(snapshot.data_quality.future_schedule_conflict_hours, 3);
+  assert.equal(snapshot.kpis.booked_next_28_hours, 0, 'sellable-capacity counter retains its forecast meaning');
+  assert.equal(snapshot.kpis.booked_next_28_pct, 0);
+  assert.equal(snapshot.kpis.sellable_next_28_hours, 0);
+  assert.equal(snapshot.kpis.expected_total_fill_pct, null);
+  const filtered = Insights.buildSnapshot({ ...input, courtId: 'court-2' });
+  assert.equal(filtered.kpis.reserved_next_28_hours, 1);
+  assert.equal(filtered.data_quality.future_schedule_conflict_hours, 1);
+});
+
+test('future actual hours and availability conflicts deduplicate partial overlaps separately', () => {
+  const partial = booking({ ref: 'PART-A', groupRef: 'PART', date: '2026-09-02', slots: [], startTime: '8:00 AM', duration: 1.5 });
+  const snapshot = Insights.buildSnapshot(baseInput({
+    bookings: [partial, { ...partial }, booking({ ref: 'PART-B', groupRef: 'PART', date: '2026-09-02', slots: [], startTime: '9:00 AM', duration: 0.5 })],
+    settings: {
+      open_hour: '8', close_hour: '10',
+      maintenance_config: { rules: [{ enabled: true, mode: 'specific', start: 9, end: 10, dates: ['2026-09-02'] }] },
+    },
+  }));
+  assert.equal(snapshot.kpis.reserved_next_28_hours, 1.5);
+  assert.equal(snapshot.data_quality.future_schedule_conflict_hours, 0.5);
+  assert.equal(snapshot.kpis.booked_next_28_hours, 1);
+});
+
+test('future reservations retain blocked dates and outside-hours bookings while rejecting invalid schedules', () => {
+  const snapshot = Insights.buildSnapshot(baseInput({
+    courts: [court(), { ...court('new-court'), createdAt: '2026-09-05T00:00:00+08:00' }],
+    bookings: [
+      booking({ ref: 'BLOCKED-DATE', date: '2026-09-02', slots: [8] }),
+      booking({ ref: 'OUTSIDE-HOURS', date: '2026-09-03', slots: [7] }),
+      booking({ ref: 'OPENPLAY', date: '2026-09-04', slots: [8] }),
+      booking({ ref: 'PENDING', date: '2026-09-05', status: 'pending', paymentStatus: 'unpaid', slots: [9] }),
+      booking({ ref: 'TODAY', date: '2026-09-01' }),
+      booking({ ref: 'OUTSIDE-HORIZON', date: '2026-09-30' }),
+      booking({ ref: 'INVALID-SLOTS', date: '2026-09-02', slots: [25] }),
+      booking({ ref: 'UNKNOWN-COURT', date: '2026-09-03', courtId: 'unknown' }),
+      booking({ ref: 'BEFORE-CREATION', date: '2026-09-03', courtId: 'new-court' }),
+      booking({ ref: 'CANCELLED', date: '2026-09-06', status: 'cancelled' }),
+      booking({ ref: 'FORFEITED', date: '2026-09-07', status: 'forfeited' }),
+    ],
+    blockedDates: ['2026-09-02'],
+    settings: {
+      open_hour: '8', close_hour: '10',
+      open_play_config: { enabled: true, start: 8, end: 9, specificDates: ['2026-09-04'] },
+    },
+  }));
+  assert.equal(snapshot.kpis.reserved_next_28_hours, 4);
+  assert.equal(snapshot.data_quality.future_schedule_conflict_hours, 3);
+  assert.equal(snapshot.kpis.booked_next_28_hours, 1);
+  const invalidDate = Insights.buildSnapshot(baseInput({
+    now: '2026-09-10T12:00:00+08:00',
+    bookings: [booking({ date: '2026-09-31' })],
+  }));
+  assert.equal(invalidDate.kpis.reserved_next_28_hours, 0, 'calendar-invalid dates cannot become actual reservations');
+  const preopening = Insights.buildSnapshot(baseInput({
+    openingDate: '2026-09-05', bookings: [booking({ date: '2026-09-02' })],
+  }));
+  assert.equal(preopening.kpis.reserved_next_28_hours, 0);
 });
 
 test('excluded sessions cannot start learning or generate a quiet-hour recommendation', () => {
