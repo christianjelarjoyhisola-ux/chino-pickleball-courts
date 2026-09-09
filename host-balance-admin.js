@@ -344,10 +344,53 @@
     return null;
   }
 
-  function apiCall(action, payload = {}) {
-    const api = global.HostBalancePayment;
-    if (!api?.invoke) throw new Error('Host balance payment service is unavailable. Refresh this page.');
-    return api.invoke(supabaseClient(), { action, ...payload });
+  function reviewActivityContext(action, payload) {
+    if (action !== 'review' || global.PB_USE_LOCAL_DATA) return null;
+    try {
+      const session = global.Auth?.getSession?.();
+      if (!session?.id || !['owner', 'court_owner', 'staff'].includes(session.role)
+        || (session.status && session.status !== 'active')) return null;
+      const startPage = String(global.location?.hash || '').replace(/^#/, '');
+      const pages = ['dash', 'insights', 'bookings', 'payreview', 'reports', 'courts',
+        'gamemgr', 'hosts', 'maintenance', 'payments', 'accounts', 'remittances', 'activity', 'deleted'];
+      const targetId = String(payload.paymentId || '');
+      return {
+        actorId: session.id,
+        actorRole: session.role,
+        page: pages.includes(startPage) ? startPage : 'admin',
+        action: payload.decision === 'approve' ? 'approveHostBalancePayment'
+          : payload.decision === 'reject' ? 'rejectHostBalancePayment' : 'reviewHostBalancePayment',
+        targetId: /^[\w.-]{1,100}$/.test(targetId) ? targetId : '',
+      };
+    } catch (_) { return null; }
+  }
+
+  async function recordReviewOutcome(activity, outcome) {
+    if (!activity || global.PB_USE_LOCAL_DATA) return;
+    try {
+      const session = global.Auth?.getSession?.();
+      if (session?.id !== activity.actorId || session?.role !== activity.actorRole
+        || (session.status && session.status !== 'active')) return;
+      await global.DB?.recordAdminActivity?.({
+        category: 'result', action: activity.action, outcome, page: activity.page,
+        targetType: 'host_booking_balance_payments', targetId: activity.targetId,
+      });
+    } catch (_) { /* Recording must not change the payment review result. */ }
+  }
+
+  async function apiCall(action, payload = {}) {
+    const activity = reviewActivityContext(action, payload);
+    try {
+      const api = global.HostBalancePayment;
+      if (!api?.invoke) throw new Error('Host balance payment service is unavailable. Refresh this page.');
+      const result = await api.invoke(supabaseClient(), { action, ...payload });
+      await recordReviewOutcome(activity, result === false || result?.ok === false || result?.error ? 'failed'
+        : result?.skipped ? 'skipped' : result?.ok === true ? 'success' : 'attempt');
+      return result;
+    } catch (error) {
+      await recordReviewOutcome(activity, 'failed');
+      throw error;
+    }
   }
 
   function addStyles() {

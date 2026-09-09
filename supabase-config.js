@@ -7645,7 +7645,12 @@ Object.assign(window.DB, {
 
   async recordAdminActivity(event = {}) {
     const session = window.Auth?.getSession?.();
-    if (window.PB_USE_LOCAL_DATA || !['owner', 'court_owner'].includes(session?.role) || (session.status && session.status !== 'active')) return null;
+    // Login finishes on the public login page before opening the dashboard.
+    // Allow only its successful sign-in observation, not other public activity.
+    const loginObservation = /^\/login(?:\.html)?\/?$/i.test(String(location.pathname || '')) &&
+      event.category === 'sign_in' && event.action === 'signIn' && event.page === 'login' &&
+      event.outcome === 'success' && session?.status === 'active';
+    if ((!PB_PRIVATE_DATA_SURFACE && !loginObservation) || window.PB_USE_LOCAL_DATA || !['owner', 'court_owner', 'staff'].includes(session?.role) || (session.status && session.status !== 'active')) return null;
     const types = { navigation: 'page_view', export: 'export', interaction: 'action_attempt', result: 'action_result', sign_in: 'sign_in', sign_out: 'sign_out' };
     const kind = types[event.category];
     if (!kind) return null;
@@ -7656,6 +7661,8 @@ Object.assign(window.DB, {
       entityId: /^[\w.-]{1,100}$/.test(String(event.targetId || '')) ? String(event.targetId) : '',
       outcome: ['view', 'attempt', 'success', 'failed', 'skipped'].includes(event.outcome) ? event.outcome : 'attempt',
     };
+    if (['click', 'change', 'submit'].includes(event.controlEvent)) metadata.controlEvent = event.controlEvent;
+    if (['opened', 'closed', 'expanded', 'collapsed', 'cancelled', 'copied', 'shared', 'validation_failed'].includes(event.uiResult)) metadata.uiResult = event.uiResult;
     // Navigation is observed before the URL is updated; its explicit destination
     // is the page opened, even while location.hash still names the previous page.
     const page = short(event.page || (kind === 'page_view' ? event.targetId : '') || String(location.hash || '').replace(/^#/, '') || 'admin', 60);
@@ -7682,7 +7689,7 @@ function _pbInstallActivityObservers(db) {
     if (typeof operation !== 'function' || !mutation.test(name) || ['seedDefaultData', 'clearCache'].includes(name)) continue;
     db[name] = async function (...args) {
       const session = window.Auth?.getSession?.();
-      const observe = PB_PRIVATE_DATA_SURFACE && !window.PB_USE_LOCAL_DATA && ['owner', 'court_owner'].includes(session?.role);
+      const observe = PB_PRIVATE_DATA_SURFACE && !window.PB_USE_LOCAL_DATA && ['owner', 'court_owner', 'staff'].includes(session?.role);
       // A save may finish after the operator navigates away. Keep the page where
       // this operation started instead of attributing its result to the new page.
       const page = observe ? String(location.hash || '').replace(/^#/, '') || 'admin' : undefined;
@@ -7705,6 +7712,41 @@ function _pbInstallActivityObservers(db) {
   }
 }
 _pbInstallActivityObservers(window.DB);
+
+// Account administration calls Auth directly instead of a DB mutation method.
+// Only the operation name and a bounded account ID go to the audit recorder;
+// account fields, credentials and error messages are never included.
+function _pbInstallAccountActivityObservers(auth, db) {
+  for (const [name, action] of Object.entries({ add: 'createAccount', update: 'updateAccount', del: 'deleteAccount' })) {
+    const operation = auth?.[name];
+    if (typeof operation !== 'function') continue;
+    auth[name] = async function (...args) {
+      const session = auth.getSession?.();
+      const actorId = session?.id;
+      const observe = PB_PRIVATE_DATA_SURFACE && !window.PB_USE_LOCAL_DATA &&
+        ['owner', 'court_owner', 'staff'].includes(session?.role) && (!session.status || session.status === 'active');
+      const page = observe ? String(location.hash || '').replace(/^#/, '') || 'admin' : undefined;
+      const targetId = name !== 'add' && typeof args[0] === 'string' ? args[0] : '';
+      const record = async outcome => {
+        if (!observe || !actorId || auth.getSession?.()?.id !== actorId) return;
+        try {
+          await db.recordAdminActivity({ category: 'result', action, targetType: 'accounts', targetId, outcome, page });
+        } catch (_) {
+          // Audit availability must not change an account operation's result.
+        }
+      };
+      try {
+        const result = await operation.apply(this, args);
+        await record(result === false || result?.ok === false || result?.error ? 'failed'
+          : result?.skipped ? 'skipped' : result == null ? 'attempt' : 'success');
+        return result;
+      } catch (error) {
+        await record('failed');
+        throw error;
+      }
+    };
+  }
+}
 
 window.Auth = {
 
@@ -7911,6 +7953,8 @@ window.Auth = {
     }
   },
 };
+
+_pbInstallAccountActivityObservers(window.Auth, window.DB);
 
 if (window.PB_USE_LOCAL_DATA) {
   Object.assign(window.Auth, {

@@ -1,14 +1,20 @@
 (function (root, factory) {
-  const api = factory();
+  const catalogs = typeof module === 'object' && module.exports
+    ? [require('./admin-activity-operations.js'), require('./admin-activity-management.js'), require('./admin-activity-accounts.js')]
+    : [root.ChinoActivityOperations, root.ChinoActivityManagement, root.ChinoActivityAccounts];
+  const api = factory(catalogs.filter(Boolean));
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.ChinoAdminActivity = api;
-})(typeof window === 'undefined' ? globalThis : window, function () {
+})(typeof window === 'undefined' ? globalThis : window, function (catalogs) {
   'use strict';
 
   const CATEGORIES = ['bookings', 'payments', 'courts', 'finance', 'settings', 'maintenance', 'accounts', 'open_play', 'hosts', 'access', 'navigation', 'interaction', 'export', 'other'];
-  const SECTIONS = { dash: 'Dashboard', insights: 'Insights', bookings: 'Bookings', deleted: 'Deleted bookings', activity: 'Activity history', payreview: 'Payment review', reports: 'Reports', courts: 'Courts', gamemgr: 'Play manager', accounts: 'Host accounts', remittances: 'Remittances', hosts: 'Host center', maintenance: 'Maintenance', payments: 'Payments' };
+  const SECTIONS = { dash: 'Dashboard', insights: 'Insights', bookings: 'Bookings', deleted: 'Deleted bookings', activity: 'Activity history', payreview: 'Payment review', reports: 'Reports', courts: 'Courts', gamemgr: 'Play manager', accounts: 'Host accounts', remittances: 'Remittances', hosts: 'Host center', maintenance: 'Maintenance', payments: 'Payments', login: 'Sign in' };
   const PLAY_ACTIONS = new Set(['add-player', 'choose-players', 'continue-live', 'copy-live-link', 'copy-text-update', 'correct-winner', 'disable-live-link', 'display', 'download-result', 'edit-player-skill', 'edit-setup', 'end-session', 'export', 'import-paid', 'native-share-live', 'new-session', 'replace-player', 'rotate-live-link', 'sample-roster', 'share-live', 'skip-player', 'start-match', 'winner']);
   const PLAY_FORMS = new Set(['add-player', 'choose-players', 'correct-winner', 'replace-player', 'setup']);
+  const CONTROL_RULES = catalogs.flatMap(catalog => catalog.controls || []);
+  const PANELS = Object.assign({}, ...catalogs.map(catalog => catalog.panels || {}), { openRescheduleModal: '#rescheduleModal, #groupRescheduleModal' });
+  const ACTION_PANELS = { court_activity_booking_details: '#bookingDetailsModal', host_balance_queue_review: '#hostBalanceReviewModal', host_booking_payment_review: '#verifyModal', activity_details_open: '[data-aa="dialog"]' };
   const PAGE_ACTIONS = {
     host_accounts_refresh: 'Refresh host accounts', host_account_open: 'Open host bookings and balance', host_account_close: 'Close host bookings and balance',
     host_bookings_search: 'Search host bookings', host_bookings_refresh: 'Refresh host bookings and balance',
@@ -26,6 +32,21 @@
     confirmHostBalanceReceived: 'Confirm host balance received', rejectHostBalanceReceipt: 'Reject host balance receipt',
     exportCSV: 'Export bookings', exportBookingsCSV: 'Export bookings', download_requested: 'Download a file', print_requested: 'Print',
   };
+  for (const catalog of catalogs) Object.assign(ACTIONS, catalog.handlers || {}, catalog.operations || {});
+  for (const control of CONTROL_RULES) ACTIONS[control.action] = control.label;
+  ACTIONS.closePanel = 'Close panel';
+  Object.assign(ACTIONS, { closeModal: 'Close panel', 'location.reload': 'Reload the admin page',
+    updateAllPromoPreview: 'Edit the all-court promo draft', updateCourtPromoPreview: 'Edit the court promo draft',
+    updateRemittanceSearch: 'Search remittances', updateBookingFeePreview: 'Edit the booking fee draft',
+    opSyncCourtPicker: 'Choose courts for open play', renderOpRegistrations: 'Filter open play registrations',
+    gmRefreshSourceSummary: 'Change the play session date', gmSyncSetupControls: 'Edit the play session time',
+    syncBookingPaymentRejectReason: 'Edit the payment rejection reason', syncBookingPaymentTransferForm: 'Edit the payment transfer draft',
+    deleteOpReg: 'Remove an open play registration' });
+  Object.assign(ACTIONS, { processHostBalanceDeadlines: 'Check host payment deadlines', notifyBookingUpdate: 'Send a booking update',
+    sendTelegramNotification: 'Send a Telegram notification', deleteOpenPlayRegistration: 'Remove an open play registration', saveAgreement: 'Save agreement acceptance' });
+  const FIELD_LABELS = { blocked: 'Bookings paused for all dates', status: 'Status', payment_status: 'Payment status', payment_method: 'Payment method',
+    amount_paid: 'Amount paid', balance_due: 'Balance due', full_name: 'Name', open_time: 'Opening time', close_time: 'Closing time', hourly_rate: 'Hourly rate',
+    start_time: 'Start time', end_time: 'End time', date: 'Date', court_id: 'Court', role: 'Account role', enabled: 'Enabled' };
   const RECORDS = { accounts: 'account', bookings: 'booking', courts: 'court', blocked_dates: 'blocked date', settings: 'setting',
     open_play_host_applications: 'host application', open_play_host_sessions: 'host session', open_play_host_session_registrations: 'host-session registration',
     host_booking_balance_payments: 'host balance payment', booking_reschedule_requests: 'booking-change request', booking_reschedule_request_items: 'booking-change item',
@@ -70,6 +91,7 @@
     if (notificationActivity(item)) return 'Messages about requests to change a booking date or time';
     if (item.action === 'page_view') return 'Page visit';
     if (item.source === 'client_reported' && Object.hasOwn(PAGE_ACTIONS, item.action)) return 'Host account activity';
+    if (item.source === 'client_reported' && !item.targetId && Object.hasOwn(ACTIONS, item.action)) return 'Page control';
     return [words(item.targetType), item.targetId].filter(Boolean).join(' · ') || 'Workspace';
   }
   function dateLabel(value, includeTime = true) {
@@ -78,9 +100,11 @@
     return new Intl.DateTimeFormat('en-PH', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric', year: 'numeric', ...(includeTime ? { hour: 'numeric', minute: '2-digit', second: '2-digit' } : {}) }).format(date);
   }
   function sourceLabel(item) {
-    if (item.source === 'database_change') return { label: 'Saved change', kind: 'saved', explanation: 'Recorded from a database change.' };
+    if (item.source === 'database_change') return { label: 'Saved', kind: 'saved', explanation: 'The database recorded this change. The before-and-after details show what changed.' };
     if (item.source === 'auth_event') return { label: 'Account event', kind: 'event', explanation: 'Recorded by the authentication service.' };
     const notification = notificationActivity(item);
+    const uiResult = item.source === 'client_reported' && { opened: ['Opened', 'The requested panel is visible.'], closed: ['Closed', 'The panel was closed.'], expanded: ['Expanded', 'The details were expanded.'], collapsed: ['Collapsed', 'The details were collapsed.'], cancelled: ['Cancelled', 'The confirmation was cancelled.'], copied: ['Copied', 'The browser copied the requested content.'], shared: ['Shared', 'The browser completed the share action.'], validation_failed: ['Needs correction', 'The form did not pass validation. No entered values are stored in this history.'] }[item.details?.uiResult];
+    if (uiResult) return { label: uiResult[0], kind: item.details.uiResult === 'validation_failed' ? 'attempt' : 'view', explanation: uiResult[1] };
     const note = notification ? ' These checks can run automatically while the dashboard is open. The account identifies the session used; this record does not establish a manual click or a booking change.' : '';
     if (notification?.client && item.outcome === 'skipped') return { label: 'Nothing to send', kind: 'view', explanation: 'The browser reported that no booking-change messages were ready to send. This is a normal check result.' + note };
     if (item.source === 'server_reported' || item.source === 'server_event') {
@@ -95,13 +119,14 @@
       return result ? { label: result[0], kind: result[1], explanation: result[2] + note }
         : { label: 'Server event', kind: 'event', explanation: 'Recorded by the server.' + note };
     }
-    if (item.outcome === 'view' || item.outcome === 'viewed' || item.action === 'page_view') return { label: 'Viewed', kind: 'view', explanation: 'Reported by the browser. This does not confirm a saved change.' };
-    if (item.outcome === 'success') return { label: 'Reported success', kind: 'event', explanation: 'The browser received a successful response. Saved changes have their own database records.' + note };
-    if (item.outcome === 'failed') return { label: 'Reported failure', kind: 'attempt', explanation: 'The browser reported that this request failed.' + note };
+    if (item.outcome === 'view' || item.outcome === 'viewed') return { label: item.action === 'page_view' ? 'Opened' : 'Viewed', kind: 'view', explanation: 'The browser recorded this view. This does not confirm a saved change.' };
+    if (item.outcome === 'success') return { label: 'Completed', kind: 'event', explanation: 'The application returned a successful result. A Saved record separately confirms any database change.' + note };
+    if (item.outcome === 'failed') return { label: 'Failed', kind: 'attempt', explanation: 'The application reported that this action failed.' + note };
     if (item.outcome === 'skipped') return { label: 'Skipped', kind: 'view', explanation: 'The browser reported that this action was skipped. Skipping an action does not by itself mean a failure.' };
-    if (item.outcome === 'denied') return { label: 'Reported denial', kind: 'attempt', explanation: 'The browser reported that access to this action was denied.' };
-    if (item.source === 'client_reported' && item.details?.event === 'action_attempt') return { label: 'Requested', kind: 'attempt', explanation: 'The browser recorded use of this control. This alone does not confirm that the requested action completed.' };
-    return { label: 'Attempt', kind: 'attempt', explanation: 'Reported by the browser. A click or request does not confirm that it completed.' };
+    if (item.outcome === 'denied') return { label: 'Not allowed', kind: 'attempt', explanation: 'The application denied access to this action.' };
+    if (item.source === 'client_reported' && ['click', 'change', 'submit'].includes(item.details?.controlEvent)) return { label: { click: 'Clicked', change: 'Input changed', submit: 'Submitted' }[item.details.controlEvent], kind: 'view', explanation: 'The account used this control. Any completed request or saved change has a separate result record.' };
+    if (item.source === 'client_reported' && item.details?.event === 'action_attempt') return { label: 'Started', kind: 'attempt', explanation: 'The browser recorded this action starting. Its completion is not established by this record.' };
+    return { label: 'Result unknown', kind: 'attempt', explanation: 'This action did not report a definite result. Check the Saved records for any changes.' };
   }
   const ownSessionKey = (session, canOwner) => session?.id && session.role === 'owner' && (!session.status || session.status === 'active') && canOwner(session) ? String(session.id) + ':owner' : '';
 
@@ -184,14 +209,14 @@
     const keys = [...new Set([...Object.keys(before), ...Object.keys(after), ...changedFields])].filter(key => changedFields.includes(key) || JSON.stringify(before[key]) !== JSON.stringify(after[key]));
     const changes = keys.map(key => {
       const hidden = /\[REDACTED\]/i.test(pretty(before[key]) + pretty(after[key]));
-      return `<section class="aa-change"><h5>${escape(words(key))}</h5>${hidden ? '<p class="aa-detail-note aa-hidden-values">This field changed. Sensitive values are hidden.</p>' : ''}<div><div><span>Before</span><pre>${escape(pretty(before[key]))}</pre></div><div><span>After</span><pre>${escape(pretty(after[key]))}</pre></div></div></section>`;
+      return `<section class="aa-change"><h5>${escape(FIELD_LABELS[key] || words(key))}</h5>${hidden ? '<p class="aa-detail-note aa-hidden-values">This field changed. Sensitive values are hidden.</p>' : ''}<div><div><span>Before</span><pre>${escape(pretty(before[key]))}</pre></div><div><span>After</span><pre>${escape(pretty(after[key]))}</pre></div></div></section>`;
     }).join('');
     return `<div class="aa-detail-summary"><span class="aa-badge aa-${source.kind}">${source.label}</span><h3>${escape(activityTitle(item))}</h3><p>${escape(source.explanation)}</p><dl><div><dt>Operator</dt><dd>${escape(item.actorName || 'System')} · ${escape(roleLabel(item.actorRole))}</dd></div><div><dt>Philippine time</dt><dd>${escape(dateLabel(item.occurredAt))}</dd></div><div><dt>Page</dt><dd>${escape(activityPage(item))}</dd></div><div><dt>Action</dt><dd>${escape(action)}</dd></div><div><dt>Result</dt><dd>${escape(source.label)}</dd></div><div><dt>Target</dt><dd>${escape(activityTarget(item))}</dd></div><div><dt>Record ID</dt><dd>${escape(item.id)}</dd></div></dl></div>${keys.length ? `<div class="aa-changes"><h4>What changed</h4>${changes}</div>` : '<p class="aa-detail-note">No before-and-after change is attached to this event.</p>'}<details class="aa-event-details"><summary>Event information</summary><pre>${escape(pretty(eventInformation))}</pre></details>`;
   }
 
   function create({ root, db, getSession, canOwner, isLocalData = () => false }) {
     const find = name => root.querySelector(`[data-aa="${name}"]`);
-    root.innerHTML = `<section class="aa-panel" aria-labelledby="activityHistoryTitle"><header class="aa-header"><div><span class="aa-eyebrow">System owner only</span><h2 id="activityHistoryTitle">Activity History</h2><p>See which page was opened, what was requested, and what changed.</p></div><button class="aa-button" type="button" data-aa="refresh">↻ <span>Refresh</span></button></header><div class="aa-scope"><span class="aa-scope-icon" aria-hidden="true">◷</span><p data-aa="started">History begins when activity recording is enabled. Earlier actions are not reconstructed.</p></div><form class="aa-filters" data-aa="filters"><label>From date<input type="date" name="fromDate" data-aa="fromDate"></label><label>To date<input type="date" name="toDate" data-aa="toDate"></label><label>Operator<select name="actorId" data-aa="actor"><option value="">All operators</option></select></label><label>Category<select name="category" data-aa="category"><option value="">All categories</option>${CATEGORIES.map(category => `<option value="${category}">${escape(words(category))}</option>`).join('')}</select></label><label>Page<select name="page" data-aa="page"><option value="">All pages</option>${Object.entries(SECTIONS).map(([key, label]) => `<option value="${key}">${label}</option>`).join('')}</select></label><label>View<select name="view" data-aa="view"><option value="people">Actions &amp; page visits</option><option value="services">Service requests</option><option value="all">All activity</option></select></label><button class="aa-button aa-primary" type="submit">Apply filters</button><button class="aa-reset" type="button" data-aa="reset">Reset</button></form><div class="aa-meta"><span data-aa="count">No records loaded</span><span>Philippine time · newest first</span></div><div data-aa="status" class="aa-status" role="status" aria-live="polite"></div><div class="aa-table-wrap" data-aa="list"><table class="aa-table"><thead><tr><th>When</th><th>Operator</th><th>Page</th><th>Action</th><th>Result</th><th><span class="aa-sr-only">Details</span></th></tr></thead><tbody data-aa="rows"></tbody></table></div><footer class="aa-footer"><p>Requested means a control was used; Saved change confirms a recorded change. Service requests are available in the View filter. Older actions without a recorded page remain under All pages.</p><button class="aa-button" type="button" data-aa="more" hidden>Load older activity</button></footer></section><dialog class="aa-dialog" data-aa="dialog" aria-labelledby="activityDetailTitle"><header><h2 id="activityDetailTitle">Activity details</h2><button class="aa-button" type="button" data-aa="close" aria-label="Close activity details">Close</button></header><div class="aa-dialog-body" data-aa="detail"></div></dialog>`;
+    root.innerHTML = `<section class="aa-panel" aria-labelledby="activityHistoryTitle"><header class="aa-header"><div><span class="aa-eyebrow">System owner only</span><h2 id="activityHistoryTitle">Activity History</h2><p>See the page opened, the action taken, and what happened.</p></div><button class="aa-button" type="button" data-aa="refresh">↻ <span>Refresh</span></button></header><div class="aa-scope"><span class="aa-scope-icon" aria-hidden="true">◷</span><p data-aa="started">History begins when activity recording is enabled. Earlier actions are not reconstructed.</p></div><form class="aa-filters" data-aa="filters"><label>From date<input type="date" name="fromDate" data-aa="fromDate"></label><label>To date<input type="date" name="toDate" data-aa="toDate"></label><label>Operator<select name="actorId" data-aa="actor"><option value="">All operators</option></select></label><label>Category<select name="category" data-aa="category"><option value="">All categories</option>${CATEGORIES.map(category => `<option value="${category}">${escape(words(category))}</option>`).join('')}</select></label><label>Page<select name="page" data-aa="page"><option value="">All pages</option>${Object.entries(SECTIONS).map(([key, label]) => `<option value="${key}">${label}</option>`).join('')}</select></label><label>View<select name="view" data-aa="view"><option value="people">Actions &amp; page visits</option><option value="services">Service requests</option><option value="all">All activity</option></select></label><button class="aa-button aa-primary" type="submit">Apply filters</button><button class="aa-reset" type="button" data-aa="reset">Reset</button></form><div class="aa-meta"><span data-aa="count">No records loaded</span><span>Philippine time · newest first</span></div><div data-aa="status" class="aa-status" role="status" aria-live="polite"></div><div class="aa-table-wrap" data-aa="list"><table class="aa-table"><thead><tr><th>When</th><th>Operator</th><th>Page</th><th>Action</th><th>Result</th><th><span class="aa-sr-only">Details</span></th></tr></thead><tbody data-aa="rows"></tbody></table></div><footer class="aa-footer"><p>Clicked means a button was used. Completed means the action returned success. Saved confirms a database change. Background checks are available under Service requests.</p><button class="aa-button" type="button" data-aa="more" hidden>Load older activity</button></footer></section><dialog class="aa-dialog" data-aa="dialog" aria-labelledby="activityDetailTitle"><header><h2 id="activityDetailTitle">Activity details</h2><button class="aa-button" type="button" data-aa="close" aria-label="Close activity details">Close</button></header><div class="aa-dialog-body" data-aa="detail"></div></dialog>`;
     let filters = { view: 'people' }, disposed = false, dialogTrigger = null, dialogTriggerIndex = null;
     const store = createStore({ db, getSession, canOwner, onChange: render });
     function render(state) {
@@ -262,13 +287,18 @@
 
   // Use code identifiers, never button text, arguments, form values, or receipt contents.
   function observationFor(element, eventType = 'click') {
-    if (!element || element.closest?.('[data-admin-activity]') || element.closest?.('.nav-item')) return null;
+    if (!element || element.closest?.('.nav-item')) return null;
     const tagged = element.getAttribute?.('data-activity-action');
     if (tagged) {
       if (!Object.hasOwn(PAGE_ACTIONS, tagged) || eventType !== (element.getAttribute('data-activity-event') || 'click')) return null;
       const page = element.getAttribute('data-activity-page');
       return { category: 'interaction', action: tagged, ...(Object.hasOwn(SECTIONS, page || '') ? { page } : {}), outcome: 'attempt' };
     }
+    const control = CONTROL_RULES.find(rule => rule.event === eventType && element.matches?.(rule.selector));
+    if (control) return { category: control.kind === 'export' ? 'export' : 'interaction', action: control.action, ...(control.page ? { page: control.page } : {}), outcome: 'attempt' };
+    // History's own explicitly named controls are safe to observe. Rendering and
+    // fetching history never create observation records, avoiding feedback loops.
+    if (element.closest?.('[data-admin-activity]')) return null;
     if (element.hasAttribute?.('download')) return { category: 'export', action: 'download_requested', label: 'Download requested', outcome: 'attempt' };
     const playAction = element.getAttribute?.(eventType === 'submit' ? 'data-pm-form' : 'data-pm-action');
     if ((eventType === 'submit' ? PLAY_FORMS : PLAY_ACTIONS).has(playAction)) {
@@ -276,29 +306,132 @@
     }
     const balanceAction = { hostBalanceApproveBtn: 'confirmHostBalanceReceived', hostBalanceRejectBtn: 'rejectHostBalanceReceipt' }[element.id];
     if (balanceAction) return { category: 'interaction', action: balanceAction, outcome: 'attempt' };
-    const code = element.getAttribute?.(eventType === 'change' ? 'onchange' : eventType === 'submit' ? 'onsubmit' : 'onclick') || '';
+    const code = element.getAttribute?.(eventType === 'change' ? 'onchange' : eventType === 'submit' ? 'onsubmit' : 'onclick') || (eventType === 'change' ? element.getAttribute?.('oninput') : '') || '';
     const matched = code.match(/(?:^|[;\s])(?:return\s+|void\s+)?(?:window\.)?([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)?)\s*\(/);
     const identifier = matched?.[1];
-    if (!identifier || /^(goto|logout|toggleSidebar|close\w*|render\w*|filter\w*|toast|event\.|console\.)/i.test(identifier)) return null;
+    if (!identifier || /^(if|for|while|switch)$/.test(identifier) || (!Object.hasOwn(ACTIONS, identifier) && /^(goto|logout|toggleSidebar|close\w*|render\w*|filter\w*|toast|event\.|console\.)/i.test(identifier))) return null;
     const exporting = /export|download|print/i.test(identifier);
     return { category: exporting ? 'export' : 'interaction', action: identifier, label: words(identifier.replace(/\./g, ' ')).slice(0, 100), outcome: 'attempt' };
   }
   function createObserver({ db, getSession, isLocalData = () => false }) {
     let documentRef = null, windowRef = null, currentPage = '';
+    let activeControl = null;
+    let controlTimer = null;
+    const detailActions = new WeakMap(), panelWatches = new Set();
+    const restoreFeedback = [];
     function record(event) {
       const session = getSession();
-      if (isLocalData() || !session?.id || !['owner', 'court_owner'].includes(session.role) || !event || typeof db.recordAdminActivity !== 'function') return;
+      if (isLocalData() || !session?.id || (session.status && session.status !== 'active') || !['owner', 'court_owner', 'staff'].includes(session.role) || !event || typeof db.recordAdminActivity !== 'function') return;
       try { Promise.resolve(db.recordAdminActivity({ ...event, page: event.page || currentPage || undefined })).catch(() => {}); } catch (_) { /* An observation must not interrupt an operation. */ }
     }
     function observeNavigation(section) {
+      for (const stop of panelWatches) if (!stop.opened()) stop();
       if (Object.hasOwn(SECTIONS, section)) { currentPage = section; record({ category: 'navigation', action: 'page_view', targetType: 'section', targetId: section, page: section, label: SECTIONS[section], outcome: 'view' }); }
     }
-    function click(event) { if (event.isTrusted === false) return; record(observationFor(event.target.closest?.('[data-activity-action],button,a,summary,[onclick],[role="button"]'))); }
-    function change(event) { if (event.isTrusted === false) return; record(observationFor(event.target.closest?.('[data-activity-action],[onchange]'), 'change')); }
-    function submit(event) { if (event.isTrusted === false) return; record(observationFor(event.target, 'submit')); }
+    function watchPanel(element, action) {
+      if (!windowRef?.MutationObserver) return;
+      const code = element.getAttribute?.('onclick') || '';
+      const selector = ACTION_PANELS[action.action] || Object.entries(PANELS).find(([handler]) => new RegExp('(?:^|[;\\s])(?:return\\s+|void\\s+)?' + handler + '\\s*\\(').test(code))?.[1];
+      if (!selector) return;
+      const isVisible = panel => panel && panel.isConnected !== false && !panel.hidden && panel.getAttribute('aria-hidden') !== 'true' && panel.getClientRects().length > 0 && windowRef.getComputedStyle(panel).visibility !== 'hidden';
+      const visible = () => Array.from(documentRef.querySelectorAll(selector)).find(isVisible);
+      if (visible()) return;
+      const actor = getSession()?.id;
+      let opened = null;
+      const stop = () => { observer.disconnect(); clearTimeout(timer); panelWatches.delete(stop); };
+      stop.opened = () => !!opened;
+      const observer = new windowRef.MutationObserver(() => {
+        if (getSession()?.id !== actor) { stop(); return; }
+        // Once an alternative opens, watch that exact element. A different
+        // matching panel cannot keep the original panel artificially open.
+        if (opened) {
+          if (!isVisible(opened)) { stop(); record({ ...action, action: 'closePanel', targetType: 'panel', targetId: opened.id || '', category: 'result', outcome: 'view', uiResult: 'closed' }); }
+          return;
+        }
+        const panel = visible();
+        if (panel) { opened = panel; clearTimeout(timer); record({ ...action, category: 'result', outcome: 'view', uiResult: 'opened' }); }
+      });
+      const timer = setTimeout(stop, 15000);
+      panelWatches.add(stop); observer.observe(documentRef.body, { attributes: true, childList: true, subtree: true, attributeFilter: ['class', 'hidden', 'aria-hidden', 'open', 'style'] });
+    }
+    function observeControl(element, type) {
+      const submitForm = type === 'click' && element?.form && (element.type === 'submit' || (element.tagName === 'BUTTON' && !element.type)) ? element.form : null;
+      const found = observationFor(element, type) || (submitForm ? observationFor(submitForm, 'submit') : null);
+      if (!found) return;
+      for (const stop of panelWatches) if (!stop.opened()) stop();
+      const action = { ...found, page: found.page || currentPage || undefined, controlEvent: type };
+      record(action);
+      activeControl = { action, actor: getSession()?.id, form: element?.form || (element?.tagName === 'FORM' ? element : null) };
+      // Native validation occurs during the same user event. Never attribute a
+      // later unrelated validation error to a previous click.
+      clearTimeout(controlTimer); controlTimer = setTimeout(() => { activeControl = null; }, 0);
+      if (type === 'click') {
+        watchPanel(element, action);
+        if (element.tagName === 'SUMMARY' && element.parentElement?.tagName === 'DETAILS') detailActions.set(element.parentElement, { action, actor: getSession()?.id });
+      }
+    }
+    function click(event) { if (event.isTrusted === false) return; observeControl(event.target.closest?.('[data-activity-action],button,a,summary,[onclick],[role="button"]'), 'click'); }
+    function change(event) { if (event.isTrusted === false) return; observeControl(event.target.closest?.('input,select,textarea,[data-activity-action],[onchange]'), 'change'); }
+    function submit(event) { if (event.isTrusted === false) return; observeControl(event.target, 'submit'); }
+    function toggle(event) {
+      const pending = detailActions.get(event.target);
+      if (!pending) return; detailActions.delete(event.target);
+      if (getSession()?.id === pending.actor) record({ ...pending.action, category: 'result', outcome: 'view', uiResult: event.target.open ? 'expanded' : 'collapsed' });
+    }
+    function invalid(event) {
+      const pending = activeControl;
+      if (!pending || getSession()?.id !== pending.actor) return;
+      if (pending.form && event?.target?.form && pending.form !== event.target.form) return;
+      activeControl = null;
+      record({ ...pending.action, category: 'result', outcome: 'failed', uiResult: 'validation_failed' });
+    }
+    function resultFor(pending, outcome, uiResult) {
+      if (pending && getSession()?.id === pending.actor) record({ ...pending.action, category: 'result', outcome, ...(uiResult ? { uiResult } : {}) });
+    }
+    function feedbackHooks() {
+      function wrap(object, key, factory) {
+        if (typeof object?.[key] !== 'function') return;
+        const original = object[key], wrapped = factory(original);
+        try { object[key] = wrapped; if (object[key] === wrapped) restoreFeedback.push(() => { if (object[key] === wrapped) object[key] = original; }); } catch (_) { /* Browser APIs may be read-only. */ }
+      }
+      wrap(windowRef, 'confirm', original => function (...args) {
+        const pending = activeControl, accepted = original.apply(this, args);
+        if (!accepted) resultFor(pending, 'skipped', 'cancelled');
+        return accepted;
+      });
+      wrap(windowRef, 'toast', original => function (...args) {
+        const pending = activeControl, value = original.apply(this, args);
+        if (args[1] === 'err') resultFor(pending, 'failed');
+        return value;
+      });
+      for (const [object, key, uiResult] of [[windowRef?.navigator?.clipboard, 'writeText', 'copied'], [windowRef?.navigator, 'share', 'shared']]) {
+        wrap(object, key, original => function (...args) {
+          const pending = activeControl;
+          // Arguments are passed through and never retained by the audit record.
+          let result;
+          try { result = original.apply(this, args); } catch (error) { if (key === 'share') resultFor(pending, 'failed'); throw error; }
+          return Promise.resolve(result).then(value => { resultFor(pending, 'success', uiResult); return value; }, error => {
+            // Copy helpers may recover through execCommand after writeText
+            // fails. An API rejection alone is not the final copy outcome.
+            if (key === 'share') resultFor(pending, error?.name === 'AbortError' ? 'skipped' : 'failed', error?.name === 'AbortError' ? 'cancelled' : undefined);
+            throw error;
+          });
+        });
+      }
+    }
+    function keydown(event) {
+      if (event.isTrusted === false || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
+      const before = documentRef.activeElement;
+      Promise.resolve().then(() => {
+        const after = documentRef?.activeElement;
+        // Host account tabs already record their keyboard activation explicitly.
+        if (!after || after === before || after.getAttribute?.('data-activity-action')?.startsWith('host_bookings_filter_')) return;
+        if (after.getAttribute?.('aria-selected') === 'true' || after.getAttribute?.('aria-pressed') === 'true') observeControl(after, 'click');
+      });
+    }
     function print() { record({ category: 'export', action: 'print_requested', label: 'Print dialog opened', outcome: 'attempt' }); }
-    function install(doc) { if (documentRef) return; documentRef = doc; windowRef = doc.defaultView; doc.addEventListener('click', click, true); doc.addEventListener('change', change, true); doc.addEventListener('submit', submit, true); windowRef?.addEventListener('beforeprint', print); }
-    function destroy() { documentRef?.removeEventListener('click', click, true); documentRef?.removeEventListener('change', change, true); documentRef?.removeEventListener('submit', submit, true); windowRef?.removeEventListener('beforeprint', print); documentRef = null; windowRef = null; }
+    function install(doc) { if (documentRef) return; documentRef = doc; windowRef = doc.defaultView; doc.addEventListener('click', click, true); doc.addEventListener('change', change, true); doc.addEventListener('submit', submit, true); doc.addEventListener('toggle', toggle, true); doc.addEventListener('invalid', invalid, true); doc.addEventListener('keydown', keydown, true); windowRef?.addEventListener('beforeprint', print); feedbackHooks(); }
+    function destroy() { for (const stop of panelWatches) stop(); for (const restore of restoreFeedback) restore(); clearTimeout(controlTimer); activeControl = null; documentRef?.removeEventListener('click', click, true); documentRef?.removeEventListener('change', change, true); documentRef?.removeEventListener('submit', submit, true); documentRef?.removeEventListener('toggle', toggle, true); documentRef?.removeEventListener('invalid', invalid, true); documentRef?.removeEventListener('keydown', keydown, true); windowRef?.removeEventListener('beforeprint', print); documentRef = null; windowRef = null; }
     return { observeNavigation, install, destroy, record };
   }
   return { create, createStore, createObserver, observationFor, itemMarkup, detailMarkup, sourceLabel, activityPage, dateLabel, CATEGORIES };

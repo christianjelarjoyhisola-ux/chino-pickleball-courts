@@ -6,11 +6,11 @@ const source = fs.readFileSync('supabase-config.js', 'utf8');
 const activity = source.slice(source.indexOf('// Activity reads always'), source.indexOf('window.Auth = {'));
 const plain = value => JSON.parse(JSON.stringify(value));
 
-function harness({ role = 'owner', local = false, privateSurface = true, rpc, methods = {} } = {}) {
+function harness({ role = 'owner', local = false, privateSurface = true, rpc, methods = {}, authMethods = {} } = {}) {
   let session = { id: 'actor-1', role, status: 'active' };
   const requests = [];
   const context = vm.createContext({
-    window: { DB: methods, PB_USE_LOCAL_DATA: local, Auth: { getSession: () => session } },
+    window: { DB: methods, PB_USE_LOCAL_DATA: local, Auth: { ...authMethods, getSession: () => session } },
     PB_PRIVATE_DATA_SURFACE: privateSurface,
     location: { hash: '#courts' },
     _extractFnError: error => error.message,
@@ -21,7 +21,8 @@ function harness({ role = 'owner', local = false, privateSurface = true, rpc, me
     setTimeout, clearTimeout, console: { warn() {} },
   });
   vm.runInContext(activity, context);
-  return { db: context.window.DB, context, requests, setSession: value => { session = value; } };
+  context._pbInstallAccountActivityObservers(context.window.Auth, context.window.DB);
+  return { db: context.window.DB, auth: context.window.Auth, context, requests, setSession: value => { session = value; } };
 }
 
 test('activity history blocks non-owners and public pages before any request', async () => {
@@ -189,4 +190,136 @@ test('void and false results never claim a successful operation', async () => {
 test('server failures are surfaced as unavailable rather than empty history', async () => {
   const h = harness({ rpc: async () => ({ error: { message: 'Permission denied' } }) });
   await assert.rejects(h.db.getAdminActivity(), /Permission denied/);
+});
+
+test('only supported control events and verified UI result names reach activity metadata', async () => {
+  const h = harness();
+  for (const [controlEvent, uiResult] of [
+    ['click', 'opened'], ['click', 'closed'], ['change', 'expanded'],
+    ['click', 'collapsed'], ['submit', 'validation_failed'],
+  ]) {
+    await h.db.recordAdminActivity({ category: 'result', action: 'court_editor_open', controlEvent, uiResult, outcome: 'success' });
+    const metadata = h.requests.at(-1).args.p_metadata;
+    assert.equal(metadata.controlEvent, controlEvent);
+    assert.equal(metadata.uiResult, uiResult);
+  }
+  await h.db.recordAdminActivity({ category: 'result', action: 'saveCourt', controlEvent: 'input', uiResult: 'private-form-contents', value: 'secret', details: { password: 'hidden' } });
+  assert.equal(Object.hasOwn(h.requests.at(-1).args.p_metadata, 'controlEvent'), false);
+  assert.equal(Object.hasOwn(h.requests.at(-1).args.p_metadata, 'uiResult'), false);
+  assert.doesNotMatch(JSON.stringify(h.requests), /private-form-contents|secret|hidden/);
+});
+
+test('staff actions are recorded while history stays system-owner-only', async () => {
+  const h = harness({ role: 'staff', methods: { async confirmBooking() { return { ok: true }; } } });
+  await h.db.recordAdminActivity({ category: 'navigation', action: 'page_view', targetId: 'bookings', outcome: 'view' });
+  await h.db.confirmBooking('B1');
+  assert.deepEqual(h.requests.map(request => request.args.p_metadata.outcome), ['view', 'success']);
+  await assert.rejects(h.db.getAdminActivity(), /Only the system owner/);
+  await assert.rejects(h.db.getAdminActivityDetail('1'), /Only the system owner/);
+  assert.equal(h.requests.length, 2);
+  for (const options of [{ role: 'host' }, { privateSurface: false }, { local: true }]) {
+    const hidden = harness(options);
+    await hidden.db.recordAdminActivity({ category: 'interaction', action: 'saveCourt' });
+    assert.equal(hidden.requests.length, 0);
+  }
+});
+
+test('account result observers preserve success, explicit failure, throws and unknown results without account fields', async () => {
+  const failure = new Error('private-account-error');
+  let result = { ok: true };
+  const changePassword = async () => ({ ok: true });
+  const h = harness({ authMethods: {
+    async add() { return result; },
+    async update() { return { ok: false, msg: 'private-account-error' }; },
+    async del() { throw failure; },
+    changePassword,
+  } });
+  const account = { password: 'private-password', email: 'private@example.com', fullName: 'private-name', id: 'forged-id' };
+  assert.equal(await h.auth.add(account), result);
+  assert.deepEqual(await h.auth.update('account-1', account), { ok: false, msg: 'private-account-error' });
+  await assert.rejects(h.auth.del('account-2'), error => error === failure);
+  result = undefined;
+  assert.equal(await h.auth.add(account), undefined);
+  assert.deepEqual(h.requests.map(request => request.args.p_metadata.outcome), ['success', 'failed', 'failed', 'attempt']);
+  assert.deepEqual(h.requests.map(request => request.args.p_metadata.action), ['createAccount', 'updateAccount', 'deleteAccount', 'createAccount']);
+  assert.deepEqual(h.requests.map(request => request.args.p_metadata.entityId), ['', 'account-1', 'account-2', '']);
+  assert.ok(h.requests.every(request => request.args.p_metadata.entityType === 'accounts'));
+  assert.doesNotMatch(JSON.stringify(h.requests), /private|forged-id/);
+  assert.equal(h.auth.changePassword, changePassword, 'Existing password recording must not be wrapped again');
+  assert.match(source, /_pbInstallAccountActivityObservers\(window\.Auth, window\.DB\);/);
+});
+
+test('account result observers retain their starting page and never attribute results to another session', async () => {
+  let finish;
+  const h = harness({ authMethods: { async update() { return new Promise(resolve => { finish = resolve; }); } } });
+  h.context.location.hash = '#accounts';
+  const pending = h.auth.update('account-1', { password: 'not-recorded' });
+  h.context.location.hash = '#dash';
+  finish({ ok: true });
+  assert.deepEqual(await pending, { ok: true });
+  assert.equal(h.requests[0].args.p_page, 'accounts');
+
+  const replaced = h.auth.update('account-2', {});
+  h.setSession({ id: 'actor-2', role: 'owner', status: 'active' });
+  finish({ ok: true });
+  await replaced;
+  assert.equal(h.requests.length, 1);
+
+  const unsafe = harness({ authMethods: { async update() { return { ok: true }; } } });
+  await unsafe.auth.update('https://example.com?token=secret', {});
+  assert.equal(unsafe.requests[0].args.p_metadata.entityId, '');
+  assert.doesNotMatch(JSON.stringify(unsafe.requests), /example|secret/);
+});
+
+test('account operations are unaffected by audit failures and do not record on public or demo pages', async () => {
+  const ok = { ok: true };
+  const failedAudit = harness({ rpc: async () => { throw new Error('Audit unavailable'); }, authMethods: { async add() { return ok; } } });
+  assert.equal(await failedAudit.auth.add({ password: 'hidden' }), ok);
+  for (const options of [{ privateSurface: false }, { local: true }, { role: 'host' }]) {
+    const h = harness({ ...options, authMethods: { async add() { return ok; } } });
+    assert.equal(await h.auth.add({ password: 'hidden' }), ok);
+    assert.equal(h.requests.length, 0);
+  }
+});
+
+test('successful dashboard sign-ins are recorded only on the actual login page', async () => {
+  const signIn = { category: 'sign_in', action: 'signIn', page: 'login', outcome: 'success' };
+  for (const pathname of ['/login', '/login.html', '/login/']) {
+    for (const role of ['owner', 'court_owner', 'staff']) {
+      const h = harness({ role, privateSurface: false });
+      h.context.location.pathname = pathname;
+      await h.db.recordAdminActivity(signIn);
+      assert.equal(h.requests.length, 1);
+      assert.equal(h.requests[0].args.p_event, 'sign_in');
+      assert.equal(h.requests[0].args.p_page, 'login');
+      assert.equal(h.requests[0].args.p_metadata.outcome, 'success');
+      await assert.rejects(h.db.getAdminActivity(), /Only the system owner/);
+    }
+  }
+  for (const pathname of ['/', '/index.html', '/bookings', '/other/login.html', '/login-copy.html']) {
+    const h = harness({ privateSurface: false });
+    h.context.location.pathname = pathname;
+    await h.db.recordAdminActivity(signIn);
+    assert.equal(h.requests.length, 0);
+  }
+  for (const override of [
+    { category: 'interaction' }, { action: 'saveCourt' }, { page: 'accounts' },
+    { outcome: 'failed' }, { outcome: 'attempt' },
+  ]) {
+    const h = harness({ privateSurface: false });
+    h.context.location.pathname = '/login.html';
+    await h.db.recordAdminActivity({ ...signIn, ...override });
+    assert.equal(h.requests.length, 0);
+  }
+  for (const options of [{ role: 'host' }, { role: null }, { local: true }]) {
+    const h = harness({ ...options, privateSurface: false });
+    h.context.location.pathname = '/login.html';
+    await h.db.recordAdminActivity(signIn);
+    assert.equal(h.requests.length, 0);
+  }
+  const inactive = harness({ privateSurface: false });
+  inactive.context.location.pathname = '/login.html';
+  inactive.setSession({ id: 'actor-1', role: 'owner', status: 'suspended' });
+  await inactive.db.recordAdminActivity(signIn);
+  assert.equal(inactive.requests.length, 0);
 });

@@ -119,11 +119,11 @@ test('closing detail before response prevents it reopening and arbitrary IDs are
 });
 
 test('saved changes, reported outcomes and observed views retain distinct meanings', () => {
-  assert.equal(Activity.sourceLabel({ source: 'database_change', outcome: 'success' }).label, 'Saved change');
-  assert.equal(Activity.sourceLabel({ source: 'client_reported', outcome: 'attempt' }).label, 'Attempt');
+  assert.equal(Activity.sourceLabel({ source: 'database_change', outcome: 'success' }).label, 'Saved');
+  assert.equal(Activity.sourceLabel({ source: 'client_reported', outcome: 'attempt' }).label, 'Result unknown');
   assert.equal(Activity.sourceLabel({ source: 'client_reported', outcome: 'view' }).label, 'Viewed');
-  assert.equal(Activity.sourceLabel({ source: 'client_reported', outcome: 'success' }).label, 'Reported success');
-  assert.equal(Activity.sourceLabel({ source: 'client_reported', outcome: 'failed' }).label, 'Reported failure');
+  assert.equal(Activity.sourceLabel({ source: 'client_reported', outcome: 'success' }).label, 'Completed');
+  assert.equal(Activity.sourceLabel({ source: 'client_reported', outcome: 'failed' }).label, 'Failed');
   assert.equal(Activity.sourceLabel({ source: 'server_reported' }).label, 'Server event');
   assert.equal(Activity.sourceLabel({ source: 'auth_event' }).label, 'Account event');
 });
@@ -164,7 +164,7 @@ test('semantic observation excludes arguments, customer text and entered values'
   assert.equal(Activity.observationFor(fakeElement('exportCSV()')).category, 'export');
   assert.equal(Activity.observationFor(fakeElement('window.PlayManager.saveSession()')).action, 'PlayManager.saveSession');
   assert.equal(Activity.observationFor(fakeElement('toggleBlock(this.value)'), 'change').action, 'toggleBlock');
-  assert.equal(Activity.observationFor(fakeElement('logout()')), null);
+  assert.equal(Activity.observationFor(fakeElement('logout()')).action, 'logout');
   assert.equal(Activity.observationFor(fakeElement("goto('bookings')")), null);
   assert.equal(Activity.observationFor(fakeElement('save()', { closest: () => ({}) })), null);
 });
@@ -178,7 +178,7 @@ test('observations are limited to real operator sessions and never call live rec
   role = 'host'; observer.observeNavigation('hosts');
   role = 'owner'; local = true; observer.observeNavigation('activity');
   local = false; observer.observeNavigation('unknown-secret-section');
-  assert.deepEqual(events.map(event => event.targetId), ['bookings', 'courts']);
+  assert.deepEqual(events.map(event => event.targetId), ['bookings', 'courts', 'payments']);
   assert.ok(events.every(event => event.outcome === 'view'));
 });
 
@@ -251,7 +251,7 @@ test('notification server request stages preserve outcomes and never claim messa
 test('generic skipped actions and unrelated saved changes keep their original meanings', () => {
   assert.equal(Activity.sourceLabel({ source: 'client_reported', action: 'saveCourt', outcome: 'skipped' }).label, 'Skipped');
   const saved = item('saved', { source: 'database_change', action: 'dispatchBookingRescheduleNotifications', summary: 'Updated court settings', outcome: 'success' });
-  assert.equal(Activity.sourceLabel(saved).label, 'Saved change');
+  assert.equal(Activity.sourceLabel(saved).label, 'Saved');
   assert.match(Activity.itemMarkup(saved, 0), /Updated court settings/);
   const unrelated = item('other', { source: 'client_reported', action: 'other', summary: 'dispatchBookingRescheduleNotifications', outcome: 'skipped' });
   assert.equal(Activity.sourceLabel(unrelated).label, 'Skipped');
@@ -268,7 +268,7 @@ test('page and action context use the visited destination without guessing a pag
   const row = Activity.itemMarkup(click, 0);
   assert.match(row, /data-label="Page"[^>]*><span[^>]*>Host accounts/);
   assert.match(row, /Open host bookings and balance/);
-  assert.match(row, /Requested/);
+  assert.match(row, /Started/);
   assert.doesNotMatch(row, /Created|Saved change|Reported result|host_account_open/);
   const saved = item('saved', { action: 'insert', targetType: 'accounts', summary: 'Created accounts', details: {} });
   assert.equal(Activity.activityPage(saved), 'Not recorded');
