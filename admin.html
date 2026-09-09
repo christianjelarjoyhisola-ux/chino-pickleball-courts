@@ -15,7 +15,7 @@
 <script src="court-pricing.js?v=20260909-fee-modes"></script>
 <script src="host-balance-payment.js?v=20260831-payment-state-v7"></script>
 <script src="finance-core.js?v=20260719-finance-v2"></script>
-<script src="owner-insights.js?v=20260831-paddle-intelligence-v1"></script>
+<script src="owner-insights.js?v=20260909-insights-audit-v2"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 <style>
@@ -2674,7 +2674,7 @@ body.gm-display-open { overflow:hidden; }
 </style>
 <link rel="stylesheet" href="brand-theme.css?v=20260909-official-logo-v1">
 <link rel="stylesheet" href="promo-admin.css?v=20260908-promo">
-<link rel="stylesheet" href="owner-insights.css?v=20260831-paddle-intelligence-v1">
+<link rel="stylesheet" href="owner-insights.css?v=20260909-insights-audit-v2">
 <link rel="stylesheet" href="play-manager.css?v=20260909-official-logo-v1">
 <style id="admin-modern-refresh">
 /* Modern admin shell — visual-only refresh; dashboard features and data stay unchanged. */
@@ -5220,7 +5220,7 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(45, 62, 79, .1
             <small id="prInsightBookedNote">Actual reserved court-hours</small>
           </article>
           <article class="pr-insights-kpi">
-            <div class="pr-insights-kpi-label">Expected total fill</div>
+            <div class="pr-insights-kpi-label">Expected fill</div>
             <strong id="prInsightExpected">—</strong>
             <small id="prInsightExpectedNote">Shown only when evidence is reliable</small>
           </article>
@@ -5245,6 +5245,7 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(45, 62, 79, .1
             <div class="pr-insights-map-summary" id="prInsightMapSummary">Learning starts after the first qualifying court session has occurred.</div>
             <div class="pr-insights-heatmap-wrap">
               <div class="pr-insights-heatmap" id="prInsightHeatmap" role="grid" aria-label="Demand by weekday and time"></div>
+              <div class="pr-insights-mobile-detail pr-insights-desktop-detail" id="prInsightDesktopDetail" role="status">Select an hour to see its booking history.</div>
             </div>
             <div class="pr-insights-mobile-map" id="prInsightMobileMap" aria-label="Mobile demand by weekday and time">
               <div class="pr-insights-mobile-learning" role="status">
@@ -8758,6 +8759,10 @@ async function flushAdminRealtimeRefresh(){
   if(document.hidden || _admRtRefreshInFlight || !_admRtRefreshQueued) return;
   const ae=document.activeElement;
   if((ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) || document.querySelector('.overlay.show')){
+    if(_curSection==='insights'){
+      scheduleAdminRealtimeRefresh();
+      return;
+    }
     _admRtRefreshQueued=false;
     return;
   }
@@ -9017,6 +9022,8 @@ function renderPaddleInsightHeatmap(snapshot){
   const target=$('prInsightHeatmap');
   const cells=Array.isArray(snapshot?.heatmap)?snapshot.heatmap:[];
   if(!target) return;
+  const detail=$('prInsightDesktopDetail');
+  if(detail) detail.textContent=cells.length?'Select an hour to see its booking history.':'';
   if(!cells.length){
     target.innerHTML='<div class="pr-insights-empty" style="grid-column:1/-1"><div><strong>No court schedule is available.</strong><p>Add an active court and operating hours to begin.</p></div></div>';
     renderPaddleInsightMobileMap();
@@ -9031,11 +9038,19 @@ function renderPaddleInsightHeatmap(snapshot){
       const cell=byKey.get(`${weekday}:${hour}`)||{weekday,weekday_label:window.PaddleRageInsights.WEEKDAYS[weekday-1],start_hour:hour,end_hour:hour+1,utilization_pct:0,comparable_days:0};
       const confidence=window.PaddleRageInsights.confidenceFor(cell);
       const display=confidence.code==='learning'?'—':`${prInsightNumber(cell.utilization_pct)}%`;
-      html+=`<button type="button" class="pr-insights-cell" role="gridcell" style="--demand:${Math.round(Number(cell.utilization_pct||0))}" data-confidence="${esc(confidence.code)}" aria-label="${esc(paddleInsightCellLabel(cell))}">${display}</button>`;
+      html+=`<button type="button" class="pr-insights-cell" role="gridcell" style="--demand:${Math.round(Number(cell.utilization_pct||0))}" data-confidence="${esc(confidence.code)}" data-weekday="${weekday}" data-hour="${hour}" aria-selected="false" aria-label="${esc(paddleInsightCellLabel(cell))}" onfocus="selectPaddleInsightDesktopCell(this)" onclick="selectPaddleInsightDesktopCell(this)">${display}</button>`;
     }
   });
   target.innerHTML=html;
   renderPaddleInsightMobileMap();
+}
+
+function selectPaddleInsightDesktopCell(button){
+  const cell=_prInsightSnapshot?.heatmap?.find(item=>Number(item.weekday)===Number(button?.dataset.weekday)&&Number(item.start_hour)===Number(button?.dataset.hour));
+  if(!cell) return;
+  document.querySelectorAll('#prInsightHeatmap .pr-insights-cell').forEach(candidate=>candidate.setAttribute('aria-selected',candidate===button?'true':'false'));
+  const detail=$('prInsightDesktopDetail');
+  if(detail) detail.innerHTML=paddleInsightMobileDetailMarkup(cell);
 }
 
 function paddleInsightPostText(recommendation){
@@ -9120,7 +9135,9 @@ function renderPaddleInsightSnapshot(snapshot,courtName){
     ? `${prInsightNumber(k.booked_next_28_pct,1)}% of ${prInsightNumber(sellable)} sellable hours reserved${forecastRange?` · ${forecastRange}`:''}`
     : `No sellable court-hours found${forecastRange?` for ${forecastRange}`:''}`;
   $('prInsightExpected').textContent=k.expected_total_fill_pct==null?'—':`${prInsightNumber(k.expected_total_fill_pct,1)}%`;
-  $('prInsightExpectedNote').textContent=k.expected_total_fill_pct==null?(noHistory?'Begins after the first qualifying court session occurs':`${learning} of ${minimum} learning days complete`):`${prInsightNumber(k.forecast_coverage_pct)}% of the next schedule has comparable evidence`;
+  $('prInsightExpectedNote').textContent=k.expected_total_fill_pct==null
+    ? (noHistory?'Begins after the first qualifying court session occurs':!enough?`${learning} of ${minimum} learning days complete`:'Waiting for comparable court-hour history')
+    : `Estimate for the ${prInsightNumber(k.forecast_coverage_pct)}% of upcoming hours with comparable evidence`;
   $('prInsightActionCount').textContent=snapshot?.recommendation?'1 Ready':!enough?'Learning':!comparisonReady?'Comparing':'0 Ready';
   $('prInsightActionNote').textContent=snapshot?.recommendation
     ? 'One regular-price Court Pick is ready'
@@ -9139,33 +9156,54 @@ function renderPaddleInsightSnapshot(snapshot,courtName){
     $('prInsightMapSummary').textContent='Future reservations affect capacity, not demand history. Demand percentages stay blank until completed-session evidence exists.';
   }else{
     $('prInsightStatus').innerHTML=`<span>${esc(window.PaddleRageInsights.formatDate(snapshot.period.from))} – ${esc(window.PaddleRageInsights.formatDate(snapshot.period.to))}</span><span>${learning} calendar learning days · qualifying court sessions through yesterday only</span>`;
-    $('prInsightMapSummary').textContent=k.likely_open_hours==null?`Still learning: ${learning} of ${minimum} days complete.`:`About ${prInsightNumber(Math.round(k.likely_open_hours))} evidence-qualified court-hours may remain open over the next 28 days. Forecast coverage: ${prInsightNumber(k.forecast_coverage_pct)}%.`;
+    $('prInsightMapSummary').textContent=k.likely_open_hours==null
+      ? (!enough?`Still learning: ${learning} of ${minimum} days complete.`:'More comparable court-hour history is needed to estimate open hours.')
+      : `About ${prInsightNumber(Math.round(k.likely_open_hours))} evidence-qualified court-hours may remain open over the next 28 days. Forecast coverage: ${prInsightNumber(k.forecast_coverage_pct)}%.`;
   }
+  $('prInsightStatus').innerHTML+=`<span>Updated ${esc(new Date().toLocaleTimeString('en-PH',{timeZone:'Asia/Manila',hour:'numeric',minute:'2-digit'}))} PH</span>`;
   renderPaddleInsightHeatmap(snapshot);
   renderPaddleInsightAction(snapshot);
+}
+
+function renderPaddleInsightUnavailable(){
+  _prInsightSnapshot=null;
+  $('prInsightStatus').innerHTML='<span>Insights are temporarily unavailable.</span><span>Refresh to reload the complete booking and court schedule.</span>';
+  $('prInsightBooked').textContent='—';
+  $('prInsightBookedNote').textContent='Reserved hours could not be verified';
+  $('prInsightExpected').textContent='—';
+  $('prInsightExpectedNote').textContent='A complete schedule is required for an estimate';
+  $('prInsightActionCount').textContent='Paused';
+  $('prInsightActionNote').textContent='Refresh before using a Court Pick';
+  $('prInsightActionKpi').dataset.state='unavailable';
+  $('prInsightMapSummary').textContent='Booking history or court availability could not be fully loaded.';
+  $('prInsightHeatmap').innerHTML='<div class="pr-insights-empty" style="grid-column:1/-1"><div><strong>Could not load demand data</strong><p>Use Refresh to try again.</p></div></div>';
+  if($('prInsightDesktopDetail')) $('prInsightDesktopDetail').textContent='';
+  renderPaddleInsightMobileUnavailable();
+  $('prInsightAction').innerHTML='<div class="pr-insights-empty"><div><strong>Recommendations paused</strong><p>We need the complete booking and court schedule before suggesting an available hour.</p></div></div>';
 }
 
 async function renderPaddleInsights({force=false}={}){
   const root=$('prInsights');
   const refresh=$('prInsightRefresh');
   if(!root) return;
-  if(!window.PaddleRageInsights){
-    $('prInsightStatus').innerHTML='<span>Insights are temporarily unavailable.</span><span>No booking, payment, or price was changed.</span>';
-    $('prInsightMapSummary').textContent='Demand data could not be read. Regular booking operations continue normally.';
-    $('prInsightHeatmap').innerHTML='<div class="pr-insights-empty" style="grid-column:1/-1"><div><strong>Could not load demand data</strong><p>Refresh the page when you are ready to try again.</p></div></div>';
-    renderPaddleInsightMobileUnavailable();
+  const requestSeq=++_prInsightRequestSeq;
+  if(!window.PaddleRageInsights||typeof DB.getInsightInputs!=='function'){
+    renderPaddleInsightUnavailable();
+    root.setAttribute('aria-busy','false');
+    if(refresh){refresh.disabled=false;refresh.innerHTML='&#8635; Refresh';}
     toast('CHINO Intelligence did not load. Refresh the page.','err');
     return;
   }
-  const requestSeq=++_prInsightRequestSeq;
   root.setAttribute('aria-busy','true');
+  _prInsightSnapshot=null;
+  const copyAction=$('prInsightAction')?.querySelector('.pr-insights-copy-action');
+  if(copyAction) copyAction.disabled=true;
   if(refresh){refresh.disabled=true;refresh.textContent='Refreshing…';}
   try{
-    if(force&&typeof DB.clearCache==='function') DB.clearCache(['bookings','courts','settings','blockedDates']);
-    const insightBookings=typeof DB.getInsightBookings==='function'?DB.getInsightBookings():DB.getBookings();
-    const [bookings,courts,settings,blockedDates]=await Promise.all([insightBookings,DB.getCourts(),DB.getSettings(),DB.getBlockedDates()]);
+    const {bookings,courts,settings,blockedDates}=await DB.getInsightInputs();
     if(requestSeq!==_prInsightRequestSeq) return;
     await ensurePaddleInsightCourts(courts);
+    if(requestSeq!==_prInsightRequestSeq) return;
     const courtId=$('prInsightCourt')?.value||null;
     const courtName=courtId?(courts.find(court=>String(court.id)===String(courtId))?.name||courtId):'All courts';
     const snapshot=window.PaddleRageInsights.buildSnapshot({bookings,courts,settings,blockedDates,courtId,openingDate:window.PaddleRageInsights.OPENING_DATE});
@@ -9173,15 +9211,7 @@ async function renderPaddleInsights({force=false}={}){
   }catch(error){
     if(requestSeq!==_prInsightRequestSeq) return;
     console.error('[CHINO Insights]',error);
-    $('prInsightStatus').innerHTML='<span>Insights are temporarily unavailable.</span><span>No booking, payment, or price was changed.</span>';
-    $('prInsightBooked').textContent='—';
-    $('prInsightExpected').textContent='—';
-    $('prInsightActionCount').textContent='Paused';
-    $('prInsightMapSummary').textContent='Demand data could not be read. Regular booking operations continue normally.';
-    $('prInsightHeatmap').innerHTML='<div class="pr-insights-empty" style="grid-column:1/-1"><div><strong>Could not load demand data</strong><p>Use Refresh when you are ready to try again.</p></div></div>';
-    _prInsightSnapshot={};
-    renderPaddleInsightMobileUnavailable();
-    renderPaddleInsightAction({period:{from:null,learning_days:0,minimum_learning_days:30},kpis:{}});
+    renderPaddleInsightUnavailable();
     toast('CHINO Insights could not be loaded.','err');
   }finally{
     if(requestSeq===_prInsightRequestSeq){root.setAttribute('aria-busy','false');if(refresh){refresh.disabled=false;refresh.innerHTML='&#8635; Refresh';}}
@@ -18999,7 +19029,7 @@ async function checkAgreementGate(session) {
 
 <script src="supabase.min.js"></script>
 <script src="open-play-rating.js?v=20260729-head-to-head-v1"></script>
-<script src="supabase-config.js?v=20260909-court-activity-v1"></script>
+<script src="supabase-config.js?v=20260909-insights-audit-v2"></script>
 <script src="qrcode.min.js?v=1.5.4"></script>
 <script src="availability-graphic.js?v=20260909-domain-v1"></script>
 <script src="play-manager.js?v=20260909-official-logo-v1"></script>

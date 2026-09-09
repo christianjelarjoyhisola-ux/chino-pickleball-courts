@@ -204,10 +204,14 @@
   font: inherit;
   font-size: .7rem;
   font-weight: 900;
-  cursor: default;
+  cursor: pointer;
 }
 .pr-insights-cell[data-confidence="learning"] { background: rgba(255, 255, 255, .025); border-color: rgba(255, 255, 255, .07); color: #767c81; }
 .pr-insights-cell:focus-visible { outline: 2px solid var(--insight-lime-bright); outline-offset: 2px; }
+.pr-insights-cell[aria-selected="true"] { outline: 2px solid var(--insight-lime); outline-offset: -2px; }
+.pr-insights-desktop-detail { margin-top: 12px; min-height: 65px; }
+.pr-insights-desktop-detail:empty { display: none; }
+.pr-insights-copy-action:disabled { cursor: wait; opacity: .55; }
 
 .pr-insights-mobile-map { display: none; padding: 0 14px 16px; }
 .pr-insights-mobile-toolbar { display: grid; grid-template-columns: minmax(0, 1fr); gap: 5px; margin-bottom: 9px; }

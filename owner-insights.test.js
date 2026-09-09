@@ -189,6 +189,120 @@ test('a zero-booking court learns from venue history without being stuck forever
   assert.equal(snapshot.recommendation?.action_type, 'feature_regular_price_hour');
 });
 
+test('receipt reviews reserve future capacity while only expired temporary holds are released', () => {
+  const snapshot = Insights.buildSnapshot(baseInput({
+    now: '2026-09-01T12:00:00+08:00',
+    bookings: [
+      booking({ ref: 'REAL-REVIEW', date: '2026-09-02', status: 'verifying', paymentStatus: 'for_verification', isTemporaryHold: false }),
+      booking({ ref: 'FRESH-HOLD', date: '2026-09-03', status: 'verifying', isTemporaryHold: true, createdAt: '2026-09-01T11:50:01+08:00' }),
+      booking({ ref: 'EXPIRED-HOLD', date: '2026-09-04', status: 'verifying', isTemporaryHold: true, createdAt: '2026-09-01T11:50:00+08:00' }),
+      booking({ ref: 'UNKNOWN-TIME', date: '2026-09-05', status: 'verifying', isTemporaryHold: true, createdAt: null }),
+      booking({ ref: 'FUTURE-TIME', date: '2026-09-06', status: 'verifying', isTemporaryHold: true, createdAt: '2026-09-01T12:01:00+08:00' }),
+      booking({ ref: 'CANCELLED', date: '2026-09-07', status: 'cancelled' }),
+      booking({ ref: 'FORFEITED', date: '2026-09-08', status: 'forfeited' }),
+    ],
+  }));
+  assert.equal(snapshot.kpis.booked_next_28_hours, 4);
+  assert.equal(snapshot.period.learning_days, 0, 'future holds and receipt reviews never teach historical demand');
+});
+
+test('excluded sessions cannot start learning or generate a quiet-hour recommendation', () => {
+  const snapshot = Insights.buildSnapshot(baseInput({
+    bookings: [
+      booking({ ref: 'BLOCKED', date: '2026-07-01' }),
+      booking({ ref: 'OPENPLAY', date: '2026-07-02' }),
+      booking({ ref: 'MAINTENANCE', date: '2026-07-03' }),
+      booking({ ref: 'OUTSIDE-HOURS', date: '2026-07-04', slots: [7] }),
+    ],
+    blockedDates: ['2026-07-01'],
+    settings: {
+      open_hour: '8', close_hour: '10',
+      open_play_config: { enabled: true, start: 8, end: 9, specificDates: ['2026-07-02'] },
+      maintenance_config: { rules: [{ enabled: true, mode: 'specific', start: 8, end: 9, dates: ['2026-07-03'] }] },
+    },
+  }));
+  assert.equal(snapshot.period.from, null);
+  assert.equal(snapshot.period.learning_days, 0);
+  assert.equal(snapshot.data_quality.successful_booking_rows, 0);
+  assert.equal(snapshot.data_quality.successful_reservations, 0);
+  assert.equal(snapshot.kpis.expected_total_fill_pct, null);
+  assert.equal(snapshot.recommendation, null);
+});
+
+test('midnight opening keeps all actual sellable hours and invalid schedules do not invent capacity', () => {
+  const snapshot = Insights.buildSnapshot(baseInput({ settings: { open_hour: '0', close_hour: '2' } }));
+  assert.equal(snapshot.kpis.sellable_next_28_hours, 56);
+  assert.deepEqual([...new Set(snapshot.signals.map(signal => signal.start_hour))], [0, 1]);
+  for (const settings of [{ open_hour: 'not-an-hour', close_hour: '22' }, { open_hour: '8', close_hour: '7' }]) {
+    assert.throws(() => Insights.buildSnapshot(baseInput({ settings })), /opening and closing hours/);
+  }
+});
+
+test('fully reserved evidence-qualified capacity reports zero remaining open hours', () => {
+  const bookings = [booking({ date: '2026-07-01' })];
+  for (let date = '2026-09-02'; date <= '2026-09-29'; date = addDays(date, 1)) {
+    bookings.push(booking({ ref: `FULL-${date}`, date }));
+  }
+  const snapshot = Insights.buildSnapshot(baseInput({ settings: { open_hour: '8', close_hour: '9' }, bookings }));
+  assert.equal(snapshot.kpis.booked_next_28_hours, 28);
+  assert.equal(snapshot.kpis.forecast_coverage_pct, 100);
+  assert.equal(snapshot.kpis.expected_total_fill_pct, 100);
+  assert.equal(snapshot.kpis.likely_open_hours, 0);
+});
+
+test('invalid booked hours and missing starts never create demand at the opening hour', () => {
+  const badRows = [
+    { slots: [null] }, { slots: [''] }, { slots: [24] }, { slots: [8, 9.5] },
+    { slots: [-1, 8] }, { slots: '8' }, { slots: [], startTime: 'not-time' },
+    { slots: [], startTime: '' }, { slots: [], startTime: '25:00' },
+    { slots: [], startTime: '8:00 PM trailing' }, { slots: [], startTime: '8:00', duration: -1 },
+  ];
+  for (const overrides of badRows) {
+    const snapshot = Insights.buildSnapshot(baseInput({ bookings: [booking(overrides)] }));
+    assert.equal(snapshot.period.learning_days, 0, JSON.stringify(overrides));
+    assert.equal(snapshot.data_quality.successful_booking_rows, 0, JSON.stringify(overrides));
+    const future = Insights.buildSnapshot(baseInput({ bookings: [booking({ ...overrides, date: '2026-09-02' })] }));
+    assert.equal(future.kpis.booked_next_28_hours, 0, JSON.stringify(overrides));
+  }
+});
+
+test('explicit slots remain authoritative, de-duplicated and separated across courts', () => {
+  const snapshot = Insights.buildSnapshot(baseInput({
+    courts: [court(), court('court-2', 'Court 2')],
+    bookings: [
+      booking({ ref: 'GROUP-A', groupRef: 'GROUP', slots: ['09', 8, '8'], duration: 9 }),
+      booking({ ref: 'GROUP-B', groupRef: 'GROUP', courtId: 'court-2', slots: [9] }),
+    ],
+  }));
+  assert.equal(snapshot.signals.reduce((sum, signal) => sum + signal.booked_hours, 0), 3);
+  assert.equal(snapshot.data_quality.successful_reservations, 1);
+  assert.equal(snapshot.data_quality.successful_booking_rows, 2);
+});
+
+test('valid legacy whole-hour starts are retained when explicit slots are absent', () => {
+  for (const startTime of ['8:00 AM', '08:00:00', '8']) {
+    const snapshot = Insights.buildSnapshot(baseInput({ bookings: [booking({ slots: [], startTime, duration: 2 })] }));
+    assert.equal(snapshot.signals.reduce((sum, signal) => sum + signal.booked_hours, 0), 2);
+  }
+});
+
+test('court creation uses Philippine dates consistently for history and future capacity', () => {
+  const snapshot = Insights.buildSnapshot(baseInput({
+    now: '2026-09-03T01:00:00+08:00',
+    courts: [{ ...court(), createdAt: '2026-09-01T16:30:00Z' }],
+    bookings: [
+      booking({ ref: 'BEFORE-COURT', date: '2026-09-01' }),
+      booking({ ref: 'ON-CREATION-DAY', date: '2026-09-02' }),
+    ],
+  }));
+  assert.equal(snapshot.period.from, '2026-09-02');
+  assert.equal(snapshot.data_quality.successful_booking_rows, 1);
+  assert.equal(snapshot.signals.reduce((sum, signal) => sum + signal.available_hours, 0), 2);
+  assert.equal(snapshot.signals.reduce((sum, signal) => sum + signal.booked_hours, 0), 1);
+  const future = Insights.buildSnapshot(baseInput({ courts: [{ ...court(), createdAt: '2026-09-28T16:30:00Z' }] }));
+  assert.equal(future.kpis.sellable_next_28_hours, 2, 'only Sep 29 exists within this forecast');
+});
+
 test('mobile demand map is compact, transposed, evidence-aware, and accessible', () => {
   const admin = read('admin.html');
   const styles = read('owner-insights.css');
@@ -217,7 +331,9 @@ test('mobile demand map is compact, transposed, evidence-aware, and accessible',
   assert.doesNotMatch(admin, /aria-describedby="prInsightMobileDetail"/);
   assert.match(admin, /onfocus="selectPaddleInsightMobileCell\(this\)"/);
   assert.match(admin, /function handlePaddleInsightMobileGridKey\(event\)/);
-  assert.match(admin, /_prInsightSnapshot=\{\};\s*renderPaddleInsightMobileUnavailable\(\);/);
+  const unavailable = admin.match(/function renderPaddleInsightUnavailable\(\)\{[\s\S]*?\n\}/)?.[0] || '';
+  assert.match(unavailable, /_prInsightSnapshot=null;/);
+  assert.match(unavailable, /renderPaddleInsightMobileUnavailable\(\);/);
   assert.match(admin, /requestAnimationFrame\(\(\)=>syncPaddleInsightMobilePeriod\(\)\)/);
   ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].forEach(key => assert.match(admin, new RegExp(key)));
 
@@ -251,10 +367,13 @@ test('Paddle admin integration is branded, role-scoped, mobile-safe, and read-on
   assert.match(config, /court_owner:\s+\[[^\]]*'insights'/);
   assert.doesNotMatch(config.match(/staff:\s+\[[^\]]*\]/)?.[0] || '', /insights/);
   assert.match(config, /async getInsightBookings\(\)/);
-  assert.match(config, /select\('ref,booking_group_ref,court_id,date,slots,start_time,end_time,duration,status,payment_status,created_at'\)/);
+  assert.match(config, /async getInsightInputs\(\)/);
+  assert.match(config, /_pbReadInsightRows\('bookings',\s*'ref,booking_group_ref,court_id,date,slots,start_time,end_time,duration,status,payment_status,created_at,email,full_name'/);
   assert.match(config, /\.range\(from, from \+ pageSize - 1\)/);
-  assert.doesNotMatch(config.match(/select\('ref,booking_group_ref,court_id,date,slots,start_time,end_time,duration,status,payment_status,created_at'\)/)?.[0] || '', /full_name|email|contact|receipt/i);
-  assert.match(admin, /DB\.getInsightBookings/);
+  const bookingProjection = config.match(/function _pbInsightBooking\(row\)\s*\{[\s\S]*?\n\}/)?.[0] || '';
+  assert.match(bookingProjection, /isTemporaryHold:/);
+  assert.doesNotMatch(bookingProjection, /(?:fullName|full_name|email|contact|receipt)\s*:/i, 'customer fields are used only to derive a hold flag, never projected');
+  assert.match(admin, /await DB\.getInsightInputs\(\)/);
   assert.match(styles, /@media \(max-width: 680px\)/);
   assert.match(styles, /\.pr-insights-mobile-map \{ display: none/);
   assert.match(admin, /role="gridcell"/);

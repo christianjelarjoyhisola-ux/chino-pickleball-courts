@@ -109,22 +109,28 @@
     return 'watch';
   }
 
-  function parseStartHour(value, fallback = 6) {
-    const match = String(value || '').trim().match(/^(\d{1,2})(?::\d{2})?\s*(AM|PM)?/i);
-    if (!match) return fallback;
+  function parseStartHour(value) {
+    const match = String(value ?? '').trim().match(/^(\d{1,2})(?::(\d{2}))?(?::(\d{2}))?\s*(AM|PM)?$/i);
+    if (!match || Number(match[2] || 0) !== 0 || Number(match[3] || 0) !== 0) return null;
     let hour = Number(match[1]);
-    if (match[2]) {
+    if (match[4]) {
+      if (hour < 1 || hour > 12) return null;
       hour %= 12;
-      if (match[2].toUpperCase() === 'PM') hour += 12;
+      if (match[4].toUpperCase() === 'PM') hour += 12;
     }
-    return clamp(hour, 0, 23);
+    return hour >= 0 && hour <= 23 ? hour : null;
   }
 
-  function normalizedSlots(row, fallbackOpen = 6) {
-    const explicit = Array.isArray(row?.slots) ? row.slots.map(Number).filter(Number.isFinite) : [];
-    if (explicit.length) return explicit.map(hour => ({ hour: Math.floor(hour), hours: 1 }));
-    const duration = Math.max(0, number(row?.duration));
-    const start = parseStartHour(row?.startTime || row?.start_time, fallbackOpen);
+  function normalizedSlots(row) {
+    if (row?.slots != null && !Array.isArray(row.slots)) return [];
+    if (Array.isArray(row?.slots) && row.slots.length) {
+      const explicit = row.slots.map(value => /^\d{1,2}$/.test(String(value ?? '').trim()) ? Number(value) : NaN);
+      if (explicit.some(hour => !Number.isInteger(hour) || hour < 0 || hour > 23)) return [];
+      return [...new Set(explicit)].sort((a, b) => a - b).map(hour => ({ hour, hours: 1 }));
+    }
+    const duration = Number(row?.duration);
+    const start = parseStartHour(row?.startTime ?? row?.start_time);
+    if (start === null || !Number.isFinite(duration) || duration <= 0 || duration > 24 || start + duration > 24) return [];
     return Array.from({ length: Math.ceil(duration) }, (_, offset) => ({
       hour: start + offset,
       hours: Math.min(1, Math.max(duration - offset, 0)),
@@ -237,7 +243,12 @@
     const unique = new Map();
     (Array.isArray(rows) ? rows : [])
       .filter(isSuccessfulBooking)
-      .filter(row => dateOnly(row.date) && dateOnly(row.date) <= throughDate)
+      .filter(row => {
+        const date = dateOnly(row.date);
+        const parsed = new Date(`${date}T00:00:00Z`);
+        return /^\d{4}-\d{2}-\d{2}$/.test(date) && !Number.isNaN(parsed.getTime())
+          && parsed.toISOString().slice(0, 10) === date && date <= throughDate;
+      })
       .filter(row => !courtId || String(row.courtId || row.court_id) === String(courtId))
       .forEach(row => {
         const slots = normalizedSlots(row).map(piece => `${piece.hour}:${piece.hours}`).join(',');
@@ -258,19 +269,34 @@
     const courts = allCourts.filter(court => !input.courtId || String(court.id) === String(input.courtId));
     const courtMap = new Map(courts.map(court => [String(court.id), court]));
     const blockedDates = new Set((Array.isArray(input.blockedDates) ? input.blockedDates : []).map(value => dateOnly(value?.date || value)));
-    const openHour = clamp(parseInt(input.settings?.open_hour || 6, 10) || 6, 0, 23);
-    const closeHour = clamp(parseInt(input.settings?.close_hour || 22, 10) || 22, openHour + 1, 24);
+    const configuredOpen = input.settings?.open_hour;
+    const configuredClose = input.settings?.close_hour;
+    const openHour = configuredOpen == null || configuredOpen === '' ? 6 : Number(configuredOpen);
+    const closeHour = configuredClose == null || configuredClose === '' ? 22 : Number(configuredClose);
+    if (!Number.isInteger(openHour) || openHour < 0 || openHour > 23
+      || !Number.isInteger(closeHour) || closeHour <= openHour || closeHour > 24) {
+      throw new TypeError('Valid venue opening and closing hours are required for Insights.');
+    }
     const slots = Array.from({ length: closeHour - openHour }, (_, index) => openHour + index);
+    const allCourtMap = new Map(allCourts.map(court => [String(court.id), court]));
+    const courtCreatedDates = new Map(allCourts.map(court => [String(court.id), manilaDateKey(court.createdAt || court.created_at || '')]));
     const venueRows = uniqueSuccessfulRows(input.bookings, throughDate, null)
       .filter(row => dateOnly(row.date) >= openingDate)
-      .filter(row => allCourts.some(court => String(court.id) === String(row.courtId || row.court_id)));
-    const historicalRows = uniqueSuccessfulRows(input.bookings, throughDate, input.courtId)
-      .filter(row => dateOnly(row.date) >= openingDate);
-    const eligibleRows = historicalRows.filter(row => courtMap.has(String(row.courtId || row.court_id)));
+      .map(row => {
+        const courtId = String(row.courtId || row.court_id);
+        const court = allCourtMap.get(courtId);
+        const date = dateOnly(row.date);
+        const createdDate = courtCreatedDates.get(courtId);
+        const pieces = !court || blockedDates.has(date) || (createdDate && createdDate > date) ? []
+          : normalizedSlots(row).filter(piece => piece.hour >= openHour && piece.hour < closeHour
+            && isSellableHour(date, piece.hour, courtId, input.settings));
+        return { row, pieces };
+      }).filter(item => item.pieces.length > 0);
+    const eligibleRows = venueRows.filter(({ row }) => courtMap.has(String(row.courtId || row.court_id)));
     // A newly filtered court learns against the venue's operating history even
     // when that court has not won a booking yet. Per-court creation dates still
     // prevent capacity from being counted before the court existed.
-    const earliest = venueRows.map(row => dateOnly(row.date)).filter(Boolean).sort()[0] || null;
+    const earliest = venueRows.map(({ row }) => dateOnly(row.date)).sort()[0] || null;
     const historyDates = earliest ? datesBetween(earliest, throughDate) : [];
     const cells = new Map();
 
@@ -302,7 +328,7 @@
       const weekday = isoWeekday(date);
       const weight = Math.pow(0.5, daysApart(date, throughDate) / RECENCY_HALF_LIFE_DAYS);
       courts.forEach(court => {
-        const createdDate = dateOnly(court.createdAt || court.created_at);
+        const createdDate = courtCreatedDates.get(String(court.id));
         if (createdDate && createdDate > date) return;
         slots.forEach(hour => {
           if (!isSellableHour(date, hour, court.id, input.settings)) return;
@@ -316,18 +342,14 @@
 
     const historicalOccupied = new Map();
     const successfulReservations = new Set();
-    eligibleRows.forEach(row => {
+    eligibleRows.forEach(({ row, pieces }) => {
       const courtId = String(row.courtId || row.court_id);
       const date = dateOnly(row.date);
-      if (!date || blockedDates.has(date)) return;
-      let contributed = false;
-      normalizedSlots(row, openHour).forEach(piece => {
-        if (piece.hour < openHour || piece.hour >= closeHour || !isSellableHour(date, piece.hour, courtId, input.settings)) return;
+      pieces.forEach(piece => {
         const key = `${courtId}:${date}:${piece.hour}`;
         historicalOccupied.set(key, Math.min(1, number(historicalOccupied.get(key)) + piece.hours));
-        contributed = true;
       });
-      if (contributed) successfulReservations.add(String(row.groupRef || row.booking_group_ref || row.ref));
+      successfulReservations.add(String(row.groupRef || row.booking_group_ref || row.ref));
     });
 
     historicalOccupied.forEach((hours, key) => {
@@ -348,12 +370,12 @@
       if (!date || date < futureFrom || date > futureEnd) return;
       const status = String(row.status || '').toLowerCase();
       const createdAt = new Date(row.createdAt || row.created_at || '').getTime();
-      const freshHold = status === 'verifying' && Number.isFinite(createdAt)
-        && Number.isFinite(nowMs) && nowMs >= createdAt && nowMs - createdAt < 15 * 60000;
-      if (!['pending', 'confirmed', 'completed'].includes(status) && !freshHold) return;
+      const expiredHold = status === 'verifying' && row.isTemporaryHold === true && Number.isFinite(createdAt)
+        && Number.isFinite(nowMs) && nowMs - createdAt >= 10 * 60000;
+      if (!['pending', 'confirmed', 'completed', 'verifying'].includes(status) || expiredHold) return;
       const courtId = String(row.courtId || row.court_id);
       if (!courtMap.has(courtId)) return;
-      normalizedSlots(row, openHour).forEach(piece => {
+      normalizedSlots(row).forEach(piece => {
         const key = `${courtId}:${date}:${piece.hour}`;
         futureOccupied.set(key, Math.min(1, number(futureOccupied.get(key)) + piece.hours));
       });
@@ -362,7 +384,7 @@
     datesBetween(futureFrom, futureEnd).forEach(date => {
       if (blockedDates.has(date)) return;
       const weekday = isoWeekday(date);
-      courts.filter(court => !court.blocked).forEach(court => slots.forEach(hour => {
+      courts.filter(court => !court.blocked && !(courtCreatedDates.get(String(court.id)) > date)).forEach(court => slots.forEach(hour => {
         if (!isSellableHour(date, hour, court.id, input.settings)) return;
         const cell = cells.get(`${court.id}:${weekday}:${hour}`);
         const occupied = number(futureOccupied.get(`${court.id}:${date}:${hour}`));
@@ -416,7 +438,7 @@
     const evidenceOpen = evidenceSignals.reduce((sum, item) => sum + item.open_future_hours, 0);
     const expectedAdditional = evidenceSignals.reduce((sum, item) => sum + item.open_future_hours * item.utilization_pct / 100, 0);
     const expectedTotalFill = evidenceSellable > 0 ? clamp((evidenceBooked + expectedAdditional) * 100 / evidenceSellable) : null;
-    const likelyOpen = evidenceOpen > 0 ? Math.max(0, evidenceOpen - expectedAdditional) : null;
+    const likelyOpen = evidenceSellable > 0 ? Math.max(0, evidenceOpen - expectedAdditional) : null;
     const enoughHistory = historyDates.length >= MINIMUM_LEARNING_DAYS;
     const maxComparableDays = Math.max(0, ...signals.map(item => item.comparable_days));
     const recommendationEvidenceReady = signals.some(item => item.comparable_days >= MINIMUM_RECOMMENDATION_COMPARABLE_DAYS

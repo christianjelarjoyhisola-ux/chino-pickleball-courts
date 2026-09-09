@@ -1233,6 +1233,47 @@ function rowToOpenPlayHostSessionRegistration(r) {
   };
 }
 
+function _pbInsightBooking(row) {
+  return {
+    ref: row.ref,
+    groupRef: row.booking_group_ref ?? row.groupRef ?? null,
+    courtId: row.court_id ?? row.courtId,
+    date: row.date,
+    slots: Array.isArray(row.slots) ? [...row.slots] : (row.slots == null ? [] : _pbClone(row.slots)),
+    startTime: row.start_time ?? row.startTime,
+    endTime: row.end_time ?? row.endTime,
+    duration: Number(row.duration || 0),
+    status: row.status,
+    paymentStatus: row.payment_status ?? row.paymentStatus ?? 'unpaid',
+    createdAt: row.created_at ?? row.createdAt,
+    // Match the server's placeholder identity without returning customer details.
+    isTemporaryHold: String(row.email || '').trim().toLowerCase() === 'reserve@hold.internal'
+      && ['reserving...', 'reserving…'].includes(String(row.full_name ?? row.fullName ?? '').trim().toLowerCase()),
+  };
+}
+
+async function _pbReadInsightRows(table, columns, key, orders = [{ column: key, ascending: true }]) {
+  const rows = [];
+  const seen = new Set();
+  const pageSize = 1000;
+  for (let from = 0; ; from += pageSize) {
+    let query = _sb.from(table).select(columns);
+    for (const order of orders) query = query.order(order.column, { ascending: order.ascending });
+    const { data, error } = await query.range(from, from + pageSize - 1);
+    if (error) throw error;
+    if (!Array.isArray(data)) throw new Error(`Insights returned an invalid ${table} response. Please refresh.`);
+    for (const row of data) {
+      if (!row || typeof row !== 'object' || !String(row[key] ?? '').trim() || seen.has(String(row[key]))) {
+        throw new Error(`Insights could not read a complete ${table} list. Please refresh.`);
+      }
+      seen.add(String(row[key]));
+      rows.push(row);
+    }
+    if (data.length < pageSize) break;
+  }
+  return rows;
+}
+
 // =============================================
 // DB — Async Data Layer (replaces localStorage)
 // =============================================
@@ -1359,41 +1400,33 @@ window.DB = {
   },
 
   async getInsightBookings() {
-    return _pbCached('bookings', { view: 'insights' }, PB_FAST_CACHE_MS.bookings, async () => {
-      const accountRole = await _pbCurrentAccountRole();
-      if (!PB_PRIVATE_DATA_SURFACE || !['owner', 'court_owner'].includes(accountRole)) {
-        throw new Error('An active owner session is required to load CHINO Insights.');
-      }
-      const pageSize = 1000;
-      const rows = [];
-      for (let from = 0; ; from += pageSize) {
-        const { data, error } = await _sb
-          .from('bookings')
-          .select('ref,booking_group_ref,court_id,date,slots,start_time,end_time,duration,status,payment_status,created_at')
-          .order('created_at', { ascending: false })
-          .range(from, from + pageSize - 1);
-        if (error) {
-          console.error('getInsightBookings:', error);
-          throw error;
-        }
-        const page = data || [];
-        rows.push(...page);
-        if (page.length < pageSize) break;
-      }
-      return rows.map(row => ({
-        ref: row.ref,
-        groupRef: row.booking_group_ref || null,
-        courtId: row.court_id,
-        date: row.date,
-        slots: row.slots || [],
-        startTime: row.start_time,
-        endTime: row.end_time,
-        duration: Number(row.duration || 0),
-        status: row.status,
-        paymentStatus: row.payment_status || 'unpaid',
-        createdAt: row.created_at,
-      }));
-    });
+    if (!PB_PRIVATE_DATA_SURFACE || !['owner', 'court_owner'].includes(await _pbCurrentAccountRole())) {
+      throw new Error('An active owner session is required to load CHINO Insights.');
+    }
+    const rows = await _pbReadInsightRows('bookings',
+      'ref,booking_group_ref,court_id,date,slots,start_time,end_time,duration,status,payment_status,created_at,email,full_name',
+      'ref', [{ column: 'created_at', ascending: false }, { column: 'ref', ascending: true }]);
+    return rows.map(_pbInsightBooking);
+  },
+
+  async getInsightInputs() {
+    if (!PB_PRIVATE_DATA_SURFACE || !['owner', 'court_owner'].includes(await _pbCurrentAccountRole())) {
+      throw new Error('An active owner session is required to load CHINO Insights.');
+    }
+    // Keep Insights separate from display APIs that use empty defaults on failure.
+    // Every refresh reads all inputs again; missing schedules must never become forecasts.
+    const [bookings, courts, settingRows, blockedRows] = await Promise.all([
+      this.getInsightBookings(),
+      _pbReadInsightRows('courts', '*', 'id'),
+      _pbReadInsightRows('settings', 'key,value', 'key'),
+      _pbReadInsightRows('blocked_dates', 'date', 'date'),
+    ]);
+    return {
+      bookings,
+      courts: courts.map(rowToCourt),
+      settings: Object.fromEntries(settingRows.map(row => [row.key, row.value])),
+      blockedDates: blockedRows.map(row => row.date),
+    };
   },
 
   async getMyHostBookings() {
@@ -4478,22 +4511,27 @@ window.DB = {
     },
     async getInsightBookings() {
       const session = window.Auth?.getSession?.();
-      if (!session || !['owner', 'court_owner'].includes(session.role)) {
+      if (!PB_PRIVATE_DATA_SURFACE || !session || !['owner', 'court_owner'].includes(session.role)
+          || (session.status && session.status !== 'active')) {
         throw new Error('An active owner session is required to load CHINO Insights.');
       }
-      return readDb().bookings.map(booking => ({
-        ref: booking.ref,
-        groupRef: booking.groupRef || null,
-        courtId: booking.courtId,
-        date: booking.date,
-        slots: booking.slots || [],
-        startTime: booking.startTime,
-        endTime: booking.endTime,
-        duration: Number(booking.duration || 0),
-        status: booking.status,
-        paymentStatus: booking.paymentStatus || 'unpaid',
-        createdAt: booking.createdAt,
-      })).sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+      return readDb().bookings.map(_pbInsightBooking)
+        .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')) || String(a.ref).localeCompare(String(b.ref)));
+    },
+    async getInsightInputs() {
+      const session = window.Auth?.getSession?.();
+      if (!PB_PRIVATE_DATA_SURFACE || !session || !['owner', 'court_owner'].includes(session.role)
+          || (session.status && session.status !== 'active')) {
+        throw new Error('An active owner session is required to load CHINO Insights.');
+      }
+      const db = readDb();
+      return {
+        bookings: db.bookings.map(_pbInsightBooking)
+          .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')) || String(a.ref).localeCompare(String(b.ref))),
+        courts: _pbClone(db.courts),
+        settings: _pbClone(db.settings),
+        blockedDates: _pbClone(db.blockedDates),
+      };
     },
     async getMyHostBookings() {
       const session = window.Auth?.getSession?.();
