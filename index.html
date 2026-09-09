@@ -5743,7 +5743,7 @@ function getOpenPlaySessionState(date, session, spotsLeft = 1) {
 }
 
 function courtAvailabilityBadge({ blocked, date, allSlots, curHour, bookedHours, courtId }) {
-  if (blocked) return { cls: 'mnt', text: '🔧 Maintenance' };
+  if (blocked) return { cls: 'mnt', text: '⏸ Bookings paused' };
 
   const isPastDate_ = !isPublicBookingDateAllowed(date);
   const futureHours = allSlots.filter(h => h > curHour);
@@ -7609,7 +7609,7 @@ async function onCardDate(courtId, date, options = {}) {
 
   const c = courts.find(x => x.id === courtId);
   if (!c || c.blocked) {
-    grid.innerHTML = `<span class="cc-slots-empty">🔧 Under maintenance</span>`;
+    grid.innerHTML = `<span class="cc-slots-empty">⏸ ${c ? 'Bookings paused' : 'Court unavailable'}</span>`;
     return;
   }
   const cTiers = getPricingTiersForCourt(c);
@@ -7778,7 +7778,7 @@ async function renderCourts() {
       : '';
 
     const slotsHtml = blk
-      ? `<div class="cc-slots-empty">🔧 Court is under maintenance</div>`
+      ? `<div class="cc-slots-empty">⏸ Bookings paused</div>`
       : openPlayCardHtml + allSlots.map(h => {
           const isPast_   = h <= curHour;
           const isBooked_ = bookedHours.has(h);
@@ -7805,7 +7805,7 @@ async function renderCourts() {
       : '';
 
     return `
-    <div class="cc${blk?' blk':''}${isSelectedCard?' sel':''}" data-id="${esc(c.id)}" ${blk ? `onclick="toast('Court is under maintenance.','err')"` : ''}>
+    <div class="cc${blk?' blk':''}${isSelectedCard?' sel':''}" data-id="${esc(c.id)}" ${blk ? `onclick="toast('Bookings are paused for this court.','err')"` : ''}>
 
       <!-- MOBILE-ONLY HEADER -->
       <div class="cc-mobile-hd">

@@ -5646,6 +5646,7 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(45, 62, 79, .1
       </div>
 
       <div class="tbl-wrap">
+        <p style="margin:14px 16px;color:var(--muted);font-size:.82rem;line-height:1.5">Pause all dates stops bookings until resumed. For selected dates and hours, use <button type="button" onclick="goto('maintenance')" style="padding:0;border:0;background:none;color:var(--accent);font:inherit;text-decoration:underline;cursor:pointer">Maintenance</button>.</p>
         <div class="tbl-scroll">
           <table>
             <thead><tr><th>Name</th><th>Description</th><th>Rate</th><th>Status</th><th>Actions</th></tr></thead>
@@ -14364,10 +14365,10 @@ async function renderCourts(){
     </td>
     <td data-label="Description" style="font-size:.82rem;color:var(--muted)">${esc(c.desc)}</td>
     <td data-label="Rate">${esc(courtAdminRateLabel({ ...c, promoEnabled:false }, courtPromoToday(), courtPromoFallbackTiers))}${courtPromoListHtml(c)}</td>
-    <td data-label="Status">${c.blocked?'<span class="bdg bdg-x">Maintenance</span>':'<span class="bdg bdg-c">Available</span>'}</td>
+    <td data-label="Status">${c.blocked?'<span class="bdg bdg-x">Paused — all dates</span>':'<span class="bdg bdg-c">Available</span>'}</td>
     <td data-label="Actions"><div style="display:flex;gap:6px">
       <button class="btn btn-g btn-sm" onclick="openCourtModal('${jsArg(c.id)}')">✏️ Edit</button>
-      <button class="btn btn-sm" style="background:${c.blocked?'rgba(var(--green-rgb),.12);color:var(--green)':'rgba(var(--yellow-rgb),.12);color:var(--yellow)'}" onclick="toggleBlock('${jsArg(c.id)}')">${c.blocked?'✅ Unblock':'🔒 Block'}</button>
+      <button class="btn btn-sm" style="background:${c.blocked?'rgba(var(--green-rgb),.12);color:var(--green)':'rgba(var(--yellow-rgb),.12);color:var(--yellow)'}" onclick="toggleBlock('${jsArg(c.id)}')">${c.blocked?'▶ Resume bookings':'⏸ Pause all dates'}</button>
       <button class="btn btn-d btn-sm" onclick="delCourt('${jsArg(c.id)}')">🗑️</button>
     </div></td>
   </tr>`).join('');
@@ -14512,7 +14513,7 @@ async function toggleBlock(id){
   c.blocked=!c.blocked;
   await DB.saveCourt(c);
   await renderCourts();
-  toast(c.blocked?'Court blocked.':'Court unblocked.','inf');
+  toast(c.blocked?'Bookings paused for this court on all dates.':'Bookings resumed for this court. Scheduled closures still apply.','inf');
 }
 
 async function delCourt(id){
