@@ -79,6 +79,7 @@ $publicFiles = @(
   "court-policies.css",
   "court-policies.js",
   "court-policies.html",
+  "receipt-verification.html",
   "assets/court-policies.png",
   "assets/chino-courts.png",
   "assets/chino-logo-transparent.png",

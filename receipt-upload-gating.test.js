@@ -333,9 +333,10 @@ test('court CTA serializes discard, replacement upload, and uncertain-result rec
   );
   assert.match(page, /function pickPay\(m\)[\s\S]*?previousMethod !== m[\s\S]*?invalidateBookingReceiptUpload\(\{ discard: true \}\)/);
   const policyListener = page.slice(
-    page.indexOf("const policy = $('bookingPolicyAgree');"),
-    page.indexOf('function wizGoTo', page.indexOf("const policy = $('bookingPolicyAgree');")),
+    page.indexOf('function initBookingValidationHighlights'),
+    page.indexOf('function wizGoTo', page.indexOf('function initBookingValidationHighlights')),
   );
+  assert.match(policyListener, /for \(const policy of \[\$\('bookingPolicyAgree'\), \$\('courtPoliciesAgree'\)\]\)/);
   assert.match(policyListener, /setBookingReceiptContinueState\(_receiptUploadState\?\.status \|\| 'idle'\)/);
   assert.doesNotMatch(policyListener, /invalidateBookingReceiptUpload/);
   assert.match(clearing, /_bookingSubmissionInFlight && !options\.force/);

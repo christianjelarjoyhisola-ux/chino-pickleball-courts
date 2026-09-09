@@ -757,8 +757,10 @@ test('court slot states stay distinct and the public light theme is genuinely li
   assert.match(page, /try \{\s*localStorage\.setItem\('pb_template_theme'/);
 });
 
-test('payment step removes duplicate notices while keeping Vision consent visible', () => {
+test('payment step keeps receipt consent explicit with linked Vision and retention details', () => {
   const page = read('index.html');
+  const receiptDetails = read('receipt-verification.html');
+  const paymentAmountUI = functionSource(page, 'updatePaymentAmountUI');
   const sharedPanel = page.slice(
     page.indexOf('function syncGcashSharedPanel'),
     page.indexOf('function copyPaymentNumber')
@@ -766,8 +768,13 @@ test('payment step removes duplicate notices while keeping Vision consent visibl
   assert.match(page, /Upload your proof of payment below\./);
   assert.doesNotMatch(page, /Payment window:|id="bPayWindow"|id="bPayWindowStart"|id="bPayWindowEnd"/);
   assert.doesNotMatch(sharedPanel, /<strong>Privacy:<\/strong>|privacy requests/i);
-  assert.match(page, /function updatePaymentAmountUI[\s\S]*?Google Cloud Vision processing it for payment verification/);
-  assert.ok((page.match(/only as long as needed for disputes, fraud prevention, accounting, and legal requirements/g) || []).length >= 4);
+  for (const source of [page, paymentAmountUI]) {
+    assert.match(source, /I confirm my payment details and allow <a href="receipt-verification\.html" target="_blank" rel="noopener"[^>]*>receipt verification<\/a>/);
+  }
+  assert.match(receiptDetails, /you consent to Google Cloud Vision analyzing your uploaded receipt for payment verification and fraud prevention/);
+  assert.match(receiptDetails, /keeps the receipt and audit record private/);
+  assert.match(receiptDetails, /only as long as needed for disputes, fraud prevention, accounting, and legal requirements/);
+  assert.match(receiptDetails, /Contact CHINO staff for privacy requests/);
 });
 
 test('only host court reservations can carry an outstanding balance', () => {

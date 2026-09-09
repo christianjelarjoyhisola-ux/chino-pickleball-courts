@@ -21,3 +21,7 @@
 .court-policies-buttons button { min-height: 48px; border-radius: 8px; padding: 10px 12px; font: inherit; font-weight: 700; cursor: pointer; }
 .court-policies-agree { flex: 1; border: 1px solid #104573; background: #104573; color: #fff; }
 .court-policies-dialog :focus-visible { outline: 3px solid #e2b623; outline-offset: -3px; }
+.booking-court-policy { align-items: center; font-size: .8rem; }
+.court-policies-inline-link { display: inline; padding: 4px 0; border: 0; background: none; color: var(--text, #145787); font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
+.court-policies-inline-link:focus-visible { outline: 2px solid var(--accent, #145787); outline-offset: 3px; }
+#bookingPolicyText a { color: inherit; font-weight: 700; text-decoration: underline; }

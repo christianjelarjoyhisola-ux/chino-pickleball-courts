@@ -229,12 +229,13 @@ test('automated uncertainty queues owner review while owners retain both deliber
   assert.match(client, /async rejectBookingPaymentTransaction\(ref, reason\)[\s\S]*?\.rpc\('reject_booking_payment_transaction'/);
   assert.ok((client.match(/receiptVerificationId: Number\(reg\.receiptVerificationId\) \|\| null/g) || []).length >= 2);
   assert.doesNotMatch(admin, /Request clearer proof|Request Clearer Proof/i);
-  assert.match(
-    paymentPolicy,
-    /clean proof can confirm automatically; anything wrong or unclear stays pending for the court owner to choose Confirm Received or Not Received/,
-  );
+  assert.match(paymentPolicy, /href="receipt-verification\.html"[^>]*>receipt verification<\/a>/);
+  const receiptDetails = read('receipt-verification.html');
+  assert.match(receiptDetails, /a complete, matching receipt can confirm your payment automatically/);
+  assert.match(receiptDetails, /Unclear or mismatched details stay pending for the court owner to review/);
   assert.doesNotMatch(page, /invalid payment may release this reservation/i);
   assert.doesNotMatch(page, /receipt[^\n]*(?:automatically|automatic)[^\n]*(?:reject|cancel|release)/i);
+  assert.doesNotMatch(receiptDetails, /receipt[^\n]*(?:automatically|automatic)[^\n]*(?:reject|cancel|release)/i);
 });
 
 test('duplicate-payment resolver requires an exact preview and an explicit no-refund decision', () => {
