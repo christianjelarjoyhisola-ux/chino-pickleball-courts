@@ -260,3 +260,43 @@ test('generic skipped actions and unrelated saved changes keep their original me
   assert.match(Activity.itemMarkup(server, 0), /Service request/);
   assert.doesNotMatch(Activity.itemMarkup(server, 0), /booking-change/);
 });
+
+test('page and action context use the visited destination without guessing a page from a saved record', () => {
+  const visit = item('visit', { source: 'client_reported', action: 'page_view', targetId: 'accounts', summary: 'Viewed payments', details: { page: 'payments' }, outcome: 'viewed' });
+  assert.equal(Activity.activityPage(visit), 'Host accounts');
+  const click = item('click', { source: 'client_reported', action: 'host_account_open', targetType: '', targetId: '', outcome: 'attempted', details: { page: 'accounts', event: 'action_attempt' } });
+  const row = Activity.itemMarkup(click, 0);
+  assert.match(row, /data-label="Page"[^>]*><span[^>]*>Host accounts/);
+  assert.match(row, /Open host bookings and balance/);
+  assert.match(row, /Requested/);
+  assert.doesNotMatch(row, /Created|Saved change|Reported result|host_account_open/);
+  const saved = item('saved', { action: 'insert', targetType: 'accounts', summary: 'Created accounts', details: {} });
+  assert.equal(Activity.activityPage(saved), 'Not recorded');
+  assert.match(Activity.itemMarkup(saved, 0), /Created account/);
+  assert.doesNotMatch(Activity.itemMarkup(saved, 0), /Host accounts/);
+  assert.equal(Activity.activityPage({ source: 'server_reported', details: { page: 'accounts' } }), 'Not recorded');
+  assert.equal(Activity.activityPage({ source: 'client_reported', details: { page: '<script>' } }), 'Not recorded');
+});
+
+test('tagged host controls record only allowlisted actions, their page, and the intended event type', () => {
+  const attributes = { 'data-activity-action': 'host_bookings_search', 'data-activity-page': 'accounts', 'data-activity-event': 'change' };
+  const control = fakeElement('saveAccount(secret)', { getAttribute: name => attributes[name] || null });
+  assert.equal(Activity.observationFor(control, 'click'), null);
+  assert.deepEqual(Activity.observationFor(control, 'change'), { category: 'interaction', action: 'host_bookings_search', page: 'accounts', outcome: 'attempt' });
+  attributes['data-activity-action'] = 'private@example.test';
+  assert.equal(Activity.observationFor(control, 'change'), null);
+});
+
+test('observer keeps current page for modal controls and explicitly records the new navigation page', () => {
+  const events = [], listeners = {};
+  const observer = Activity.createObserver({ db: { recordAdminActivity: event => events.push(event) }, getSession: () => ({ id: 'court-owner', role: 'court_owner' }) });
+  observer.install({ addEventListener: (name, listener) => { listeners[name] = listener; }, defaultView: { addEventListener() {} } });
+  observer.observeNavigation('accounts');
+  const control = fakeElement('openHostAccountDetails()');
+  listeners.click({ isTrusted: true, target: { closest: () => control } });
+  observer.observeNavigation('bookings');
+  assert.deepEqual(events.map(event => event.page), ['accounts', 'accounts', 'bookings']);
+  assert.equal(events[1].action, 'openHostAccountDetails');
+  listeners.click({ isTrusted: false, target: { closest: () => control } });
+  assert.equal(events.length, 3);
+});

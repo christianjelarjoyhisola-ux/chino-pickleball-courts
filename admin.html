@@ -16,8 +16,8 @@
 <script src="host-balance-payment.js?v=20260831-payment-state-v7"></script>
 <script src="finance-core.js?v=20260719-finance-v2"></script>
 <script src="owner-insights.js?v=20260909-insights-audit-v2"></script>
-<script src="admin-activity.js?v=20260909-history-wording-v2"></script>
-<link rel="stylesheet" href="admin-activity.css?v=20260909-history-v1">
+<script src="admin-activity.js?v=20260910-page-actions-v1"></script>
+<link rel="stylesheet" href="admin-activity.css?v=20260910-page-actions-v1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 <style>
@@ -5673,7 +5673,7 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(45, 62, 79, .1
           <p id="accSectionCopy">View every Open Play Host, then open a dedicated booking and balance summary.</p>
         </div>
         <div class="account-page-actions">
-          <button class="btn btn-g" type="button" onclick="renderAccounts()">&#8635; Refresh</button>
+          <button class="btn btn-g" type="button" data-activity-action="host_accounts_refresh" data-activity-page="accounts" onclick="renderAccounts()">&#8635; Refresh</button>
           <button class="btn btn-p" type="button" data-perm="accounts" onclick="openAccModal()">+ Add Account</button>
         </div>
       </div>
@@ -6629,7 +6629,7 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(45, 62, 79, .1
         <h2 id="hostAccountModalTitle">HOST ACCOUNT DETAILS</h2>
         <p>Bookings, verified payments, and outstanding balance</p>
       </div>
-      <button class="m-x" type="button" aria-label="Close host account details" onclick="closeHostAccountDetails()">&#10005;</button>
+      <button class="m-x" type="button" aria-label="Close host account details" data-activity-action="host_account_close" data-activity-page="accounts" onclick="closeHostAccountDetails()">&#10005;</button>
     </div>
     <div class="host-finance-body" id="hostAccountBody" aria-live="polite">
       <div class="hf-loading"><div class="hf-loading-inner"><span class="hf-spinner" aria-hidden="true"></span><span>Loading host account...</span></div></div>
@@ -16181,7 +16181,7 @@ async function renderAccounts(){
         <td data-label="Role"><span class="bdg ${ACCOUNT_ROLE_BADGES[role] || 'bdg-d'}">${esc(ACCOUNT_ROLE_LABELS[role] || role)}</span></td>
         <td data-label="Status"><span class="bdg ${statusClass}">${esc(status)}</span></td>
         <td data-label="Actions"><div class="acc-action-row">
-          ${isHost ? `<button class="btn btn-sm acc-view-btn" type="button" onclick="openHostAccountDetails('${jsArg(a.id)}')">Bookings &amp; Balance</button>` : ''}
+          ${isHost ? `<button class="btn btn-sm acc-view-btn" type="button" data-activity-action="host_account_open" data-activity-page="accounts" onclick="openHostAccountDetails('${jsArg(a.id)}')">Bookings &amp; Balance</button>` : ''}
           ${canManage ? `<button class="btn btn-g btn-sm" type="button" onclick="openAccModal('${jsArg(a.id)}')">Edit</button>
           <button class="btn btn-d btn-sm" type="button" aria-label="Delete ${esc(a.fullName || 'account')}" onclick="delAcc('${jsArg(a.id)}')">Delete</button>` : ''}
         </div></td>
@@ -16400,7 +16400,7 @@ function hostFinanceBookingCard(booking) {
       <div class="hf-money-cell balance ${fullyInactive ? 'inactive' : amount.balance <= 0 ? 'settled' : ''}"><span>Balance</span><strong>${fullyInactive ? 'Not due' : fmt(amount.balance)}</strong></div>
     </div>
     <details class="hf-booking-detail">
-      <summary>Payment and booking details</summary>
+      <summary data-activity-action="host_booking_details_toggle" data-activity-page="accounts">Payment and booking details</summary>
       <div class="hf-booking-detail-grid">
         <div class="hf-booking-detail-row"><span>Requested initial due</span><span>${fmt(amount.requestedInitial)}</span></div>
         ${hasInactiveItems ? `<div class="hf-booking-detail-row"><span>Original booking total</span><span>${fmt(amount.total)}</span></div>` : ''}
@@ -16414,8 +16414,8 @@ function hostFinanceBookingCard(booking) {
     <div class="hf-card-foot">
       <div class="hf-card-meta"><span>${esc(paymentMethodLabel(booking.paymentMethod))}</span>${fullyInactive ? `<span>· ${booking.status==='forfeited'?'Forfeited — deposit retained, slot released':'Cancelled — excluded from balance'}</span>` : needsReview ? '<span>· Needs review</span>' : ''}</div>
       <div class="hf-card-actions">
-        ${showReview ? `<button class="btn btn-g btn-sm" type="button" onclick="openHostFinanceBooking('${jsArg(actionRef)}','review')">Review payment</button>` : ''}
-        ${Auth.can('bookings', sess.role) ? `<button class="btn btn-p btn-sm" type="button" onclick="openHostFinanceBooking('${jsArg(bookingSearchRef)}','booking')">View booking</button>` : ''}
+        ${showReview ? `<button class="btn btn-g btn-sm" type="button" data-activity-action="host_booking_payment_review" data-activity-page="accounts" onclick="openHostFinanceBooking('${jsArg(actionRef)}','review')">Review payment</button>` : ''}
+        ${Auth.can('bookings', sess.role) ? `<button class="btn btn-p btn-sm" type="button" data-activity-action="host_booking_open" data-activity-page="accounts" onclick="openHostFinanceBooking('${jsArg(bookingSearchRef)}','booking')">View booking</button>` : ''}
       </div>
     </div>
   </article>`;
@@ -16495,13 +16495,13 @@ function renderHostAccountDetails() {
     </section>
     <div class="hf-policy-note"><span aria-hidden="true">&#9432;</span><span><strong>How balance is calculated:</strong> the remaining balance is due by 11:59 PM Philippine time, five calendar days before the booking date. Uploaded receipts awaiting review are not counted as paid. A forfeited booking has no collectible balance, while its verified non-refundable deposit remains included in paid revenue.</span></div>
     <div class="hf-toolbar">
-      <label class="hf-search-wrap"><input class="hf-search" id="hostAccountSearch" type="search" aria-label="Search host bookings" placeholder="Search customer, reference, court..." value="${esc(_hostFinanceState.query)}" oninput="updateHostAccountSearch(this.value)"></label>
-      <button class="btn btn-g hf-refresh" id="hostFinanceRefreshBtn" type="button" aria-label="Refresh host bookings" onclick="refreshHostAccountDetails()" title="Refresh host bookings"><span aria-hidden="true">&#8635;</span><span class="hf-refresh-label">Refresh</span></button>
+      <label class="hf-search-wrap"><input class="hf-search" id="hostAccountSearch" type="search" aria-label="Search host bookings" data-activity-action="host_bookings_search" data-activity-page="accounts" data-activity-event="change" placeholder="Search customer, reference, court..." value="${esc(_hostFinanceState.query)}" oninput="updateHostAccountSearch(this.value)"></label>
+      <button class="btn btn-g hf-refresh" id="hostFinanceRefreshBtn" type="button" aria-label="Refresh host bookings" data-activity-action="host_bookings_refresh" data-activity-page="accounts" onclick="refreshHostAccountDetails()" title="Refresh host bookings"><span aria-hidden="true">&#8635;</span><span class="hf-refresh-label">Refresh</span></button>
     </div>
     <div class="hf-tabs" id="hostAccountTabs" role="tablist" aria-label="Filter host bookings">
       ${[
         ['all','All'], ['upcoming','Upcoming'], ['balance','Balance Due'], ['review','Needs Review'], ['history','History']
-      ].map(([key, label]) => `<button class="hf-tab ${_hostFinanceState.filter === key ? 'active' : ''}" type="button" role="tab" data-filter="${key}" aria-selected="${_hostFinanceState.filter === key ? 'true' : 'false'}" aria-controls="hostFinanceBookingList" tabindex="${_hostFinanceState.filter === key ? '0' : '-1'}" onclick="setHostAccountFilter('${key}')" onkeydown="hostFinanceTabKeydown(event)">${label} <span data-count>${hostFinanceFilterCount(key)}</span></button>`).join('')}
+      ].map(([key, label]) => `<button class="hf-tab ${_hostFinanceState.filter === key ? 'active' : ''}" type="button" role="tab" data-filter="${key}" data-activity-action="host_bookings_filter_${key}" data-activity-page="accounts" aria-selected="${_hostFinanceState.filter === key ? 'true' : 'false'}" aria-controls="hostFinanceBookingList" tabindex="${_hostFinanceState.filter === key ? '0' : '-1'}" onclick="setHostAccountFilter('${key}')" onkeydown="hostFinanceTabKeydown(event)">${label} <span data-count>${hostFinanceFilterCount(key)}</span></button>`).join('')}
     </div>
     <div class="hf-list-meta" id="hostFinanceListMeta"></div>
     <div class="hf-booking-list" id="hostFinanceBookingList" role="tabpanel" aria-live="polite"></div>`;
@@ -16526,7 +16526,7 @@ async function loadHostAccountBookings({ announce = false } = {}) {
   } catch (e) {
     if (requestId !== _hostFinanceLoadSeq || String(_hostFinanceState.account?.id || '') !== accountId || !$('hostAccountModal')?.classList.contains('show')) return;
     console.error('loadHostAccountBookings failed:', e);
-    $('hostAccountBody').innerHTML = `<div class="hf-error"><div><strong style="display:block;color:var(--text);margin-bottom:6px">Could not load host bookings</strong><span>Please check your connection and try again.</span><div style="margin-top:14px"><button class="btn btn-p" type="button" onclick="refreshHostAccountDetails()">Try again</button></div></div></div>`;
+    $('hostAccountBody').innerHTML = `<div class="hf-error"><div><strong style="display:block;color:var(--text);margin-bottom:6px">Could not load host bookings</strong><span>Please check your connection and try again.</span><div style="margin-top:14px"><button class="btn btn-p" type="button" data-activity-action="host_bookings_refresh" data-activity-page="accounts" onclick="refreshHostAccountDetails()">Try again</button></div></div></div>`;
   }
 }
 
@@ -16596,6 +16596,12 @@ function hostFinanceTabKeydown(event) {
     : (current - 1 + tabs.length) % tabs.length;
   tabs[next].click();
   tabs[next].focus();
+  const action = tabs[next].dataset.activityAction;
+  if (event.isTrusted !== false && /^host_bookings_filter_(all|upcoming|balance|review|history)$/.test(action || '')) {
+    try {
+      Promise.resolve(DB.recordAdminActivity?.({ category:'interaction', action, page:'accounts', outcome:'attempt' })).catch(() => {});
+    } catch (_) { /* Activity recording must not interrupt keyboard navigation. */ }
+  }
 }
 
 function hostAccountModalKeydown(event) {
@@ -19127,7 +19133,7 @@ async function checkAgreementGate(session) {
 
 <script src="supabase.min.js"></script>
 <script src="open-play-rating.js?v=20260729-head-to-head-v1"></script>
-<script src="supabase-config.js?v=20260909-insights-audit-v2"></script>
+<script src="supabase-config.js?v=20260910-page-actions-v1"></script>
 <script src="qrcode.min.js?v=1.5.4"></script>
 <script src="availability-graphic.js?v=20260909-domain-v1"></script>
 <script src="play-manager.js?v=20260909-official-logo-v1"></script>

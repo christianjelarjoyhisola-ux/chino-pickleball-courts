@@ -7625,6 +7625,8 @@ Object.assign(window.DB, {
       p_actor_id: filters.actorId || null,
       p_before_id: filters.cursor || null,
       p_limit: Math.max(1, Math.min(100, Math.floor(Number(filters.limit) || 30))),
+      p_page: filters.page || null,
+      p_view: filters.view || 'people',
     });
     if (error) throw new Error(_extractFnError(error, 'Could not load activity history.'));
     if (actor !== await _pbRequireActivityOwner()) throw new Error('Your account changed. Refresh activity history.');
@@ -7654,10 +7656,13 @@ Object.assign(window.DB, {
       entityId: /^[\w.-]{1,100}$/.test(String(event.targetId || '')) ? String(event.targetId) : '',
       outcome: ['view', 'attempt', 'success', 'failed', 'skipped'].includes(event.outcome) ? event.outcome : 'attempt',
     };
+    // Navigation is observed before the URL is updated; its explicit destination
+    // is the page opened, even while location.hash still names the previous page.
+    const page = short(event.page || (kind === 'page_view' ? event.targetId : '') || String(location.hash || '').replace(/^#/, '') || 'admin', 60);
     let timer;
     try {
       const result = await Promise.race([
-        _sb.rpc('record_admin_activity', { p_event: kind, p_page: short(event.page || location.hash.replace(/^#/, '') || 'admin', 60), p_metadata: metadata }),
+        _sb.rpc('record_admin_activity', { p_event: kind, p_page: page, p_metadata: metadata }),
         new Promise(resolve => { timer = setTimeout(() => resolve({ error: true }), 3000); }),
       ]);
       if (result?.error) { console.warn('Activity observation could not be recorded. Saved changes are audited by the server.'); return null; }
@@ -7678,10 +7683,13 @@ function _pbInstallActivityObservers(db) {
     db[name] = async function (...args) {
       const session = window.Auth?.getSession?.();
       const observe = PB_PRIVATE_DATA_SURFACE && !window.PB_USE_LOCAL_DATA && ['owner', 'court_owner'].includes(session?.role);
+      // A save may finish after the operator navigates away. Keep the page where
+      // this operation started instead of attributing its result to the new page.
+      const page = observe ? String(location.hash || '').replace(/^#/, '') || 'admin' : undefined;
       const first = args[0];
       const id = typeof first === 'string' ? first : (first?.ref || first?.id || first?.bookingRef || '');
       const record = outcome => observe && window.Auth?.getSession?.()?.id === session.id
-        ? db.recordAdminActivity({ category: 'result', action: name, targetId: id, outcome }) : Promise.resolve(null);
+        ? db.recordAdminActivity({ category: 'result', action: name, targetId: id, outcome, page }) : Promise.resolve(null);
       try {
         const result = await operation.apply(this, args);
         // Legacy void-returning methods do not provide a positive outcome signal.

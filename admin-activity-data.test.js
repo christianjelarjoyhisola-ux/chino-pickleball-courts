@@ -41,11 +41,25 @@ test('owner activity filters use inclusive Philippine dates and bounded cursor p
   assert.deepEqual(h.requests[0], { name: 'owner_activity_log_list', args: {
     p_from: '2026-09-08T16:00:00.000Z', p_to: '2026-09-09T16:00:00.000Z',
     p_category: 'courts', p_actor_id: 'court-owner', p_before_id: '9223372036854775000', p_limit: 100,
+    p_page: null, p_view: 'people',
   } });
   for (const date of ['2026-02-30', 'garbage', '2026-13-01']) {
     await assert.rejects(h.db.getAdminActivity({ fromDate: date }), /valid activity date/);
   }
   await assert.rejects(h.db.getAdminActivity({ fromDate: '2026-09-10', toDate: '2026-09-09' }), /end date/);
+});
+
+test('activity history requests the selected page and separates service checks', async () => {
+  const h = harness();
+  await h.db.getAdminActivity({ page: 'accounts', view: 'people' });
+  assert.equal(h.requests[0].args.p_page, 'accounts');
+  assert.equal(h.requests[0].args.p_view, 'people');
+  await h.db.getAdminActivity({ page: 'dash', view: 'services' });
+  assert.equal(h.requests[1].args.p_page, 'dash');
+  assert.equal(h.requests[1].args.p_view, 'services');
+  await h.db.getAdminActivity({ view: 'all' });
+  assert.equal(h.requests[2].args.p_page, null);
+  assert.equal(h.requests[2].args.p_view, 'all');
 });
 
 test('history results are rejected if owner session changes during a request', async () => {
@@ -85,6 +99,67 @@ test('operation wrapper preserves success and failures and records only bounded 
   await assert.rejects(h.db.deleteCourt('c1'), error => error === failure);
   assert.deepEqual(h.requests.map(request => request.args.p_metadata.outcome), ['success', 'failed']);
   assert.doesNotMatch(JSON.stringify(h.requests), /secret|private/);
+});
+
+test('navigation records the destination page before the URL changes', async () => {
+  const h = harness({ role: 'court_owner' });
+  assert.equal(h.context.location.hash, '#courts');
+  await h.db.recordAdminActivity({ category: 'navigation', action: 'page_view', targetType: 'section', targetId: 'accounts', outcome: 'view' });
+  assert.equal(h.requests[0].args.p_event, 'page_view');
+  assert.equal(h.requests[0].args.p_page, 'accounts');
+  assert.equal(h.requests[0].args.p_metadata.entityId, 'accounts');
+  await h.db.recordAdminActivity({ category: 'navigation', action: 'page_view', page: 'bookings', outcome: 'view' });
+  assert.equal(h.requests[1].args.p_page, 'bookings');
+  await h.db.recordAdminActivity({ category: 'interaction', action: 'saveCourt', targetId: 'c1', outcome: 'attempt' });
+  assert.equal(h.requests[2].args.p_page, 'courts');
+});
+
+test('operation results keep their starting page after navigation, including failures', async () => {
+  let finish;
+  const h = harness({ role: 'court_owner', methods: {
+    async saveHostAccount() { return new Promise((resolve, reject) => { finish = { resolve, reject }; }); },
+  } });
+  h.context.location.hash = '#accounts';
+  const saved = h.db.saveHostAccount({ id: 'host-1' });
+  h.context.location.hash = '#bookings';
+  finish.resolve({ ok: true });
+  assert.deepEqual(await saved, { ok: true });
+  assert.equal(h.requests[0].args.p_page, 'accounts');
+  assert.equal(h.requests[0].args.p_metadata.outcome, 'success');
+
+  h.context.location.hash = '#accounts';
+  const failed = h.db.saveHostAccount({ id: 'host-1' });
+  h.context.location.hash = '#dash';
+  const failure = new Error('Could not save account');
+  finish.reject(failure);
+  await assert.rejects(failed, error => error === failure);
+  assert.equal(h.requests[1].args.p_page, 'accounts');
+  assert.equal(h.requests[1].args.p_metadata.outcome, 'failed');
+});
+
+test('operation results are not attributed to a replacement signed-in account', async () => {
+  let finish;
+  const h = harness({ methods: { async saveHostAccount() { return new Promise(resolve => { finish = resolve; }); } } });
+  h.context.location.hash = '#accounts';
+  const pending = h.db.saveHostAccount({ id: 'host-1' });
+  h.setSession({ id: 'actor-2', role: 'owner', status: 'active' });
+  h.context.location.hash = '#dash';
+  finish({ ok: true });
+  assert.deepEqual(await pending, { ok: true });
+  assert.equal(h.requests.length, 0);
+});
+
+test('missing URL hashes do not interrupt observed or unobserved operations', async () => {
+  for (const options of [{}, { local: true }, { privateSurface: false }, { role: 'host' }]) {
+    const h = harness({ ...options, methods: { async saveCourt() { return { ok: true }; } } });
+    delete h.context.location.hash;
+    assert.deepEqual(await h.db.saveCourt({ id: 'c1' }), { ok: true });
+    if (!Object.keys(options).length) {
+      assert.equal(h.requests[0].args.p_page, 'admin');
+    } else {
+      assert.equal(h.requests.length, 0);
+    }
+  }
 });
 
 test('observation failure never changes the original business-operation result', async () => {
