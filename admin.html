@@ -5032,7 +5032,7 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(45, 62, 79, .1
     <div id="sec-dash" class="adm-sec on">
       <div class="stat-cards">
         <div class="sc"><div class="sc-lbl">Total Bookings</div><div class="sc-val" id="dTotal">0</div><div class="sc-ic">📋</div></div>
-        <div class="sc"><div class="sc-lbl">Today's Bookings</div><div class="sc-val" id="dToday">0</div><div class="sc-ic">📅</div></div>
+        <div class="sc"><div class="sc-lbl">Booked Today</div><div class="sc-val" id="dToday">0</div><div id="dScheduledToday" style="font-size:12px;color:var(--text3);margin-top:8px">0 scheduled today</div><div class="sc-ic">📅</div></div>
         <div class="sc"><div class="sc-lbl">Net Court Revenue</div><div class="sc-val" id="dRev">₱0</div><div class="sc-ic">💰</div></div>
         <div class="sc"><div class="sc-lbl">Most Booked</div><div class="sc-val" style="font-size:1rem;margin-top:4px" id="dMost">—</div><div class="sc-ic">🏆</div></div>
       </div>
@@ -9183,6 +9183,13 @@ async function renderPaddleInsights({force=false}={}){
 /* ==============================================
    DASHBOARD
    ============================================== */
+function dashboardDailyCounts(transactions, now = new Date()) {
+  const today = phDateKeyFromTimestamp(now);
+  return {
+    booked: transactions.filter(b => phDateKeyFromTimestamp(b.createdAt || b.created_at) === today).length,
+    scheduled: transactions.filter(b => (b.items?.length ? b.items : [b]).some(item => item.date === today)).length,
+  };
+}
 async function renderDash(){
   // The private platform-allocation position comes from the authoritative
   // remittance RPC. It loads alongside the operational dashboard metrics.
@@ -9190,7 +9197,6 @@ async function renderDash(){
 
   const [bks, settings]=await Promise.all([DB.getBookings(), DB.getSettings()]);
   const feeCfg=getPlatformFeeConfig(settings);
-  const today=new Date().toISOString().split('T')[0];
   // Exclude placeholder slot-holds ("Reserving…") — they are temporary locks, not real bookings.
   const realBks=bks.filter(isDashboardReportBooking);
   const active=realBks.filter(isDashboardActiveBooking);
@@ -9198,11 +9204,12 @@ async function renderDash(){
   const forfeitedTxns=groupBookings(realBks.filter(b=>b.status==='forfeited' && b.paymentStatus==='deposit_retained'));
   const retainedRevenue=forfeitedTxns.reduce((s,b)=>s+Math.max(0,(window.BookingBalance?.paidAmount?.(b)||0)-platformFeeAmountForBooking(b,feeCfg)),0);
   const rev=activeTxns.reduce((s,b)=>s+netCourtRevenueForBooking(b,feeCfg),0)+retainedRevenue;
-  const todayBks=activeTxns.filter(b=>b.date===today);
+  const dailyCounts=dashboardDailyCounts(activeTxns);
   const cc={};active.forEach(b=>{cc[b.courtName]=(cc[b.courtName]||0)+1;});
   const most=Object.entries(cc).sort((a,b)=>b[1]-a[1])[0];
   $('dTotal').textContent=activeTxns.length;
-  $('dToday').textContent=todayBks.length;
+  $('dToday').textContent=dailyCounts.booked;
+  $('dScheduledToday').textContent=`${dailyCounts.scheduled} scheduled today`;
   $('dRev').textContent=fmt(rev);
   $('dMost').textContent=most?most[0]:'—';
   const gc=activeTxns.filter(b=>receivedAccountKey(b)==='gcash').reduce((s,b)=>s+b.total,0)+forfeitedTxns.filter(b=>receivedAccountKey(b)==='gcash').reduce((s,b)=>s+(window.BookingBalance?.paidAmount?.(b)||0),0);

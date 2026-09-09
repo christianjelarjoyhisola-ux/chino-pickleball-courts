@@ -2,6 +2,31 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const RevenueReport = require('./finance-core');
 
+const adminSource = require('node:fs').readFileSync('admin.html', 'utf8');
+const dailyCounts = new Function(`
+  ${adminSource.slice(adminSource.indexOf('function phDateKeyFromTimestamp('), adminSource.indexOf('function bookingRevenueDate('))}
+  ${adminSource.slice(adminSource.indexOf('function dashboardDailyCounts('), adminSource.indexOf('async function renderDash('))}
+  return dashboardDailyCounts;
+`)();
+
+test('dashboard separates four reservations placed today from three scheduled today', () => {
+  const transactions = ['2026-09-09', '2026-09-09', '2026-09-13', '2026-09-09'].map(date => ({
+    date, createdAt: '2026-09-09T03:00:00Z',
+  }));
+  assert.deepEqual(dailyCounts(transactions, new Date('2026-09-09T05:13:00Z')), { booked: 4, scheduled: 3 });
+});
+
+test('dashboard uses Philippine midnight and counts a multi-date reservation only once', () => {
+  const transactions = [
+    { createdAt: '2026-09-08T16:00:00Z', items: [{date:'2026-09-08'}, {date:'2026-09-09'}, {date:'2026-09-09'}] },
+    { created_at: '2026-09-08T15:59:59Z', date:'2026-09-09' },
+    { createdAt: 'invalid', date:'2026-09-13' },
+    { date:'2026-09-13' },
+  ];
+  assert.deepEqual(dailyCounts(transactions, new Date('2026-09-08T16:30:00Z')), { booked: 1, scheduled: 2 });
+  assert.deepEqual(dailyCounts([], new Date('2026-09-08T16:30:00Z')), { booked: 0, scheduled: 0 });
+});
+
 const settings = { maintenance_fee: '5', fee_type: 'per_hour' };
 const range = { from: '2026-07-01', to: '2026-07-31' };
 
