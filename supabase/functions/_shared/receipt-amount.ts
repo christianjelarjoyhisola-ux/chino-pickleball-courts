@@ -444,6 +444,46 @@ function collectCandidates(
       }
       if (boundaryIndex < 0) continue;
 
+      // Vision can emit the left-column Ref before the right-column amounts.
+      // Recover only the complete, tightly bounded Ref -> timestamp layout;
+      // never scan onward into the advertisement below the receipt. See
+      // https://docs.cloud.google.com/vision/docs/fulltext-annotations
+      let displayStart = anchorIndex + 1;
+      let referenceFirst = false;
+      if (
+        lines.slice(displayStart, boundaryIndex).every((line) => !line.trim())
+      ) {
+        const referenceLine = lines[boundaryIndex].trim();
+        if (!/^Ref\s*No\.?\s*\d{13}\s*$/i.test(referenceLine)) continue;
+        displayStart = boundaryIndex + 1;
+        boundaryIndex = -1;
+        let noiseCount = 0;
+        for (
+          let index = displayStart;
+          index < Math.min(lines.length, displayStart + 7);
+          index++
+        ) {
+          const line = lines[index].trim();
+          if (!line) continue;
+          if (
+            /^(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+\d{4}\s+\d{1,2}:\d{2}\s*[AP]M$/i
+              .test(line)
+          ) {
+            boundaryIndex = index;
+            break;
+          }
+          if (GCASH_AMOUNT_DISPLAY_LINE_RE.test(line)) continue;
+          // A detached battery percentage and discount can precede the values.
+          // Neither is monetary evidence. Any other text ends recovery.
+          if (
+            /^(?:\d{1,2}|100|[-−]\d{1,2}%)$/.test(line) && ++noiseCount <= 2
+          ) continue;
+          break;
+        }
+        if (boundaryIndex < 0) continue;
+        referenceFirst = true;
+      }
+
       const blockDisplays = new Map<
         string,
         {
@@ -455,7 +495,7 @@ function collectCandidates(
         }
       >();
       for (
-        let lineIndex = anchorIndex + 1;
+        let lineIndex = displayStart;
         lineIndex < boundaryIndex;
         lineIndex++
       ) {
@@ -494,6 +534,7 @@ function collectCandidates(
       );
       if (
         gcashTotalAmountAnchors.length !== 1 || displayLines.size < 2 ||
+        (referenceFirst && displayLines.size !== 2) ||
         amounts.size !== 1 ||
         !displays.some((display) => display.currencyMarked)
       ) continue;

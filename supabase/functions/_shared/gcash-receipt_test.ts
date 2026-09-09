@@ -37,6 +37,65 @@ const EXPECTED_RECIPIENT = {
   name: "Jan Kennith Magallano",
 };
 
+// Anonymized production Vision ordering: left-column Ref precedes amounts.
+const REFERENCE_FIRST_OCR = `11:23 1
+Amount
+Express Send
+J•• KE••••H M.
++63 998 123 4567
+Sent via GCash
+Total Amount Sent
+Ref No. 2043350406766
+-51%
+81
+265.00
+P265.00
+Sep 9, 2026 11:23 AM
+From Metro Manila In Stock
+Shopee
+P999.00
+279g (gCO2e)`;
+
+Deno.test("GCash reads concordant amounts after Ref in production Vision ordering", () => {
+  const parsed = parseGcashReceipt(REFERENCE_FIRST_OCR);
+  assertEquals(parsed.amount.amount, 265, "receipt amount, not advertisement");
+  assertEquals(parsed.amount.reliable, true, "reliable amount");
+  assertEquals(
+    parsed.amount.matchingPrimaryAmountDisplays,
+    true,
+    "two displays",
+  );
+  assertEquals(parsed.amount.conflictingPrimaryAmounts, false, "no conflict");
+});
+
+Deno.test("GCash reference-first recovery fails closed on incomplete or conflicting evidence", () => {
+  for (
+    const text of [
+      REFERENCE_FIRST_OCR.replace("P265.00", "P365.00"),
+      REFERENCE_FIRST_OCR.replace("265.00\n", ""),
+      REFERENCE_FIRST_OCR.replace("P265.00", "265.00"),
+      REFERENCE_FIRST_OCR.replace("Sep 9, 2026 11:23 AM", ""),
+      REFERENCE_FIRST_OCR.replace(
+        "265.00\nP265.00",
+        "Advertisement\n265.00\nP265.00",
+      ),
+      REFERENCE_FIRST_OCR.replace(
+        "265.00\nP265.00",
+        "Transfer Fee\n265.00\nP265.00",
+      ),
+      REFERENCE_FIRST_OCR.replace("P265.00", "P265.00\nP265.00"),
+    ]
+  ) {
+    const parsed = parseGcashReceipt(text);
+    assertEquals(
+      parsed.amount.reliable && parsed.amount.matchingPrimaryAmountDisplays &&
+        !parsed.amount.conflictingPrimaryAmounts,
+      false,
+      text,
+    );
+  }
+});
+
 Deno.test("parses the supplied masked-name GCash receipt", () => {
   const parsed = parseGcashReceipt(USER_GCASH_OCR, {
     typedReference: "2043350406766",
