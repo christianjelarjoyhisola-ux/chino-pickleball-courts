@@ -2,25 +2,22 @@
   'use strict';
   const storageKey = 'chino-court-policies:2026-09-09';
   let accepted = false;
-  let previousRootOverflow = ''; 
+  let previousRootOverflow = '';
   try { accepted = sessionStorage.getItem(storageKey) === 'accepted'; } catch (_) {}
   const dialog = document.createElement('dialog');
   dialog.className = 'court-policies-dialog';
   dialog.setAttribute('aria-labelledby', 'courtPoliciesTitle');
   dialog.setAttribute('aria-describedby', 'courtPoliciesIntro');
   dialog.innerHTML = `
-    <header class="court-policies-heading">
-      <h2 id="courtPoliciesTitle" tabindex="-1">Before you book</h2>
-      <p id="courtPoliciesIntro">Please review our court policies for a safe and enjoyable game.</p>
-    </header>
+    <h2 class="court-policies-sr-only" id="courtPoliciesTitle">Court policies</h2>
+    <p class="court-policies-sr-only" id="courtPoliciesIntro">Review the poster or text version. Selecting Agree &amp; Continue means you agree to these court policies.</p>
     <div class="court-policies-content">
       <a class="court-policies-poster" href="assets/court-policies.png" target="_blank" rel="noopener" aria-label="Enlarge court policies poster (opens in a new tab)">
         <img src="assets/court-policies.png" width="1024" height="1536" alt="CHINO court policies poster. Tap to enlarge, or use the text version below.">
       </a>
     </div>
     <footer class="court-policies-actions">
-      <div class="court-policies-help">Tap the poster to enlarge · <a href="court-policies.html" target="_blank" rel="noopener">Read as text (new tab)</a></div>
-      <p>By selecting Agree &amp; Continue, you acknowledge and agree to these court policies.</p>
+      <div class="court-policies-help">Tap to enlarge · <a href="court-policies.html" target="_blank" rel="noopener" aria-label="Read court policies as text (opens in a new tab)">Read as text ↗</a></div>
       <div class="court-policies-buttons">
         <button type="button" class="court-policies-agree">Agree &amp; Continue</button>
       </div>
@@ -45,7 +42,7 @@
       }
       document.documentElement.style.overflow = 'hidden';
       document.body.style.overflow = 'hidden';
-      dialog.querySelector('#courtPoliciesTitle').focus();
+      dialog.querySelector('.court-policies-poster').focus({ preventScroll: true });
       return true;
     },
     isOpen() { return dialog.open; },
