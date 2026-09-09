@@ -49,6 +49,8 @@ $publicFiles = @(
   "_headers",
   "_worker.js",
   "admin.html",
+  "admin-activity.css",
+  "admin-activity.js",
   "dashboard-court-activity.css",
   "dashboard-court-activity.js",
   "availability-graphic.css",

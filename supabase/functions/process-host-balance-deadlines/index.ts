@@ -1,4 +1,4 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createAdminActivityClient, setAdminActivityContext, withAdminActivity } from "../_shared/admin-activity.ts";
 import {
   claimBalanceNotification,
   finishBalanceNotification,
@@ -297,7 +297,7 @@ async function sendNotice(
   };
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAdminActivity("process-host-balance-deadlines", async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -314,7 +314,7 @@ Deno.serve(async (req) => {
     if (!url || !serviceKey) {
       throw new Error("Balance processor environment is incomplete");
     }
-    const db = createClient(url, serviceKey, {
+    const db = createAdminActivityClient(req, url, serviceKey, {
       auth: { persistSession: false },
     });
     const body = await req.json().catch(() => ({}));
@@ -322,6 +322,7 @@ Deno.serve(async (req) => {
     if (body.action === "manual") {
       await assertAdmin(req, db);
       const ref = String(body.bookingRef || "");
+      setAdminActivityContext(req, { action: "manual_reminder", targetType: "booking", targetId: ref });
       const { data: seed } = await db.from("bookings").select(
         "booking_group_ref",
       ).eq("ref", ref).single();
@@ -379,6 +380,7 @@ Deno.serve(async (req) => {
 
     if (body.action === "process" || body.source === "admin") {
       await assertAdmin(req, db);
+      setAdminActivityContext(req, { action: "process_deadlines" });
     } else {
       await assertCronRequest(req, db);
     }
@@ -441,8 +443,8 @@ Deno.serve(async (req) => {
       JSON.stringify({
         ok: true,
         processed: results.length,
-        sent: results.filter((result) => result.sent).length,
-        failed: results.filter((result) => result.failed).length,
+        sent: results.filter((result) => "sent" in result && result.sent).length,
+        failed: results.filter((result) => "failed" in result && result.failed).length,
         skipped: results.filter((result) => result.skipped).length,
         results,
       }),
@@ -462,4 +464,4 @@ Deno.serve(async (req) => {
       headers: JSON_HEADERS,
     });
   }
-});
+}, { requireAudit: true }));

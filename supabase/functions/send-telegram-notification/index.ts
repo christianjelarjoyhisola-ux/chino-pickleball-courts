@@ -1,4 +1,4 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createAdminActivityClient, setAdminActivityContext, withAdminActivity } from "../_shared/admin-activity.ts";
 import { sendTelegramHtml } from "../_shared/telegram.ts";
 
 const corsHeaders = {
@@ -188,7 +188,7 @@ async function sendTelegram(message: string): Promise<Record<string, unknown>> {
   return await sendTelegramHtml(message);
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAdminActivity("send-telegram-notification", async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -206,7 +206,7 @@ Deno.serve(async (req) => {
         error: "Notification service is not configured",
       }, 503);
     }
-    const db = createClient(supabaseUrl, serviceKey, {
+    const db = createAdminActivityClient(req, supabaseUrl, serviceKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
@@ -239,6 +239,7 @@ Deno.serve(async (req) => {
       );
     }
 
+    setAdminActivityContext(req, { action: event, targetType: "booking", targetId: bookingRef });
     const { data: primary, error: bookingError } = await db
       .from("bookings")
       .select(
@@ -334,4 +335,4 @@ Deno.serve(async (req) => {
     console.error("send-telegram-notification failed", error);
     return json({ ok: false, error: "Notification could not be sent" }, 500);
   }
-});
+}, { requireAudit: true }));

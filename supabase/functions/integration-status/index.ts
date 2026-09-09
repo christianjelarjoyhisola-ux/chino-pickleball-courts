@@ -1,3 +1,4 @@
+import { withAdminActivity } from "../_shared/admin-activity.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -59,7 +60,7 @@ function receiptOcrService(): ServiceStatus {
   };
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAdminActivity("integration-status", async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -119,4 +120,4 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     },
   );
-});
+}));

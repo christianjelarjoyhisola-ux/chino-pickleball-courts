@@ -23,7 +23,7 @@
 // owner can still deliberately mark a pending receipt as not received.
 // ----------------------------------------------------------------------------
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createAdminActivityClient, setAdminActivityContext, withAdminActivity, requireAdminActivityAudit } from "../_shared/admin-activity.ts";
 import { Image } from "https://deno.land/x/imagescript@1.2.17/mod.ts";
 import {
   calculateCourtPayment,
@@ -1291,7 +1291,7 @@ async function loadReceiptCaller(
   return { userId, account: account || null };
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -1301,7 +1301,7 @@ Deno.serve(async (req) => {
   const serviceRoleKey = Deno.env.get("SERVICE_ROLE_KEY") ||
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
   if (!serviceRoleKey) return json({ error: "Missing SERVICE_ROLE_KEY" }, 500);
-  const db = createClient(supabaseUrl, serviceRoleKey);
+  const db = createAdminActivityClient(req, supabaseUrl, serviceRoleKey);
 
   const requestLength = Number(req.headers.get("content-length") || 0);
   if (Number.isFinite(requestLength) && requestLength > MAX_REQUEST_BYTES) {
@@ -1347,6 +1347,13 @@ Deno.serve(async (req) => {
     }, 400);
   }
   const action = (body.action as string) || "verify";
+  if (["stage", "recover-stage", "discard-stage", "sign", "verify", "reverify"].includes(action)) {
+    setAdminActivityContext(req, { action, targetType: "receipt", targetId: String(body.bookingRef || body.openPlayRegistrationId || body.hostSessionRegistrationId || "") });
+    if (["stage", "discard-stage", "verify", "reverify"].includes(action)) {
+      const auditUnavailable = requireAdminActivityAudit(req);
+      if (auditUnavailable) return auditUnavailable;
+    }
+  }
 
   // ── customer/staff: durable, private pre-verification evidence ────────────
   if (["stage", "recover-stage", "discard-stage"].includes(action)) {
@@ -3786,4 +3793,4 @@ Deno.serve(async (req) => {
       }
     }
   }
-});
+}));

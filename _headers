@@ -28,6 +28,12 @@
 /supabase-config.js
   Cache-Control: no-store, max-age=0
 
+/admin-activity.js
+  Cache-Control: no-store, max-age=0
+
+/admin-activity.css
+  Cache-Control: no-store, max-age=0
+
 /booking-balance.js
   Cache-Control: no-store, max-age=0
 

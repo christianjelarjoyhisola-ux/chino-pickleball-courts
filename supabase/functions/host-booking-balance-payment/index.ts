@@ -1,6 +1,6 @@
 // deno-lint-ignore-file no-explicit-any no-import-prefix no-control-regex
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createAdminActivityClient, setAdminActivityContext, withAdminActivity, requireAdminActivityAudit } from "../_shared/admin-activity.ts";
 
 type AccountRole = "host" | "owner" | "court_owner" | "system";
 type Actor = {
@@ -343,7 +343,7 @@ export async function handleHostBookingBalancePayment(
       error: "Supabase service credentials are missing",
     }, 500);
   }
-  const db = createClient(supabaseUrl, serviceRoleKey, {
+  const db = createAdminActivityClient(req, supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
   const actorResult = await authenticate(req, db, serviceRoleKey);
@@ -357,6 +357,13 @@ export async function handleHostBookingBalancePayment(
     return json({ ok: false, error: "Invalid JSON body" }, 400);
   }
   const action = actionName(body.action);
+  if (["quote", "create", "submit", "history_for_booking", "list_pending", "review", "sign_receipt", "receipt_url"].includes(action)) {
+    setAdminActivityContext(req, { action, targetType: "host_balance_payment", targetId: String(body.paymentId ?? body.payment_id ?? body.bookingRef ?? body.booking_ref ?? "") });
+    if (["create", "submit", "review"].includes(action)) {
+      const auditUnavailable = requireAdminActivityAudit(req);
+      if (auditUnavailable) return auditUnavailable;
+    }
+  }
 
   try {
     if (action === "quote") {
@@ -708,5 +715,5 @@ export async function handleHostBookingBalancePayment(
 }
 
 if (import.meta.main) {
-  Deno.serve(handleHostBookingBalancePayment);
+  Deno.serve(withAdminActivity("host-booking-balance-payment", handleHostBookingBalancePayment));
 }

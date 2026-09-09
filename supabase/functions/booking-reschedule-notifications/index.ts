@@ -1,5 +1,5 @@
 // deno-lint-ignore-file no-explicit-any no-import-prefix
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createAdminActivityClient, setAdminActivityContext, withAdminActivity } from "../_shared/admin-activity.ts";
 import {
   emailCorsHeaders,
   isAllowedEmailOrigin,
@@ -809,7 +809,7 @@ async function deliverNotification(
   throw new Error("Unsupported reschedule notification kind");
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAdminActivity("booking-reschedule-notifications", async (req) => {
   if (req.method === "OPTIONS") {
     return isAllowedEmailOrigin(req)
       ? new Response(null, {
@@ -842,7 +842,7 @@ Deno.serve(async (req) => {
     if (!supabaseUrl || !serviceKey) {
       throw new RequestError("Notification service is not configured", 503);
     }
-    const db = createClient(supabaseUrl, serviceKey, {
+    const db = createAdminActivityClient(req, supabaseUrl, serviceKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
     const body = await readBody(req);
@@ -853,6 +853,7 @@ Deno.serve(async (req) => {
 
     const role = await activeAdminRole(req, db);
     const requestedId = body.requestId ? uuid(body.requestId) : null;
+    setAdminActivityContext(req, { action, targetType: "reschedule_request", targetId: requestedId || "" });
     if (!role) {
       if (action !== "dispatch" || !requestedId) {
         throw new RequestError("Active owner access is required", 403);
@@ -983,4 +984,4 @@ Deno.serve(async (req) => {
     }
     return json(req, { ok: false, error: message }, status);
   }
-});
+}, { requireAudit: true }));

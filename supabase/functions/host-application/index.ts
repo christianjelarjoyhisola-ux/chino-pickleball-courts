@@ -1,5 +1,5 @@
 // deno-lint-ignore-file no-explicit-any no-import-prefix
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createAdminActivityClient, setAdminActivityContext, withAdminActivity, requireAdminActivityAudit, adminActivityClientOptions } from "../_shared/admin-activity.ts";
 import { sendMailerooEmail } from "../_shared/maileroo.ts";
 import {
   renderHostDecisionEmail,
@@ -850,7 +850,7 @@ async function requireReviewer(req: Request, db: any): Promise<ReviewerResult> {
   return { user: userData.user };
 }
 
-Deno.serve(async (req): Promise<Response> => {
+Deno.serve(withAdminActivity("host-application", async (req): Promise<Response> => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -863,9 +863,10 @@ Deno.serve(async (req): Promise<Response> => {
     return json({ error: "Supabase service credentials are missing" }, 500);
   }
 
-  const db = createClient(supabaseUrl, serviceRoleKey);
+  const db = createAdminActivityClient(req, supabaseUrl, serviceRoleKey);
 
   const serviceHeaders = {
+    ...adminActivityClientOptions(req).global.headers,
     apikey: serviceRoleKey,
     authorization: `Bearer ${serviceRoleKey}`,
   };
@@ -1051,6 +1052,14 @@ Deno.serve(async (req): Promise<Response> => {
   } catch (error) {
     const status = error instanceof RequestBodyError ? error.status : 400;
     return json({ error: errMsg(error) }, status);
+  }
+
+  if (["confirm-verification", "dispatch-review-notifications", "test-review-notification", "resend-verification", "sign-valid-id", "repair-activation", "review", "signup"].includes(body.action || "")) {
+    setAdminActivityContext(req, { action: body.action, targetType: "host_application", targetId: clean(body.applicationId) });
+    if (body.action !== "sign-valid-id") {
+      const auditUnavailable = requireAdminActivityAudit(req);
+      if (auditUnavailable) return auditUnavailable;
+    }
   }
 
   if (body.action === "confirm-verification") {
@@ -1684,4 +1693,4 @@ Deno.serve(async (req): Promise<Response> => {
     }
     return json({ error: errMsg(err) }, 500);
   }
-});
+}));

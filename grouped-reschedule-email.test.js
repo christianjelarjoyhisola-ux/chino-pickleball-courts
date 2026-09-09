@@ -75,7 +75,11 @@ function endpoint(rows, { authorized = true } = {}) {
       env: { get: key => key === 'SUPABASE_URL' ? 'https://database.example.test' : 'test-only-value' },
       serve: value => { handler = value; },
     },
-    createClient: () => db,
+    // Business behavior is isolated here; wrapper identity, logging, and
+    // attribution are exercised by _shared/admin-activity_test.ts.
+    createAdminActivityClient: () => db,
+    setAdminActivityContext: () => {},
+    withAdminActivity: (_endpoint, callback) => callback,
     isAllowedEmailOrigin: () => true,
     emailCorsHeaders: () => ({}),
     jsonResponse: (_req, body, status = 200) => new Response(JSON.stringify(body), { status }),

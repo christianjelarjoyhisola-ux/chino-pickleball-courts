@@ -16,6 +16,8 @@
 <script src="host-balance-payment.js?v=20260831-payment-state-v7"></script>
 <script src="finance-core.js?v=20260719-finance-v2"></script>
 <script src="owner-insights.js?v=20260909-insights-audit-v2"></script>
+<script src="admin-activity.js?v=20260909-history-v1"></script>
+<link rel="stylesheet" href="admin-activity.css?v=20260909-history-v1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 <style>
@@ -5023,6 +5025,7 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(45, 62, 79, .1
     </div>
     <div class="sb-section" data-perm="owner_only">
       <div class="nav-grp">System Owner</div>
+      <button class="nav-item" type="button" data-s="activity" data-perm="owner_only" onclick="goto('activity')"><span aria-hidden="true">&#9719;</span> Activity History</button>
       <div class="nav-item" data-s="deleted" data-perm="owner_only" onclick="goto('deleted')"><span>&#128465;</span> Deleted Bookings</div>
     </div>
     <div class="sb-foot">
@@ -5382,6 +5385,11 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(45, 62, 79, .1
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- ACTIVITY HISTORY (system owner only; fetched only after access checks) -->
+    <div id="sec-activity" class="adm-sec" data-perm="owner_only">
+      <div id="adminActivityHistory" data-admin-activity hidden></div>
     </div>
 
     <!-- DELETED BOOKINGS (owner only) -->
@@ -8673,13 +8681,33 @@ let sess;
 /* ==============================================
    NAVIGATION
    ============================================== */
-const titles={dash:'Dashboard',insights:'Insights',bookings:'Bookings',deleted:'Deleted Bookings',payreview:'Payment Review',reports:'Reports',courts:'Courts',gamemgr:'Play Manager',accounts:'Host Accounts',remittances:'Remittances',hosts:'Host Center',maintenance:'Maintenance',payments:'Payments'};
-const SECTION_PERM={dash:'dashboard',insights:'insights',bookings:'bookings',deleted:'owner_only',payreview:'payment_review',reports:'reports',courts:'courts',gamemgr:'open_play',accounts:'host_accounts_view',remittances:'remittances',hosts:'host_open_play',maintenance:'maintenance',payments:'payments'};
-const SECTION_LOADERS={dash:renderDash,insights:()=>renderPaddleInsights({force:true}),bookings:renderBookings,deleted:renderDeletedBookings,payreview:()=>renderPaymentReview(),reports:renderReport,courts:renderCourts,gamemgr:()=>window.PlayManager?.render(),accounts:renderAccounts,remittances:renderRemittances,hosts:renderHostCenter,maintenance:renderMaintenance,payments:renderPaymentSettings};
+const titles={dash:'Dashboard',insights:'Insights',bookings:'Bookings',activity:'Activity History',deleted:'Deleted Bookings',payreview:'Payment Review',reports:'Reports',courts:'Courts',gamemgr:'Play Manager',accounts:'Host Accounts',remittances:'Remittances',hosts:'Host Center',maintenance:'Maintenance',payments:'Payments'};
+const SECTION_PERM={dash:'dashboard',insights:'insights',bookings:'bookings',activity:'owner_only',deleted:'owner_only',payreview:'payment_review',reports:'reports',courts:'courts',gamemgr:'open_play',accounts:'host_accounts_view',remittances:'remittances',hosts:'host_open_play',maintenance:'maintenance',payments:'payments'};
+const SECTION_LOADERS={dash:renderDash,insights:()=>renderPaddleInsights({force:true}),bookings:renderBookings,activity:renderAdminActivity,deleted:renderDeletedBookings,payreview:()=>renderPaymentReview(),reports:renderReport,courts:renderCourts,gamemgr:()=>window.PlayManager?.render(),accounts:renderAccounts,remittances:renderRemittances,hosts:renderHostCenter,maintenance:renderMaintenance,payments:renderPaymentSettings};
+let _adminActivity = null;
+function initAdminActivity() {
+  if (_adminActivity || !window.ChinoAdminActivity) return _adminActivity;
+  _adminActivity = window.ChinoAdminActivity.create({
+    root: $('adminActivityHistory'), db: DB,
+    getSession: () => _adminSessionInvalidated ? null : Auth.getSession(),
+    canOwner: session => Auth.can('owner_only', session?.role),
+    isLocalData: () => !!window.PB_USE_LOCAL_DATA,
+  });
+  _adminActivity.installObservers(document);
+  return _adminActivity;
+}
+async function renderAdminActivity() {
+  if (!sess?.role || !Auth.can('owner_only', sess.role) || !Auth.can('owner_only', Auth.getSession()?.role)) {
+    _adminActivity?.clear();
+    return false;
+  }
+  return initAdminActivity()?.refresh();
+}
 let _curSection=null;
 function canAccessSection(s,role=sess?.role){
   if(!SECTION_LOADERS[s] || !$('sec-'+s)) return false;
   const perm=SECTION_PERM[s];
+  if(s==='activity') return !!role && Auth.can('owner_only',role);
   return !perm || !role || Auth.can(perm,role);
 }
 function firstAllowedSection(role=sess?.role){
@@ -8719,6 +8747,7 @@ async function goto(s,{historyMode='push',announceDenied=true}={}){
   document.getElementById('sidebar').classList.remove('open');
   document.getElementById('sidebarOverlay').classList.remove('show');
   _curSection=s;
+  _adminActivity?.observeNavigation(s);
   if(historyMode!=='none') updateSectionRoute(s,historyMode);
   if (s === 'bookings') resetBookingFilters({ render: false });
   if(SECTION_LOADERS[s]) await SECTION_LOADERS[s]();
@@ -8751,6 +8780,7 @@ let _adminSessionInvalidated=false;
 function invalidateStaleAdminSession(){
   if(_adminSessionInvalidated) return;
   _adminSessionInvalidated=true;
+  _adminActivity?.clear();
   showAdminBoot('Another CHINO account was signed in. Returning to secure sign in…');
   document.documentElement.style.pointerEvents='none';
   const returnTo=`admin.html${location.hash||''}`;
@@ -18710,7 +18740,7 @@ function finishAdminBoot() {
   splash.hidden = true;
 }
 
-function logout(){ Auth.logout(); }
+function logout(){ _adminActivity?.clear(); Auth.logout(); }
 
 document.addEventListener('DOMContentLoaded', async ()=>{
   try {
@@ -18766,6 +18796,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   $('uRole').className = 'role-bdg ' + (ROLE_CLASSES[role] || 'r-staff');
 
   applyRoleVisibility(role);
+  initAdminActivity();
   startAdminSessionGuard();
 
   // Modal close on overlay click
@@ -18805,6 +18836,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
    ROLE-BASED VISIBILITY
    ============================================== */
 function applyRoleVisibility(role) {
+  if (!role || !Auth.can('owner_only', role)) _adminActivity?.clear();
   const allowed = Auth.permissionsFor(role);
   document.querySelectorAll('[data-perm]').forEach(el => {
     el.style.display = allowed.includes(el.dataset.perm) ? '' : 'none';

@@ -7574,6 +7574,130 @@ window.DB = {
   console.info('[CHINO Pickleball Courts] Local data mode enabled. Supabase writes are bypassed in this browser.');
 })();
 
+// Activity reads always go to the owner-only server RPC; never the shared cache.
+function _pbActivityDateBound(value, end = false) {
+  if (!value) return null;
+  const day = String(value);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) throw new Error('Choose a valid activity date.');
+  const date = new Date(`${day}T00:00:00+08:00`);
+  if (!Number.isFinite(date.getTime()) || new Date(date.getTime() + 8 * 3600000).toISOString().slice(0, 10) !== day) {
+    throw new Error('Choose a valid activity date.');
+  }
+  return new Date(date.getTime() + (end ? 86400000 : 0)).toISOString();
+}
+
+function _pbActivityItem(row) {
+  if (!row) return null;
+  return {
+    ...row,
+    id: String(row.id),
+    occurredAt: row.occurredAt || row.occurred_at || row.created_at,
+    actorId: row.actorId || row.actor_id || null,
+    actorName: row.actorName || row.actor_name || row.actor_email || 'System',
+    actorRole: row.actorRole || row.actor_role || 'system',
+    targetType: row.targetType || row.target_type || row.entity_type || row.table_name || '',
+    targetId: row.targetId || row.target_id || row.entity_id || row.record_id || '',
+    before: row.before ?? row.before_data ?? null,
+    after: row.after ?? row.after_data ?? null,
+    changedFields: row.changedFields || row.changed_fields || [],
+    details: row.details || row.metadata || {},
+  };
+}
+
+async function _pbRequireActivityOwner() {
+  const session = window.Auth?.getSession?.();
+  if (!PB_PRIVATE_DATA_SURFACE || session?.role !== 'owner' || (session.status && session.status !== 'active')) {
+    throw new Error('Only the system owner can view activity history.');
+  }
+  return session.id;
+}
+
+Object.assign(window.DB, {
+  async getAdminActivity(filters = {}) {
+    const actor = await _pbRequireActivityOwner();
+    if (window.PB_USE_LOCAL_DATA) return { items: [], actors: [], nextCursor: null, startedAt: null, localOnly: true };
+    const from = _pbActivityDateBound(filters.fromDate);
+    const to = _pbActivityDateBound(filters.toDate, true);
+    if (from && to && from >= to) throw new Error('The end date must be on or after the start date.');
+    const { data, error } = await _sb.rpc('owner_activity_log_list', {
+      p_from: from, p_to: to,
+      p_category: filters.category || null,
+      p_actor_id: filters.actorId || null,
+      p_before_id: filters.cursor || null,
+      p_limit: Math.max(1, Math.min(100, Math.floor(Number(filters.limit) || 30))),
+    });
+    if (error) throw new Error(_extractFnError(error, 'Could not load activity history.'));
+    if (actor !== await _pbRequireActivityOwner()) throw new Error('Your account changed. Refresh activity history.');
+    return { ...data, items: (data?.items || []).map(_pbActivityItem), actors: data?.actors || [], nextCursor: data?.nextCursor == null ? null : String(data.nextCursor) };
+  },
+
+  async getAdminActivityDetail(id) {
+    const actor = await _pbRequireActivityOwner();
+    if (window.PB_USE_LOCAL_DATA) return null;
+    if (!/^\d+$/.test(String(id || ''))) throw new Error('Choose a valid activity record.');
+    const { data, error } = await _sb.rpc('owner_activity_log_detail', { p_id: String(id) });
+    if (error) throw new Error(_extractFnError(error, 'Could not load activity details.'));
+    if (actor !== await _pbRequireActivityOwner()) throw new Error('Your account changed. Refresh activity history.');
+    return _pbActivityItem(data);
+  },
+
+  async recordAdminActivity(event = {}) {
+    const session = window.Auth?.getSession?.();
+    if (window.PB_USE_LOCAL_DATA || !['owner', 'court_owner'].includes(session?.role) || (session.status && session.status !== 'active')) return null;
+    const types = { navigation: 'page_view', export: 'export', interaction: 'action_attempt', result: 'action_result', sign_in: 'sign_in', sign_out: 'sign_out' };
+    const kind = types[event.category];
+    if (!kind) return null;
+    // Never collect form contents, passwords, files, URLs, or arbitrary payloads.
+    const short = (value, max = 120) => String(value || '').replace(/[\x00-\x1f]/g, ' ').slice(0, max);
+    const metadata = {
+      action: short(event.action), entityType: short(event.targetType, 60),
+      entityId: /^[\w.-]{1,100}$/.test(String(event.targetId || '')) ? String(event.targetId) : '',
+      outcome: ['view', 'attempt', 'success', 'failed', 'skipped'].includes(event.outcome) ? event.outcome : 'attempt',
+    };
+    let timer;
+    try {
+      const result = await Promise.race([
+        _sb.rpc('record_admin_activity', { p_event: kind, p_page: short(event.page || location.hash.replace(/^#/, '') || 'admin', 60), p_metadata: metadata }),
+        new Promise(resolve => { timer = setTimeout(() => resolve({ error: true }), 3000); }),
+      ]);
+      if (result?.error) { console.warn('Activity observation could not be recorded. Saved changes are audited by the server.'); return null; }
+      return result?.data ?? null;
+    } catch (_) {
+      console.warn('Activity observation could not be recorded. Saved changes are audited by the server.');
+      return null;
+    } finally { if (timer) clearTimeout(timer); }
+  },
+});
+
+// Record operation outcomes too: a click is only an attempt, not proof of a save.
+// Database triggers remain authoritative even for older clients and direct API calls.
+function _pbInstallActivityObservers(db) {
+  const mutation = /^(?:add|save|delete|update|create|confirm|reject|review|prepare|submit|remove|set|send|dispatch|notify|process|cancel|restore|void|transfer|reschedule|mark|replace|correct|clear|rotate|sync|release|stage|discard|recover|repair)/;
+  for (const [name, operation] of Object.entries(db)) {
+    if (typeof operation !== 'function' || !mutation.test(name) || ['seedDefaultData', 'clearCache'].includes(name)) continue;
+    db[name] = async function (...args) {
+      const session = window.Auth?.getSession?.();
+      const observe = PB_PRIVATE_DATA_SURFACE && !window.PB_USE_LOCAL_DATA && ['owner', 'court_owner'].includes(session?.role);
+      const first = args[0];
+      const id = typeof first === 'string' ? first : (first?.ref || first?.id || first?.bookingRef || '');
+      const record = outcome => observe && window.Auth?.getSession?.()?.id === session.id
+        ? db.recordAdminActivity({ category: 'result', action: name, targetId: id, outcome }) : Promise.resolve(null);
+      try {
+        const result = await operation.apply(this, args);
+        // Legacy void-returning methods do not provide a positive outcome signal.
+        // Their committed changes are still independently recorded by the database.
+        await record(result === false || result?.ok === false || result?.error ? 'failed'
+          : result?.skipped ? 'skipped' : result == null ? 'attempt' : 'success');
+        return result;
+      } catch (error) {
+        await record('failed');
+        throw error;
+      }
+    };
+  }
+}
+_pbInstallActivityObservers(window.DB);
+
 window.Auth = {
 
   // ── Role model ──────────────────────────────────────────
@@ -7671,6 +7795,7 @@ window.Auth = {
     if (error || !data.user) return { ok: false, msg: error?.message || 'Invalid email or password.' };
     this._lastLoginMessage = '';
     const session = await this.refreshSessionFromAuth({ remember });
+    if (session) await DB.recordAdminActivity({ category: 'sign_in', action: 'signIn', outcome: 'success', page: 'login' });
     return session ? { ok: true } : { ok: false, msg: this._lastLoginMessage || 'Account is not active.' };
   },
 
@@ -7693,6 +7818,7 @@ window.Auth = {
   },
 
   async logout() {
+    await DB.recordAdminActivity({ category: 'sign_out', action: 'signOut', outcome: 'attempt' });
     await _sb.auth.signOut();
     sessionStorage.removeItem('pb_session');
     localStorage.removeItem('pb_session');
@@ -7747,14 +7873,23 @@ window.Auth = {
     const sess = this.getSession();
     if (!sess || !sess.email) return { ok: false, msg: 'No active session. Please sign in again.' };
     if (!newPassword || newPassword.length < 6) return { ok: false, msg: 'New password must be at least 6 characters.' };
+    await DB.recordAdminActivity({ category: 'interaction', action: 'changePassword', outcome: 'attempt' });
 
     // Re-authenticate to confirm the current password is correct.
     const { error: authErr } = await _sb.auth.signInWithPassword({ email: sess.email, password: currentPassword });
-    if (authErr) return { ok: false, msg: 'Current password is incorrect.' };
+    if (authErr) {
+      await DB.recordAdminActivity({ category: 'result', action: 'changePassword', outcome: 'failed' });
+      return { ok: false, msg: 'Current password is incorrect.' };
+    }
 
     // Update the password in Supabase Auth.
     const { error: updErr } = await _sb.auth.updateUser({ password: newPassword });
-    if (updErr) return { ok: false, msg: updErr.message || 'Could not update password.' };
+    if (updErr) {
+      await DB.recordAdminActivity({ category: 'result', action: 'changePassword', outcome: 'failed' });
+      return { ok: false, msg: updErr.message || 'Could not update password.' };
+    }
+
+    await DB.recordAdminActivity({ category: 'result', action: 'changePassword', outcome: 'success' });
 
     return { ok: true };
   },

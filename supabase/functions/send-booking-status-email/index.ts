@@ -1,4 +1,4 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createAdminActivityClient, setAdminActivityContext, withAdminActivity } from "../_shared/admin-activity.ts";
 import {
   emailCorsHeaders,
   isAllowedEmailOrigin,
@@ -131,7 +131,7 @@ async function loadCanonicalPaymentTransfer(
   return { ...transfer, reason: reason.slice(0, 1000), amount };
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAdminActivity("send-booking-status-email", async (req) => {
   if (req.method === "OPTIONS") {
     return isAllowedEmailOrigin(req)
       ? new Response(null, { status: 204, headers: emailCorsHeaders(req) })
@@ -151,7 +151,7 @@ Deno.serve(async (req) => {
     if (!supabaseUrl || !serviceRoleKey) {
       throw new Error("Email service database access is not configured");
     }
-    const db = createClient(supabaseUrl, serviceRoleKey, {
+    const db = createAdminActivityClient(req, supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false },
     });
     await requireAdminEmailRequest(req, db);
@@ -170,6 +170,7 @@ Deno.serve(async (req) => {
     ]).has(event)) {
       throw new Error("Invalid booking email event");
     }
+    setAdminActivityContext(req, { action: event, targetType: "booking", targetId: bookingRef });
     const rows = await loadRows(db, bookingRef);
     const paymentReassigned = event === "payment_reassigned";
     const validState = paymentReassigned
@@ -316,4 +317,4 @@ Deno.serve(async (req) => {
       : 500;
     return jsonResponse(req, { ok: false, error: message }, status);
   }
-});
+}, { requireAudit: true }));

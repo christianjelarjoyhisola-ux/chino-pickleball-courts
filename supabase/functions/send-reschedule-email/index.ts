@@ -1,4 +1,4 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createAdminActivityClient, setAdminActivityContext, withAdminActivity } from "../_shared/admin-activity.ts";
 import {
   emailCorsHeaders,
   isAllowedEmailOrigin,
@@ -161,7 +161,7 @@ async function verifiedGroupedPayload(
   };
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAdminActivity("send-reschedule-email", async (req) => {
   if (req.method === "OPTIONS") {
     return isAllowedEmailOrigin(req)
       ? new Response(null, { status: 204, headers: emailCorsHeaders(req) })
@@ -181,7 +181,7 @@ Deno.serve(async (req) => {
     if (!supabaseUrl || !serviceRoleKey) {
       throw new Error("Email service database access is not configured");
     }
-    const db = createClient(supabaseUrl, serviceRoleKey, {
+    const db = createAdminActivityClient(req, supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false },
     });
     await requireAdminEmailRequest(req, db);
@@ -191,6 +191,7 @@ Deno.serve(async (req) => {
       | null;
     if (body && Object.prototype.hasOwnProperty.call(body, "items")) {
       const payload = await verifiedGroupedPayload(db, body);
+      setAdminActivityContext(req, { action: "send_group_reschedule", targetType: "booking", targetId: payload.bookingRef });
       const content = renderGroupedRescheduleEmail(payload);
       const sent = await sendMailerooEmail({
         to: payload.email,
@@ -206,6 +207,7 @@ Deno.serve(async (req) => {
       return jsonResponse(req, { ok: true, id: sent.id });
     }
     const bookingRef = validBookingRef(body?.bookingRef);
+    setAdminActivityContext(req, { action: "send_reschedule", targetType: "booking", targetId: bookingRef });
     const email = String(body?.email || "").trim().toLowerCase();
     if (!isEmailAddress(email)) throw new Error("email is invalid");
 
@@ -296,4 +298,4 @@ Deno.serve(async (req) => {
       : 500;
     return jsonResponse(req, { ok: false, error: message }, status);
   }
-});
+}, { requireAudit: true }));

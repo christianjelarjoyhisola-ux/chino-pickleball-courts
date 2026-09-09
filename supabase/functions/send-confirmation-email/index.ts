@@ -1,4 +1,4 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createAdminActivityClient, setAdminActivityContext, withAdminActivity } from "../_shared/admin-activity.ts";
 import {
   emailCorsHeaders,
   isAdminEmailRequest,
@@ -159,7 +159,7 @@ function verifiedPayload(
   };
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAdminActivity("send-confirmation-email", async (req) => {
   if (req.method === "OPTIONS") {
     return isAllowedEmailOrigin(req)
       ? new Response(null, { status: 204, headers: emailCorsHeaders(req) })
@@ -182,7 +182,7 @@ Deno.serve(async (req) => {
     if (!supabaseUrl || !serviceRoleKey) {
       throw new Error("Email service database access is not configured");
     }
-    db = createClient(supabaseUrl, serviceRoleKey, {
+    db = createAdminActivityClient(req, supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false },
     });
 
@@ -191,6 +191,7 @@ Deno.serve(async (req) => {
       email?: unknown;
     } | null;
     const bookingRef = validBookingRef(body?.bookingRef);
+    setAdminActivityContext(req, { action: "send_confirmation", targetType: "booking", targetId: bookingRef });
     const requestedEmail = String(body?.email || "").trim().toLowerCase();
     if (!isEmailAddress(requestedEmail)) {
       return jsonResponse(
@@ -287,4 +288,4 @@ Deno.serve(async (req) => {
       : 500;
     return jsonResponse(req, { ok: false, error: message }, status);
   }
-});
+}, { requireAudit: true }));

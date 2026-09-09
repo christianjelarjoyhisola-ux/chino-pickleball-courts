@@ -1,4 +1,4 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createAdminActivityClient, setAdminActivityContext, withAdminActivity } from "../_shared/admin-activity.ts";
 
 type Role = "owner" | "court_owner" | "staff" | "host";
 
@@ -74,7 +74,7 @@ async function requireOwner(req: Request, db: any): Promise<OwnerCheck> {
   return { user: userData.user };
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAdminActivity("manage-account", async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -89,7 +89,7 @@ Deno.serve(async (req) => {
     return json({ error: "Supabase service credentials are missing" }, 500);
   }
 
-  const db = createClient(supabaseUrl, serviceRoleKey);
+  const db = createAdminActivityClient(req, supabaseUrl, serviceRoleKey);
   const ownerResult = await requireOwner(req, db);
   if (ownerResult.error) return ownerResult.error;
   const ownerUser = ownerResult.user;
@@ -103,6 +103,9 @@ Deno.serve(async (req) => {
 
   const action = body.action;
   const id = cleanText(body.id);
+  if (["create", "update", "delete"].includes(action || "")) {
+    setAdminActivityContext(req, { action, targetType: "account", targetId: id });
+  }
   const fullName = cleanText(body.fullName);
   const username = cleanText(body.username);
   const email = cleanText(body.email).toLowerCase();
@@ -236,4 +239,4 @@ Deno.serve(async (req) => {
   } catch (err) {
     return json({ error: errMsg(err) }, 500);
   }
-});
+}, { requireAudit: true }));
