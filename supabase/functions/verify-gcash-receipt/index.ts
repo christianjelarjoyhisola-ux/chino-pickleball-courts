@@ -53,6 +53,10 @@ import {
 import { extractReceiptAmount } from "../_shared/receipt-amount.ts";
 import { receiptHasEditorMetadata } from "../_shared/receipt-image-metadata.ts";
 import {
+  type RecipientOcrRegion,
+  rereadGotymeRecipient,
+} from "../_shared/gotyme-recipient-ocr.ts";
+import {
   activeReceiptRole,
   bookingAccessTokenMatches,
   canViewBookingReceipt,
@@ -94,6 +98,7 @@ type OcrResult = {
   text: string;
   originalText?: string;
   layoutApplied?: boolean;
+  recipientRegion?: RecipientOcrRegion;
   confidence: number;
   confidenceSource: "native" | "heuristic" | "none";
   provider: OcrProvider;
@@ -903,6 +908,47 @@ function receiptEvidenceWasVerified(row: Record<string, unknown>): boolean {
     flags.length > 0;
 }
 
+function isOwnerReverificationRequest(
+  body: Record<string, unknown>,
+  hasUpload: boolean,
+): boolean {
+  const allowed = new Set([
+    "action",
+    "bookingRef",
+    "provider",
+    "stagedReceiptPath",
+    "expectedReceiptHash",
+    "expectedReceiptVerifiedAt",
+  ]);
+  const expectedTime = body.expectedReceiptVerifiedAt;
+  return !hasUpload && Object.keys(body).every((key) => allowed.has(key)) &&
+    (body.provider === undefined || body.provider === "gotyme") &&
+    /^[0-9a-f]{64}$/.test(String(body.expectedReceiptHash || "")) &&
+    typeof body.stagedReceiptPath === "string" &&
+    body.stagedReceiptPath.length > 0 &&
+    Object.prototype.hasOwnProperty.call(body, "expectedReceiptVerifiedAt") &&
+    (expectedTime === null ||
+      (typeof expectedTime === "string" && expectedTime.length > 0 &&
+        Number.isFinite(Date.parse(expectedTime))));
+}
+
+function canReverifyBookingReceipt(
+  caller: ReceiptCaller | null,
+  row: Record<string, unknown>,
+  body: Record<string, unknown>,
+): boolean {
+  return !!caller && ["owner", "court_owner"].includes(
+    activeReceiptRole(caller.account),
+  ) && row.payment_method === "gotyme" && row.status === "pending" &&
+    row.payment_status === "for_verification" &&
+    row.receipt_status === "manual_review" &&
+    row.receipt_image_hash === body.expectedReceiptHash &&
+    row.receipt_image_url === body.stagedReceiptPath &&
+    (body.expectedReceiptVerifiedAt === null
+      ? row.receipt_verified_at == null
+      : row.receipt_verified_at === body.expectedReceiptVerifiedAt);
+}
+
 function receiptMetadataKey(row: Record<string, unknown>): string {
   return JSON.stringify([
     String(row.payment_method || "").toLowerCase(),
@@ -1046,7 +1092,7 @@ function ocrCriticalGaps(
     const gaps: string[] = [];
     if (
       !receipt.reference.value ||
-      receipt.reference.typedMatch !== "match"
+      (typedRef && receipt.reference.typedMatch !== "match")
     ) gaps.push("reference");
     if (
       receipt.amount.amount == null || !receipt.amount.reliable ||
@@ -1936,7 +1982,19 @@ Deno.serve(async (req) => {
     }
     return json({ ok: true, url: signed.signedUrl });
   }
-  if (action !== "verify") return json({ error: "Unsupported action" }, 400);
+  if (action !== "verify" && action !== "reverify") {
+    return json({ error: "Unsupported action" }, 400);
+  }
+  const isReverification = action === "reverify";
+  if (
+    isReverification && !isOwnerReverificationRequest(body, !!uploadedImage)
+  ) {
+    return json({
+      error:
+        "Rechecking requires the exact stored receipt hash, path and previous verification time. New uploads and booking changes are not accepted.",
+      code: "RECEIPT_REVERIFY_REQUEST_INVALID",
+    }, 400);
+  }
 
   let receiptLeaseKey = "";
   let receiptLeaseToken = "";
@@ -1945,7 +2003,9 @@ Deno.serve(async (req) => {
   try {
     const bookingRef = String(body.bookingRef || "");
     const bookingAccessToken = String(body.bookingAccessToken || "");
-    let provider = normalizedProvider(String(body.provider || "gcash"));
+    let provider = normalizedProvider(
+      String(body.provider || (isReverification ? "gotyme" : "gcash")),
+    );
     if (!provider) {
       return json({
         error: "Unsupported payment provider.",
@@ -2015,6 +2075,19 @@ Deno.serve(async (req) => {
       console.error("receipt caller lookup failed:", errMsg(error));
       return json({ error: "Receipt authorization could not be checked" }, 500);
     }
+    if (
+      isReverification &&
+      (!caller ||
+        !["owner", "court_owner"].includes(activeReceiptRole(caller.account)))
+    ) {
+      return json({
+        error: "Only an active owner may recheck a stored receipt.",
+        code: "RECEIPT_REVERIFY_FORBIDDEN",
+      }, 403);
+    }
+    if (isReverification && !persistedRow) {
+      return json({ error: "Booking not found" }, 404);
+    }
 
     let booking: Record<string, unknown>;
     let bookingMutationScope: BookingMutationScope = {};
@@ -2062,6 +2135,15 @@ Deno.serve(async (req) => {
         }
       }
       delete booking.customer_access_token_hash;
+      if (
+        isReverification && !canReverifyBookingReceipt(caller, booking, body)
+      ) {
+        return json({
+          error:
+            "This receipt changed or is no longer awaiting review. Refresh the booking before rechecking.",
+          code: "RECEIPT_REVERIFY_STALE",
+        }, 409);
+      }
       const persistedStatus = String(booking.status || "");
       const persistedPaymentStatus = String(booking.payment_status || "");
       const terminal =
@@ -2249,7 +2331,7 @@ Deno.serve(async (req) => {
       const { data: currentReceiptRow, error: currentReceiptError } = await db
         .from("bookings")
         .select(
-          "status,payment_status,receipt_image_url,receipt_image_hash,receipt_phash,receipt_status,receipt_flags,receipt_extracted,receipt_confidence,receipt_verified_at",
+          "status,payment_status,payment_method,booking_group_ref,receipt_image_url,receipt_image_hash,receipt_phash,receipt_status,receipt_flags,receipt_extracted,receipt_confidence,receipt_verified_at",
         )
         .eq("ref", bookingRef)
         .maybeSingle();
@@ -2264,6 +2346,27 @@ Deno.serve(async (req) => {
         ...booking,
         ...(currentReceiptRow as Record<string, unknown>),
       };
+      if (isReverification) {
+        const currentGroup = await loadScopedReceiptBookingRows(
+          db,
+          booking,
+          bookingMutationScope,
+        );
+        if (
+          String(booking.booking_group_ref || bookingRef) !== receiptLeaseKey ||
+          !canReverifyBookingReceipt(caller, booking, body) ||
+          currentGroup.length === 0 ||
+          !currentGroup.every((row) =>
+            canReverifyBookingReceipt(caller, row, body)
+          )
+        ) {
+          return json({
+            error:
+              "This receipt or booking group changed while rechecking started. Refresh the booking.",
+            code: "RECEIPT_REVERIFY_STALE",
+          }, 409);
+        }
+      }
 
       const currentStatus = String(booking.status || "");
       const currentPaymentStatus = String(booking.payment_status || "");
@@ -2274,7 +2377,10 @@ Deno.serve(async (req) => {
         ["paid", "downpayment_paid", "deposit_retained", "rejected"].includes(
           currentPaymentStatus,
         );
-      if (terminalAfterLease || receiptEvidenceWasVerified(booking)) {
+      if (
+        terminalAfterLease ||
+        (receiptEvidenceWasVerified(booking) && !isReverification)
+      ) {
         const storedReceiptStatus = String(booking.receipt_status || "");
         const finalStatus = storedReceiptStatus === "rejected" ||
             currentStatus === "cancelled" || currentPaymentStatus === "rejected"
@@ -2414,7 +2520,9 @@ Deno.serve(async (req) => {
       }, 500);
     }
 
-    if (hasPersistedBooking) {
+    // Owner rechecks keep the previous evidence visible until the existing
+    // lease-protected finalizer atomically commits a fresh result and audit.
+    if (hasPersistedBooking && !isReverification) {
       let safeStateQuery = bookingUpdateQuery(
         db,
         booking,
@@ -2594,6 +2702,7 @@ Deno.serve(async (req) => {
     let ocrText = "";
     let ocrOriginalText = "";
     let ocrLayoutApplied = false;
+    let ocrRecipientRegion: RecipientOcrRegion | undefined;
     let ocrConfidence = 0;
     let ocrConfidenceSource: OcrResult["confidenceSource"] = "none";
     let ocrProvider: OcrResult["provider"] = "none";
@@ -2606,6 +2715,7 @@ Deno.serve(async (req) => {
       ocrText = ocr.text;
       ocrOriginalText = ocr.originalText ?? ocr.text;
       ocrLayoutApplied = ocr.layoutApplied === true;
+      ocrRecipientRegion = ocr.recipientRegion;
       ocrConfidence = ocr.confidence;
       ocrConfidenceSource = ocr.confidenceSource;
       ocrProvider = ocr.provider;
@@ -2631,12 +2741,50 @@ Deno.serve(async (req) => {
     }
 
     // ── field extraction ────────────────────────────────────────────────────
-    const providerParse: ProviderReceiptParse | null =
+    let providerParse: ProviderReceiptParse | null =
       isDedicatedReceiptProvider(provider)
         ? parseProviderReceipt(provider, ocrText, {
           typedReference: typedRef,
         })
         : null;
+    let recipientRefinement:
+      | Awaited<ReturnType<typeof rereadGotymeRecipient>>
+      | null = null;
+    if (
+      providerParse?.provider === "gotyme" &&
+      ocrConfidenceSource === "native" && ocrConfidence >= 0.9
+    ) {
+      const primaryRecipient = providerParse.receipt.recipient;
+      const trustedAccount = String(
+        settings.gcash_qr_receipt_destination_token ||
+          settings.bdopay_receipt_destination_token || "",
+      ).trim().toUpperCase();
+      const suffix = primaryRecipient.accountSuffix || "";
+      // Use configured identity only to decide whether a focused reread is
+      // useful. It is never supplied to OCR or the correction decision.
+      if (
+        primaryRecipient.accountVisibility === "masked" &&
+        /[O0]/.test(suffix) &&
+        /^[A-Z0-9]{8,40}$/.test(trustedAccount) &&
+        !trustedAccount.endsWith(suffix)
+      ) {
+        recipientRefinement = await rereadGotymeRecipient(
+          bytes,
+          ocrRecipientRegion,
+          providerParse.receipt,
+          visionKey,
+        );
+        if (recipientRefinement.accepted && recipientRefinement.changed) {
+          providerParse = {
+            ...providerParse,
+            receipt: {
+              ...providerParse.receipt,
+              recipient: recipientRefinement.recipient,
+            },
+          };
+        }
+      }
+    }
     const gcashParse: GcashReceiptParse | null =
       providerParse?.provider === "gcash" ? providerParse.receipt : null;
     const bankParse = providerParse && providerParse.provider !== "gcash"
@@ -2706,11 +2854,12 @@ Deno.serve(async (req) => {
           amountTolerance: 0.01,
           expectedRecipientNumber: expectedNumber,
           expectedRecipientName: expectedName,
-          expectedRecipientAccount: provider === "bdopay" || provider === "bpi" ||
+          expectedRecipientAccount:
+            provider === "bdopay" || provider === "bpi" ||
               provider === "gotyme" || provider === "maribank"
-            ? settings.gcash_qr_receipt_destination_token ||
-              settings.bdopay_receipt_destination_token || ""
-            : "",
+              ? settings.gcash_qr_receipt_destination_token ||
+                settings.bdopay_receipt_destination_token || ""
+              : "",
           bookingStartedAt: bookingStartedInstant?.toISOString() || null,
           bookingStartedDate,
           paymentWindowMinutes: PAYMENT_WINDOW_MINUTES,
@@ -2950,9 +3099,11 @@ Deno.serve(async (req) => {
         !providerParse.receipt.indicators.competingProviderBrand
       : false;
     const referenceMatch =
-      (providerParse?.receipt.reference.typedMatch === "match" ||
-        (!typedRef && providerParse?.receipt.reference.typedMatch === "not_provided" &&
-          !!extractedRef && providerParse.receipt.reference.confidence === "high"));
+      providerParse?.receipt.reference.typedMatch === "match" ||
+      (!typedRef &&
+        providerParse?.receipt.reference.typedMatch === "not_provided" &&
+        !!extractedRef &&
+        providerParse.receipt.reference.confidence === "high");
     const amountMatch = extractedAmount != null && expectedAmount > 0 &&
       closeMoney(extractedAmount, expectedAmount) &&
       amountExtraction?.reliable === true &&
@@ -3099,6 +3250,14 @@ Deno.serve(async (req) => {
       route,
       parserVersion: providerParse?.parserVersion || "legacy",
       verifierVersion: "receipt_evidence_v1",
+      ...(isReverification
+        ? {
+          reverification: {
+            requestedBy: caller?.userId,
+            previousReceiptVerifiedAt: body.expectedReceiptVerifiedAt,
+          },
+        }
+        : {}),
       verification,
       gcash: gcashParse
         ? {
@@ -3142,6 +3301,7 @@ Deno.serve(async (req) => {
           },
           timestamp: bankParse.timestamp,
           recipient: bankParse.recipient,
+          ...(recipientRefinement ? { recipientRefinement } : {}),
           indicators: bankParse.indicators,
           recipientComparison: providerVerification?.provider === "bpi" ||
               providerVerification?.provider === "maya" ||
@@ -3330,7 +3490,9 @@ Deno.serve(async (req) => {
 
         if (reviewResponse.error) {
           finalUpdateError = errMsg(reviewResponse.error);
-          if (!flags.includes("REVIEW_FINALIZATION_FAILED")) flags.push("REVIEW_FINALIZATION_FAILED");
+          if (!flags.includes("REVIEW_FINALIZATION_FAILED")) {
+            flags.push("REVIEW_FINALIZATION_FAILED");
+          }
           console.error(
             "Digital receipt review finalization failed:",
             finalUpdateError,
@@ -3524,7 +3686,9 @@ Deno.serve(async (req) => {
     }
 
     // ── alert admin on anything needing a human ─────────────────────────────
-    if (result === "manual_review" && hasPersistedBooking) {
+    if (
+      result === "manual_review" && hasPersistedBooking && !isReverification
+    ) {
       const paymentLabel = String(booking.payment_method || "digital")
         .toUpperCase();
       const displayRef = String(

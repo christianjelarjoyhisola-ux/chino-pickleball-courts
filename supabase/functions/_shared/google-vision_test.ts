@@ -4,6 +4,7 @@ import {
   googleVisionConfidenceDetails,
   googleVisionLayoutText,
   googleVisionOcr,
+  googleVisionRecipientRegion,
   receiptImageDimensions,
   receiptImageSafeToDecode,
 } from "./google-vision.ts";
@@ -141,6 +142,82 @@ Deno.test("sends the Vision key in a header and builds one OCR request", async (
   assertEquals(result.text, "CHINO receipt", "OCR text");
   assertEquals(result.confidence, 0.97, "OCR confidence");
   assertEquals(result.confidenceSource, "native", "OCR confidence source");
+  assertEquals(
+    JSON.stringify(requestBody.requests[0].imageContext),
+    JSON.stringify({ languageHints: ["en"] }),
+    "default document request remains unchanged",
+  );
+});
+
+Deno.test("TEXT_DETECTION explicitly requests documented native confidence", async () => {
+  let body: Record<string, unknown> = {};
+  const fetcher = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+    body = JSON.parse(String(init?.body));
+    return Response.json({
+      responses: [{
+        fullTextAnnotation: {
+          text: "Observed recipient",
+          pages: [{ confidence: 0.96 }],
+        },
+      }],
+    });
+  }) as typeof fetch;
+  const result = await googleVisionOcr("test-key", "QUJD", {
+    featureType: "TEXT_DETECTION",
+    fetcher,
+  });
+  const requests = body.requests as Array<Record<string, unknown>>;
+  assertEquals(
+    JSON.stringify(requests[0].features),
+    JSON.stringify([{ type: "TEXT_DETECTION", maxResults: 1 }]),
+    "one alternative feature",
+  );
+  assertEquals(
+    JSON.stringify(requests[0].imageContext),
+    JSON.stringify({
+      languageHints: ["en"],
+      textDetectionParams: { enableTextDetectionConfidenceScore: true },
+    }),
+    "exact REST confidence parameter",
+  );
+  assertEquals(result.text, "Observed recipient", "observed text unchanged");
+  assertEquals(result.confidence, 0.96, "native confidence retained");
+  assertEquals(
+    result.confidenceSource,
+    "native",
+    "confidence provenance retained",
+  );
+});
+
+Deno.test("OCR timeout includes a stalled response body after headers arrive", async () => {
+  let signal: AbortSignal | null | undefined;
+  let bodyStarted = false;
+  const fetcher = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+    signal = init?.signal;
+    return {
+      ok: true,
+      status: 200,
+      json: () => {
+        bodyStarted = true;
+        return new Promise(() => {});
+      },
+    } as unknown as Response;
+  }) as typeof fetch;
+  let message = "";
+  const started = Date.now();
+  try {
+    await googleVisionOcr("test-key", "QUJD", { fetcher, timeoutMs: 20 });
+  } catch (error) {
+    message = error instanceof Error ? error.message : String(error);
+  }
+  assert(bodyStarted, "response headers arrived and JSON body read started");
+  assertEquals(
+    message,
+    "Google Vision request timed out",
+    "body deadline error",
+  );
+  assert(signal?.aborted, "underlying fetch is aborted at its deadline");
+  assert(Date.now() - started < 2000, "stalled JSON cannot run indefinitely");
 });
 
 Deno.test("surfaces a bounded Google Vision API error", async () => {
@@ -492,5 +569,120 @@ Deno.test("supports documented zero coordinates and normalized word boxes", () =
     googleVisionLayoutText(annotation, "Amount\nP265.00"),
     "Amount P265.00",
     "zero axis values are valid",
+  );
+});
+
+function recipientGeometry(extraWords: ReturnType<typeof visionWord>[] = []) {
+  const words = [
+    visionWord("Transferred", 350, 50),
+    visionWord("To", 20, 200),
+    visionWord("KR****E L** C*", 450, 198),
+    visionWord("****9W07", 500, 250),
+    visionWord("G-Xchange, Inc (GCash)", 390, 300),
+    visionWord("From", 20, 400),
+    visionWord("SENDER E*****", 450, 400),
+    ...extraWords,
+  ];
+  return {
+    words,
+    annotation: { pages: [visionPage(words)] },
+    text: words.map((word) =>
+      word.symbols.map((symbol) => symbol.text).join("")
+    ).join("\n"),
+  };
+}
+
+Deno.test("recipient crop geometry encloses observed To evidence and excludes From", async () => {
+  const { annotation, text } = recipientGeometry();
+  const region = googleVisionRecipientRegion(annotation, text);
+  assert(region, "unique complete recipient region is found");
+  assert(
+    region.x <= 20 && region.y <= 198,
+    "To label and name top are enclosed",
+  );
+  assert(
+    region.x + region.width >= 558,
+    "entire name and account are enclosed",
+  );
+  assert(region.y + region.height >= 320, "GCash destination line is enclosed");
+  assert(region.y + region.height < 400, "sender section is excluded");
+  assert(
+    region.x >= 0 && region.y >= 0 && region.x + region.width <= 1000 &&
+      region.y + region.height <= 2000,
+    "crop stays inside image pixels",
+  );
+  const fetcher = (async () =>
+    Response.json({
+      responses: [{ fullTextAnnotation: { ...annotation, text } }],
+    })) as typeof fetch;
+  const result = await googleVisionOcr("test-key", "QUJD", { fetcher });
+  assertEquals(
+    JSON.stringify(result.recipientRegion),
+    JSON.stringify(region),
+    "OCR output exposes bounded region only",
+  );
+  assertEquals(result.text, text, "original evidence remains unchanged");
+});
+
+Deno.test("recipient crop rejects ambiguous anchors, missing evidence, and incomplete geometry", () => {
+  const valid = recipientGeometry();
+  const original = (words: ReturnType<typeof visionWord>[]) =>
+    words.map((word) => word.symbols.map((s) => s.text).join("")).join("\n");
+  const invalidRows = [
+    recipientGeometry([visionWord("To", 20, 600)]).words,
+    recipientGeometry([visionWord("From", 20, 600)]).words,
+    valid.words.filter((word) =>
+      word.symbols.map((s) => s.text).join("") !== "To"
+    ),
+    valid.words.filter((word) =>
+      word.symbols.map((s) => s.text).join("") !== "From"
+    ),
+    valid.words.filter((word) =>
+      !word.symbols.map((s) => s.text).join("").includes("GCash")
+    ),
+    valid.words.filter((word) =>
+      !word.symbols.map((s) => s.text).join("").includes("9W07")
+    ),
+    valid.words.filter((word) =>
+      !word.symbols.map((s) => s.text).join("").startsWith("KR")
+    ),
+    recipientGeometry([visionWord("****4ABC", 500, 350)]).words,
+    valid.words.map((word) =>
+      word.symbols.map((s) => s.text).join("") === "From"
+        ? visionWord("From", 20, 100)
+        : word
+    ),
+  ];
+  for (const words of invalidRows) {
+    assertEquals(
+      googleVisionRecipientRegion(
+        { pages: [visionPage(words)] },
+        original(words),
+      ),
+      undefined,
+      "uncertain region must not be cropped",
+    );
+  }
+  assertEquals(
+    googleVisionRecipientRegion({
+      pages: [visionPage(valid.words), visionPage(valid.words)],
+    }, valid.text + "\n" + valid.text),
+    undefined,
+    "multiple pages are not a single image crop",
+  );
+  assertEquals(
+    googleVisionRecipientRegion(
+      valid.annotation,
+      valid.text + "\nUnrepresented evidence",
+    ),
+    undefined,
+    "incomplete word hierarchy cannot define a crop",
+  );
+  const malformed = structuredClone(valid.annotation);
+  malformed.pages[0].blocks[0].paragraphs[0].words[3].boundingBox.vertices = [];
+  assertEquals(
+    googleVisionRecipientRegion(malformed, valid.text),
+    undefined,
+    "invalid account geometry cannot be cropped",
   );
 });

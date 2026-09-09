@@ -72,7 +72,7 @@ test('GoTyme QR account support does not relax GCash or other bank checks', () =
 
 test('configured QR destination token is supplied to both bank parsers and recorded in the audit', () => {
   for (const property of ['expectedRecipientAccount', 'expectedReceiverAccount']) {
-    const accountExpression = edge.match(new RegExp(`${property}: (provider === "bdopay"[\\s\\S]*?)\\n\\s*: (?:""|null),`));
+    const accountExpression = edge.match(new RegExp(`${property}:\\s*(provider === "bdopay"[\\s\\S]*?)\\n\\s*: (?:""|null),`));
     assert.ok(accountExpression, property);
     for (const provider of ['gotyme', 'maribank']) {
       const result = vm.runInNewContext(accountExpression[1] + '\n: null', {
@@ -148,4 +148,89 @@ test('both settlement paths and fallback audit preserve untouched Google OCR', (
       ocrOriginalText: 'Google original', ocrText: 'Layout used for parsing',
     }), 'Google original');
   }
+});
+
+function reverifyHelpers() {
+  const start = edge.indexOf('function isOwnerReverificationRequest(');
+  const end = edge.indexOf('\nfunction receiptMetadataKey(', start);
+  assert.ok(start > 0 && end > start);
+  const source = edge.slice(start, end)
+    .replace(/function isOwnerReverificationRequest\([\s\S]*?\): boolean/, 'function isOwnerReverificationRequest(body, hasUpload)')
+    .replace(/function canReverifyBookingReceipt\([\s\S]*?\): boolean/, 'function canReverifyBookingReceipt(caller, row, body)');
+  return vm.runInNewContext(source + '\n({ isOwnerReverificationRequest, canReverifyBookingReceipt });', {
+    activeReceiptRole: account => account?.status === 'active' ? String(account.role || '').toLowerCase() : '',
+  });
+}
+
+const reverifyRequest = {
+  action: 'reverify', bookingRef: 'REVIEW-TEST',
+  stagedReceiptPath: `REVIEW-TEST/${'a'.repeat(64)}.png`,
+  expectedReceiptHash: 'a'.repeat(64),
+  expectedReceiptVerifiedAt: '2026-09-09T06:00:00.000Z',
+};
+const reviewedBooking = {
+  payment_method: 'gotyme', status: 'pending', payment_status: 'for_verification',
+  receipt_status: 'manual_review', receipt_image_hash: reverifyRequest.expectedReceiptHash,
+  receipt_image_url: reverifyRequest.stagedReceiptPath,
+  receipt_verified_at: reverifyRequest.expectedReceiptVerifiedAt,
+  receipt_flags: ['RECEIVER_ACCOUNT_MISMATCH'], receipt_extracted: { amount: 265 },
+};
+
+test('owner rechecks require an exact stored checkpoint and reject new evidence or booking changes', () => {
+  const { isOwnerReverificationRequest } = reverifyHelpers();
+  assert.equal(isOwnerReverificationRequest(reverifyRequest, false), true);
+  assert.equal(isOwnerReverificationRequest({ ...reverifyRequest, expectedReceiptVerifiedAt: null }, false), true);
+  assert.equal(isOwnerReverificationRequest(reverifyRequest, true), false, 'uploaded multipart image');
+  for (const forbidden of ['imageBase64', 'imageFile', 'bookingData', 'bookingAccessToken', 'created_at', 'paymentMethod']) {
+    assert.equal(isOwnerReverificationRequest({ ...reverifyRequest, [forbidden]: 'untrusted' }, false), false, forbidden);
+  }
+  for (const overrides of [
+    { expectedReceiptHash: '' }, { expectedReceiptHash: 'z'.repeat(64) },
+    { expectedReceiptVerifiedAt: undefined }, { expectedReceiptVerifiedAt: 'invalid' },
+    { stagedReceiptPath: '' }, { provider: 'gcash' },
+  ]) assert.equal(isOwnerReverificationRequest({ ...reverifyRequest, ...overrides }, false), false);
+  const missingTime = { ...reverifyRequest };
+  delete missingTime.expectedReceiptVerifiedAt;
+  assert.equal(isOwnerReverificationRequest(missingTime, false), false, 'missing timestamp expectation');
+});
+
+test('only active owners can recheck a pending GoTyme receipt', () => {
+  const { canReverifyBookingReceipt } = reverifyHelpers();
+  for (const role of ['owner', 'court_owner']) {
+    assert.equal(canReverifyBookingReceipt({ account: { role, status: 'active' } }, reviewedBooking, reverifyRequest), true, role);
+    assert.equal(canReverifyBookingReceipt({ account: { role, status: 'inactive' } }, reviewedBooking, reverifyRequest), false, `inactive ${role}`);
+  }
+  for (const role of ['staff', 'host', 'customer', 'anon', 'service_role']) {
+    assert.equal(canReverifyBookingReceipt({ account: { role, status: 'active' } }, reviewedBooking, reverifyRequest), false, role);
+  }
+  assert.equal(canReverifyBookingReceipt(null, reviewedBooking, reverifyRequest), false);
+});
+
+test('reverification refuses terminal bookings, stale snapshots, and changed methods or receipts', () => {
+  const { canReverifyBookingReceipt } = reverifyHelpers();
+  const owner = { account: { role: 'owner', status: 'active' } };
+  for (const changed of [
+    ...['confirmed', 'cancelled', 'completed', 'forfeited', 'verifying'].map(status => ({ status })),
+    ...['paid', 'downpayment_paid', 'deposit_retained', 'rejected', 'unpaid'].map(payment_status => ({ payment_status })),
+    { payment_method: 'gcash' }, { receipt_status: 'auto_approved' },
+    { receipt_image_hash: 'b'.repeat(64) }, { receipt_image_url: 'ANOTHER/receipt.png' },
+    { receipt_verified_at: '2026-09-09T06:01:00.000Z' }, { receipt_verified_at: null },
+  ]) assert.equal(canReverifyBookingReceipt(owner, { ...reviewedBooking, ...changed }, reverifyRequest), false, JSON.stringify(changed));
+});
+
+test('reverification rechecks the complete group after claiming its lease and preserves old evidence until finalization', () => {
+  assert.match(edge, /currentGroup\.every\(\(row\) =>\s*canReverifyBookingReceipt\(caller, row, body\)\s*\)/);
+  assert.match(edge, /String\(booking\.booking_group_ref \|\| bookingRef\) !== receiptLeaseKey/);
+  assert.match(edge, /if \(hasPersistedBooking && !isReverification\) \{\s*let safeStateQuery = bookingUpdateQuery/);
+  const cachedGate = 'terminalAfterLease || (receiptEvidenceWasVerified(booking) && !isReverification)';
+  assert.ok(edge.replace(/\s/g, '').includes(cachedGate.replace(/\s/g, '')));
+  const runGate = change => vm.runInNewContext(cachedGate, {
+    terminalAfterLease: false, receiptEvidenceWasVerified: () => true,
+    booking: reviewedBooking, isReverification: false, ...change,
+  });
+  assert.equal(runGate({}), true, 'ordinary requests keep the cached result');
+  assert.equal(runGate({ isReverification: true }), false, 'authorized rechecks can continue');
+  assert.equal(runGate({ isReverification: true, terminalAfterLease: true }), true, 'terminal state never bypassed');
+  assert.match(edge.replace(/\s+/g, ' '), /if \(\s*result === "manual_review" && hasPersistedBooking && !isReverification\s*\)/,
+    'unchanged manual review does not send another review notification');
 });

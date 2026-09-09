@@ -218,8 +218,8 @@ test('Telegram endpoint authorizes active accounts and sends review-only alerts'
   assert.match(telegramEdge, /method !== "cash"/);
   assert.match(telegramEdge, /if \(!eventMatchesCanonicalState\(event, rows\)\)/);
   assert.match(
-    receiptEdge,
-    /if \(result === "manual_review" && hasPersistedBooking\) \{[\s\S]*?await sendTelegram/
+    receiptEdge.replace(/\s+/g, ' '),
+    /if \(\s*result === "manual_review" && hasPersistedBooking && !isReverification\s*\) \{[\s\S]*?await sendTelegram/
   );
   assert.match(receiptEdge, /function shortTelegramFlags[\s\S]*?flags\.slice\(0, 2\)/);
   assert.match(telegramEdge, /Open the CHINO dashboard/);

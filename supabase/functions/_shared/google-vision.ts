@@ -6,6 +6,7 @@ export type ReceiptImageContentType =
 export type GoogleVisionOcrResult = {
   text: string;
   layoutText?: string;
+  recipientRegion?: ReceiptImageRegion;
   confidence: number;
   confidenceSource: "native" | "heuristic" | "none";
 };
@@ -13,6 +14,11 @@ export type GoogleVisionOcrResult = {
 export type ReceiptImageDimensions = {
   width: number;
   height: number;
+};
+
+export type ReceiptImageRegion = ReceiptImageDimensions & {
+  x: number;
+  y: number;
 };
 
 const GOOGLE_VISION_ANNOTATE_URL =
@@ -234,10 +240,20 @@ export function googleVisionConfidenceDetails(
 type LayoutWord = {
   text: string;
   left: number;
+  right: number;
   top: number;
   bottom: number;
   order: number;
 };
+
+type LayoutRow = {
+  top: number;
+  bottom: number;
+  words: LayoutWord[];
+  text?: string;
+};
+
+type LayoutResult = { text: string; pageRows: LayoutRow[][] };
 
 function record(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === "object" && !Array.isArray(value)
@@ -312,6 +328,7 @@ function layoutWord(
   return {
     text,
     left: Math.min(...points.map((point) => point.x)),
+    right: Math.max(...points.map((point) => point.x)),
     top,
     bottom,
     order,
@@ -324,15 +341,14 @@ function layoutWord(
  * Uses the documented Page -> Block -> Paragraph -> Word -> Symbol hierarchy:
  * https://docs.cloud.google.com/vision/docs/reference/rest/v1/AnnotateImageResponse#Word
  */
-export function googleVisionLayoutText(
+function googleVisionLayout(
   annotation: Record<string, unknown> | null,
   originalText: string,
-): string | undefined {
+): LayoutResult | undefined {
   if (
     !annotation || !originalText.trim() || !Array.isArray(annotation.pages) ||
     !annotation.pages.length
   ) return undefined;
-  type LayoutRow = { top: number; bottom: number; words: LayoutWord[] };
   const pageRows: LayoutRow[][] = [];
   const observedWords: LayoutWord[] = [];
   for (const rawPage of annotation.pages) {
@@ -419,10 +435,10 @@ export function googleVisionLayoutText(
       offset += word.text.replace(/\s/g, "").length;
     });
   }
-  return pageRows.map((rows) =>
+  const text = pageRows.map((rows) =>
     rows.map((row) => {
       row.words.sort((a, b) => a.left - b.left || a.order - b.order);
-      return row.words.map((word, index) => {
+      row.text = row.words.map((word, index) => {
         const previous = row.words[index - 1];
         const separator = !previous ||
             (joinsPrevious.has(word) && previous.order + 1 === word.order)
@@ -430,13 +446,112 @@ export function googleVisionLayoutText(
           : " ";
         return separator + word.text;
       }).join("");
+      return row.text;
     }).join("\n")
   ).join("\n\f\n");
+  return { text, pageRows };
 }
 
-type GoogleVisionOcrOptions = {
+export function googleVisionLayoutText(
+  annotation: Record<string, unknown> | null,
+  originalText: string,
+): string | undefined {
+  return googleVisionLayout(annotation, originalText)?.text;
+}
+
+function recipientRegionFromLayout(
+  annotation: Record<string, unknown> | null,
+  layout: LayoutResult | undefined,
+): ReceiptImageRegion | undefined {
+  if (
+    !layout || layout.pageRows.length !== 1 || !Array.isArray(annotation?.pages)
+  ) return undefined;
+  const page = record(annotation.pages[0]);
+  const width = page?.width;
+  const height = page?.height;
+  if (
+    typeof width !== "number" || !Number.isInteger(width) || width <= 0 ||
+    typeof height !== "number" || !Number.isInteger(height) || height <= 0
+  ) return undefined;
+  const rows = layout.pageRows[0];
+  const toRows = rows.filter((row) => /^to(?:\s|:|$)/i.test(row.text || ""));
+  const fromRows = rows.filter((row) =>
+    /^from(?:\s|:|$)/i.test(row.text || "")
+  );
+  if (toRows.length !== 1 || fromRows.length !== 1) return undefined;
+  const to = toRows[0];
+  const from = fromRows[0];
+  const fromTop = Math.min(...from.words.map((word) => word.top));
+  const toBottom = Math.max(...to.words.map((word) => word.bottom));
+  if (
+    fromTop <= toBottom || Math.abs(to.words[0].left - from.words[0].left) >
+      Math.max(to.bottom - to.top, from.bottom - from.top) * 2
+  ) return undefined;
+  const regionRows = rows.slice(rows.indexOf(to), rows.indexOf(from));
+  if (
+    regionRows.length < 3 ||
+    !regionRows.some((row) => /\bg\s*cash\b/i.test(row.text || ""))
+  ) return undefined;
+  const accountRows = regionRows.filter((row) => {
+    const compact = (row.text || "").replace(/\s/g, "");
+    const match = compact.match(
+      /^(?:(?:account|acct)(?:number|no\.?)?:?)?[*•●·xX]{2,}([A-Z0-9]{4,})$/i,
+    );
+    return Boolean(match && /\d/.test(match[1]));
+  });
+  if (accountRows.length !== 1) return undefined;
+  const namePresent = regionRows.some((row) => {
+    if (accountRows.includes(row) || /\bg\s*cash\b/i.test(row.text || "")) {
+      return false;
+    }
+    const name = (row.text || "").replace(/^to(?:\s|:)+/i, "").trim();
+    return /[A-Z]/i.test(name) && /[*•●·]/.test(name);
+  });
+  if (!namePresent) return undefined;
+  const words = regionRows.flatMap((row) => row.words);
+  const left = Math.min(...words.map((word) => word.left));
+  const right = Math.max(...words.map((word) => word.right));
+  const top = Math.min(...words.map((word) => word.top));
+  const bottom = Math.max(...words.map((word) => word.bottom));
+  if (bottom >= fromTop) return undefined;
+  const padding = Math.max(
+    2,
+    Math.ceil(Math.max(to.bottom - to.top, from.bottom - from.top) * 0.5),
+  );
+  const previous = rows[rows.indexOf(to) - 1];
+  const previousBottom = previous
+    ? Math.max(...previous.words.map((word) => word.bottom))
+    : 0;
+  if (previous && previousBottom >= top) return undefined;
+  const x = Math.max(0, Math.floor(left - padding));
+  const y = Math.max(
+    0,
+    Math.floor(Math.max(top - padding, (previousBottom + top) / 2)),
+  );
+  const endX = Math.min(width, Math.ceil(right + padding));
+  const endY = Math.min(
+    height,
+    Math.ceil(Math.min(bottom + padding, (bottom + fromTop) / 2)),
+  );
+  return endX > x && endY > y
+    ? { x, y, width: endX - x, height: endY - y }
+    : undefined;
+}
+
+export function googleVisionRecipientRegion(
+  annotation: Record<string, unknown> | null,
+  originalText: string,
+): ReceiptImageRegion | undefined {
+  return recipientRegionFromLayout(
+    annotation,
+    googleVisionLayout(annotation, originalText),
+  );
+}
+
+export type GoogleVisionOcrOptions = {
   fetcher?: typeof fetch;
   timeoutMs?: number;
+  featureType?: "DOCUMENT_TEXT_DETECTION" | "TEXT_DETECTION";
 };
 
 export async function googleVisionOcr(
@@ -452,30 +567,61 @@ export async function googleVisionOcr(
     ? base64.slice(comma + 1)
     : base64;
   if (!content) throw new Error("Google Vision image content is empty");
+  const featureType = options.featureType || "DOCUMENT_TEXT_DETECTION";
 
   const controller = new AbortController();
+  let rejectTimeout: (error: Error) => void = () => {};
+  const timeout = new Promise<never>((_resolve, reject) => {
+    rejectTimeout = reject;
+  });
   const timer = setTimeout(
-    () => controller.abort(),
+    () => {
+      controller.abort();
+      rejectTimeout(new Error("Google Vision request timed out"));
+    },
     options.timeoutMs ?? 25_000,
   );
   let response: Response;
+  let data: Record<string, unknown>;
   try {
-    response = await (options.fetcher || fetch)(GOOGLE_VISION_ANNOTATE_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        // Keep credentials out of URLs, proxy logs, and exception traces.
-        "x-goog-api-key": key,
-      },
-      body: JSON.stringify({
-        requests: [{
-          image: { content },
-          features: [{ type: "DOCUMENT_TEXT_DETECTION", maxResults: 1 }],
-          imageContext: { languageHints: ["en"] },
-        }],
-      }),
-      signal: controller.signal,
-    });
+    const readResponse = async () => {
+      const received = await (options.fetcher || fetch)(
+        GOOGLE_VISION_ANNOTATE_URL,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            // Keep credentials out of URLs, proxy logs, and exception traces.
+            "x-goog-api-key": key,
+          },
+          body: JSON.stringify({
+            requests: [{
+              image: { content },
+              features: [{ type: featureType, maxResults: 1 }],
+              imageContext: {
+                languageHints: ["en"],
+                ...(featureType === "TEXT_DETECTION"
+                  ? {
+                    // REST field documented at ImageContext#TextDetectionParams.
+                    textDetectionParams: {
+                      enableTextDetectionConfidenceScore: true,
+                    },
+                  }
+                  : {}),
+              },
+            }],
+          }),
+          signal: controller.signal,
+        },
+      );
+      const data = await received.json().catch(() => ({})) as Record<
+        string,
+        unknown
+      >;
+      return { response: received, data };
+    };
+    // Headers alone do not complete OCR: apply the same deadline to body reads.
+    ({ response, data } = await Promise.race([readResponse(), timeout]));
   } catch (error) {
     if (controller.signal.aborted) {
       throw new Error("Google Vision request timed out");
@@ -485,10 +631,6 @@ export async function googleVisionOcr(
     clearTimeout(timer);
   }
 
-  const data = await response.json().catch(() => ({})) as Record<
-    string,
-    unknown
-  >;
   if (!response.ok) {
     throw new Error(
       `Google Vision error ${response.status}: ${
@@ -518,9 +660,11 @@ export async function googleVisionOcr(
     : "";
 
   const confidence = googleVisionConfidenceDetails(fullText, text);
+  const layout = googleVisionLayout(fullText, text);
   return {
     text,
-    layoutText: googleVisionLayoutText(fullText, text),
+    layoutText: layout?.text,
+    recipientRegion: recipientRegionFromLayout(fullText, layout),
     confidence: confidence.confidence,
     confidenceSource: confidence.source,
   };
