@@ -84,6 +84,47 @@ test('configured QR destination token is supplied to both bank parsers and recor
   }
 });
 
+test('saved bank receipt evidence carries its provider so the admin panel shows the matching payment route', () => {
+  const auditExpression = edge.match(/bankTransfer:\s*([\s\S]+?),\s*ocrProvider,/);
+  assert.ok(auditExpression, 'load the production bank receipt audit');
+  const admin = fs.readFileSync(path.join(__dirname, 'admin.html'), 'utf8');
+  const adminStart = admin.indexOf('  const bankReceiptProvider =');
+  const adminEnd = admin.indexOf('  const bankUsesQrAccount =', adminStart);
+  assert.ok(adminStart > 0 && adminEnd > adminStart, 'load the production bank receipt display gate');
+  const displayGate = admin.slice(adminStart, adminEnd) + '\nshowBankReceipt;';
+  for (const provider of ['gotyme', 'maribank']) {
+    const bankTransfer = vm.runInNewContext(auditExpression[1], {
+      providerParse: { provider },
+      bankParse: {
+        reference: { value: 'SAVED-REFERENCE' },
+        amount: { amount: 265, reliable: true, ambiguous: false },
+        recipient: { accountVisibility: 'masked', accountSuffix: '9WO7' },
+      },
+      providerVerification: { provider, recipientComparison: { account: 'suffix_only' } },
+      recipientRefinement: null,
+    });
+    assert.equal(bankTransfer.provider, provider);
+    assert.equal(bankTransfer.reference.value, 'SAVED-REFERENCE');
+    const ex = { provider, parserVersion: `${provider}_to_gcash_v1` };
+    assert.equal(vm.runInNewContext(displayGate, { ex, bankTransfer }), true, provider);
+    assert.equal(vm.runInNewContext(displayGate, {
+      ex, bankTransfer: { ...bankTransfer, provider: 'gcash' },
+    }), false, 'mismatched audit must not show another provider route');
+    const legacyAudit = { ...bankTransfer };
+    delete legacyAudit.provider;
+    assert.equal(vm.runInNewContext(displayGate, { ex, bankTransfer: legacyAudit }), true,
+      'existing audit uses its matching top-level provider and dedicated parser');
+    for (const mismatch of [
+      { ...ex, provider: undefined },
+      { ...ex, provider: 'gcash' },
+      { ...ex, parserVersion: provider === 'gotyme' ? 'maribank_to_gcash_v1' : 'gotyme_to_gcash_v1' },
+    ]) {
+      assert.equal(vm.runInNewContext(displayGate, { ex: mismatch, bankTransfer: legacyAudit }), false,
+        'legacy audit still requires matching provider and parser identity');
+    }
+  }
+});
+
 const ocrStart = edge.indexOf('async function runOCR(');
 const ocrEnd = edge.indexOf('\nfunction telegramAdminUrl(', ocrStart);
 assert.ok(ocrStart > 0 && ocrEnd > ocrStart, 'load the production OCR dispatcher');

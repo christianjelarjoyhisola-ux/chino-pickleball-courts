@@ -7803,7 +7803,8 @@ function receiptDetailsHtml(b){
     maribank_to_gcash_v1: 'maribank',
   })[String(ex.parserVersion || '').toLowerCase()];
   const showBankReceipt = bankTransfer && bankReceiptProvider &&
-    bankTransfer.provider === bankReceiptProvider && ex.provider === bankReceiptProvider;
+    ex.provider === bankReceiptProvider &&
+    (bankTransfer.provider == null || bankTransfer.provider === bankReceiptProvider);
   const bankUsesQrAccount = ['full', 'masked'].includes(bankTransfer?.recipient?.accountVisibility);
   const parserLabel = ({
     gcash_v1: 'Dedicated GCash v1',

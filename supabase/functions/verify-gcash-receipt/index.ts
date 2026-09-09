@@ -3279,8 +3279,9 @@ Deno.serve(async (req) => {
           issues: gcashParse.issues,
         }
         : null,
-      bankTransfer: bankParse
+      bankTransfer: bankParse && providerParse
         ? {
+          provider: providerParse.provider,
           reference: bankParse.reference,
           invoice: "invoice" in bankParse ? bankParse.invoice : null,
           total: "total" in bankParse ? bankParse.total : null,
