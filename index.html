@@ -25,7 +25,7 @@
 <meta name="twitter:image:alt" content="CHINO Pickleball Courts — Your court. Your community." />
 <link rel="icon" type="image/jpeg" href="logochino.jpg">
 <link rel="stylesheet" href="payment-method-brand.css?v=20260901-payment-icons-v2" />
-<link rel="stylesheet" href="court-policies.css?v=20260909-policy-sync" />
+<link rel="stylesheet" href="court-policies.css?v=20260909-single-policy" />
 <script src="payment-method-brand.js?v=20260909-security-bank"></script>
 <script src="booking-balance.js?v=20260831-payment-state-v7"></script>
 <script src="host-balance-payment.js?v=20260831-payment-state-v7"></script>
@@ -4098,6 +4098,7 @@ try {
                   Selecting a receipt starts its secure upload and payment checks.<br>
                   Choose the payment app you actually used. When automated confirmation is available for that method, a clean receipt can confirm automatically; otherwise it stays pending for court-owner review.
                 </div>
+                <p id="bookingReceiptDisclosure" class="bpay-help">Receipts are checked using Google Vision. <a href="receipt-verification.html" target="_blank" rel="noopener">Details</a></p>
               </div>
             </div>
           </div>
@@ -4106,10 +4107,7 @@ try {
             <input type="checkbox" id="courtPoliciesAgree" aria-labelledby="courtPoliciesPaymentLabel" />
             <span id="courtPoliciesPaymentLabel"><label for="courtPoliciesAgree">I agree to the </label><button type="button" class="court-policies-inline-link" onclick="window.ChinoCourtPolicies?.review(this)">Court Policies</button></span>
           </div>
-          <label class="booking-policy-check">
-            <input type="checkbox" id="bookingPolicyAgree" />
-            <span id="bookingPolicyText">I confirm my payment details and allow <a href="receipt-verification.html" target="_blank" rel="noopener" aria-label="Receipt verification details (opens in a new tab)">receipt verification</a>.</span>
-          </label>
+          <p id="bookingPaymentNotice" class="bpay-help" hidden></p>
 
           <!-- Cash note -->
           <div class="cash-note" id="cashNote" style="display:none">
@@ -6658,7 +6656,6 @@ function guestResumeFormDraft() {
     payMethod: $('bPay')?.value || '',
     gcashRef: $('bGcashRef')?.value || '',
     payFull: !!payFull,
-    policyAgreed: !!$('bookingPolicyAgree')?.checked,
   };
 }
 
@@ -6729,7 +6726,7 @@ function restoreGuestResumeDraft(form = {}) {
   if ($('bName')) $('bName').value = form.name || '';
   if ($('bPhone')) $('bPhone').value = form.phone || '';
   if ($('bEmail')) $('bEmail').value = form.email || '';
-  if ($('bookingPolicyAgree')) $('bookingPolicyAgree').checked = !!form.policyAgreed;
+  window.ChinoCourtPolicies?.syncPaymentAgreement();
   if (form.payMethod && paymentMethods[form.payMethod]) pickPay(form.payMethod);
   if ($('bGcashRef')) {
     $('bGcashRef').value = normalizePaymentRef(form.gcashRef || '', $('bPay')?.value || form.payMethod || 'gcash');
@@ -6747,7 +6744,7 @@ function applyHostBookingDraft() {
 }
 
 function initGuestResumePersistence() {
-  ['bName', 'bPhone', 'bEmail', 'bGcashRef', 'bookingPolicyAgree'].forEach(id => {
+  ['bName', 'bPhone', 'bEmail', 'bGcashRef', 'courtPoliciesAgree'].forEach(id => {
     const el = $(id);
     if (!el) return;
     ['input', 'change'].forEach(evt => el.addEventListener(evt, () => saveGuestBookingResume()));
@@ -7465,25 +7462,22 @@ function initBookingValidationHighlights() {
     if (!el) return;
     ['input', 'change'].forEach(evt => el.addEventListener(evt, () => clearBookingInvalid(el)));
   });
-  for (const policy of [$('bookingPolicyAgree'), $('courtPoliciesAgree')]) {
+  const policy = $('courtPoliciesAgree');
   if (policy) {
     policy.addEventListener('change', () => {
       if (_bookingSubmissionInFlight) {
-        policy.checked = !!_bookingSubmissionSnapshot?.consentAgreed;
+        policy.checked = !!_bookingSubmissionSnapshot?.policyAgreed;
         toast('Please wait while your receipt and booking are being finalized.', 'inf');
         return;
       }
-      if (policy.checked) {
-        clearBookingInvalid(policy.closest('.booking-policy-check'));
-      }
-      // File selection stages the private receipt immediately. This agreement
-      // gates OCR verification and final booking submission, not the upload.
+      if (policy.checked) clearBookingInvalid(policy.closest('.booking-policy-check'));
+      // Staging happens on file selection; OCR starts only when the customer
+      // chooses Continue — Verify Payment after the upload is ready.
       if (_receiptUploadState?.status === 'uploaded') {
         setBookingReceiptUploadMessage('uploaded', bookingReceiptUploadedMessage());
       }
       setBookingReceiptContinueState(_receiptUploadState?.status || 'idle');
     });
-  }
   }
 }
 
@@ -8507,16 +8501,12 @@ function updatePaymentAmountUI() {
       if (btn100) btn100.style.display = '';
     }
   });
-  const policy = $('bookingPolicyText');
-  if (policy) {
-    const visionConsent = ' If I upload a receipt, I consent to Google Cloud Vision processing it for payment verification and CHINO retaining the private audit record only as long as needed for disputes, fraud prevention, accounting, and legal requirements.';
-    policy.innerHTML = (hostBooking
-      ? hostDeposit
-        ? '<strong>I agree</strong> that all payments are final and non-refundable. The remaining balance is due by 11:59 PM Philippine time, five calendar days before Open Play; missing the deadline forfeits the reservation and releases the slot.'
-        : '<strong>I agree</strong> that full payment is required because this Open Play starts in five days or less, and all payments are final and non-refundable.'
-      : isDigitalPayMethod($('bPay')?.value || '')
-        ? 'I confirm my payment details and allow <a href="receipt-verification.html" target="_blank" rel="noopener" aria-label="Receipt verification details (opens in a new tab)">receipt verification</a>.'
-        : 'I confirm my payment details are correct.') + (hostBooking ? visionConsent : '');
+  const notice = $('bookingPaymentNotice');
+  if (notice) {
+    notice.hidden = !hostBooking;
+    notice.textContent = hostDeposit
+      ? 'The remaining balance is due by 11:59 PM Philippine time, five calendar days before Open Play; missing the deadline forfeits the reservation and releases the slot. All payments are final and non-refundable.'
+      : 'Full payment is required because this Open Play starts in five days or less. All payments are final and non-refundable.';
   }
   updatePrice();
 }
@@ -8577,7 +8567,6 @@ async function submitBookingLegacy(e) {
     [!payMethod, 'Please select a payment method.', 'payMethodBlock', 4],
     [!!payMethod && !paymentMethods[payMethod], 'Selected payment method is no longer available.', 'payMethodBlock', 4],
     [!$('courtPoliciesAgree')?.checked, 'Please agree to the Court Policies before confirming.', $('courtPoliciesAgree')?.closest('.booking-policy-check'), 5],
-    [!$('bookingPolicyAgree')?.checked, 'Please agree to the booking and payment policy before confirming.', $('bookingPolicyAgree')?.closest('.booking-policy-check'), 5],
     [digitalPay && !_receiptFile, () => {
       // Scroll to and flash the upload zone so the user knows exactly what's missing.
       const drop = $('bReceiptDrop');
@@ -8830,7 +8819,6 @@ async function submitBooking(e) {
     [!payMethod, 'Please select a payment method.', 'payMethodBlock', 4],
     [!!payMethod && !paymentMethods[payMethod], 'Selected payment method is no longer available.', 'payMethodBlock', 4],
     [!$('courtPoliciesAgree')?.checked, 'Please agree to the Court Policies before confirming.', $('courtPoliciesAgree')?.closest('.booking-policy-check'), 5],
-    [!$('bookingPolicyAgree')?.checked, 'Please agree to the booking and payment policy before confirming.', $('bookingPolicyAgree')?.closest('.booking-policy-check'), 5],
     [digitalPay && !_receiptFile, () => {
       const drop = $('bReceiptDrop');
       if (drop) markBookingInvalid(drop, 5);
@@ -8858,7 +8846,7 @@ async function submitBooking(e) {
       file: _receiptFile,
       bookingRef: _reservedRef,
       paymentMethod: payMethod,
-      consentAgreed: !!$('bookingPolicyAgree')?.checked,
+      policyAgreed: !!$('courtPoliciesAgree')?.checked,
       result: Object.freeze({ ...(_receiptUploadState?.result || {}) }),
     })
     : null;
@@ -9092,8 +9080,6 @@ function setBookingSubmissionControlsLocked(locked) {
   if (receiptInput) receiptInput.disabled = !!locked;
   const removeButton = document.querySelector('#bReceiptPreviewWrap button');
   if (removeButton) removeButton.disabled = !!locked;
-  const policy = $('bookingPolicyAgree');
-  if (policy) policy.disabled = !!locked;
   if ($('courtPoliciesAgree')) $('courtPoliciesAgree').disabled = !!locked;
   const paymentReference = $('bGcashRef');
   if (paymentReference) paymentReference.disabled = !!locked;
@@ -9105,7 +9091,7 @@ function setBookingSubmissionControlsLocked(locked) {
 }
 
 function bookingReceiptUploadedMessage() {
-  return $('bookingPolicyAgree')?.checked && $('courtPoliciesAgree')?.checked
+  return $('courtPoliciesAgree')?.checked
     ? 'Upload complete — ready to verify.'
     : 'Upload complete. Agree below to continue.';
 }
@@ -9224,14 +9210,14 @@ function setBookingReceiptContinueState(kind = 'idle') {
   const file = _receiptFile;
   const bookingRef = _reservedRef;
   const paymentMethod = $('bPay')?.value || '';
-  const consentAgreed = !!$('bookingPolicyAgree')?.checked && !!$('courtPoliciesAgree')?.checked;
+  const policyAgreed = !!$('courtPoliciesAgree')?.checked;
   const contextMatches = receiptUploadStateMatchesCurrentContext(_receiptUploadState);
   const ready = bookingReceiptUploadReady(file, bookingRef, paymentMethod);
   const retryableFailure = contextMatches && _receiptUploadState?.status === 'failed';
   const locked = ['uploading', 'failed'].includes(kind);
   button.disabled = locked;
   if (retryableFailure) button.disabled = false;
-  if (ready && consentAgreed) button.disabled = false;
+  if (ready && policyAgreed) button.disabled = false;
   if (!file) {
     button.disabled = false;
     button.textContent = 'Attach Receipt to Continue';
@@ -9243,7 +9229,7 @@ function setBookingReceiptContinueState(kind = 'idle') {
     button.textContent = 'Uploading receipt...';
   } else if (retryableFailure) {
     button.textContent = 'Retry Receipt Upload';
-  } else if (ready && !consentAgreed) {
+  } else if (ready && !policyAgreed) {
     button.disabled = true;
     button.textContent = 'Agree Below to Continue';
   } else if (ready) {
@@ -9568,7 +9554,6 @@ function resetForm(options = {}) {
   if (refWrap2) refWrap2.style.display = 'none';
   $('cashNote').style.display = 'none';
   if ($('bGcashRef')) $('bGcashRef').value = '';
-  if ($('bookingPolicyAgree')) $('bookingPolicyAgree').checked = false;
   window.ChinoCourtPolicies?.syncPaymentAgreement();
   gcashSettings.checkoutVisited = false;
   document.querySelectorAll('.bpay-methods .pay-opt').forEach(el => { el.classList.remove('on'); el.setAttribute('aria-pressed', 'false'); });
@@ -11761,7 +11746,7 @@ async function submitOpenPlay() {
     <span>Logout</span>
   </button>
 </nav>
-<script src="court-policies.js?v=20260909-policy-sync"></script>
+<script src="court-policies.js?v=20260909-single-policy"></script>
 </body>
 </html>
 

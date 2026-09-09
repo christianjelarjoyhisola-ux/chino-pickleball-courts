@@ -6,7 +6,7 @@ const vm = require('node:vm');
 const script = fs.readFileSync('court-policies.js', 'utf8');
 const storageKey = 'chino-court-policies:2026-09-09';
 
-function createHarness({ accepted = false, receiptConsent = false, storageUnavailable = false } = {}) {
+function createHarness({ accepted = false, storageUnavailable = false } = {}) {
   const storage = new Map(accepted ? [[storageKey, 'accepted']] : []);
   const focusCalls = [];
   const scrollCalls = [];
@@ -48,11 +48,9 @@ function createHarness({ accepted = false, receiptConsent = false, storageUnavai
 
   const nodes = {
     courtPoliciesAgree: element('courtPoliciesAgree'),
-    bookingPolicyAgree: element('bookingPolicyAgree'),
     courts: element('courts'),
     courtSharedDateDisplay: element('courtSharedDateDisplay'),
   };
-  nodes.bookingPolicyAgree.checked = receiptConsent;
   const trigger = element('review-trigger');
   const poster = element('poster');
   const button = element('agree-button');
@@ -114,7 +112,7 @@ function createHarness({ accepted = false, receiptConsent = false, storageUnavai
   };
 }
 
-test('Agree & Continue remembers the court rules and checks only the court policy agreement', () => {
+test('Agree & Continue remembers the court rules and checks the payment policy agreement', () => {
   const harness = createHarness();
   assert.equal(harness.nodes.courtPoliciesAgree.checked, false);
   assert.equal(harness.api.open(), true);
@@ -126,49 +124,42 @@ test('Agree & Continue remembers the court rules and checks only the court polic
 
   assert.equal(harness.dialog.open, false);
   assert.equal(harness.nodes.courtPoliciesAgree.checked, true);
-  assert.equal(harness.nodes.bookingPolicyAgree.checked, false, 'receipt processing still needs its own consent');
   assert.equal(harness.storage.get(storageKey), 'accepted');
   assert.equal(harness.api.open(), false, 'accepted court rules do not interrupt entry again');
   assert.equal(harness.scrollCalls.length, 1);
   assert.equal(harness.scrollCalls[0].id, 'courts');
 });
 
-test('a remembered court agreement initializes the payment checkbox without changing receipt consent', () => {
-  for (const receiptConsent of [false, true]) {
-    const harness = createHarness({ accepted: true, receiptConsent });
-    assert.equal(harness.nodes.courtPoliciesAgree.checked, true);
-    assert.equal(harness.nodes.bookingPolicyAgree.checked, receiptConsent);
-    assert.equal(harness.api.open(), false);
-  }
+test('a remembered court agreement initializes the payment checkbox', () => {
+  const harness = createHarness({ accepted: true });
+  assert.equal(harness.nodes.courtPoliciesAgree.checked, true);
+  assert.equal(harness.api.open(), false);
 });
 
-test('sync restores court agreement after booking form reset without granting receipt consent', () => {
+test('sync restores court agreement after booking form reset', () => {
   const harness = createHarness({ accepted: true });
   harness.nodes.courtPoliciesAgree.checked = false;
   harness.api.syncPaymentAgreement();
   assert.equal(harness.nodes.courtPoliciesAgree.checked, true);
-  assert.equal(harness.nodes.bookingPolicyAgree.checked, false);
 });
 
 test('unchecking court policies revokes the remembered agreement and makes entry require agreement again', () => {
-  const harness = createHarness({ accepted: true, receiptConsent: true });
+  const harness = createHarness({ accepted: true });
   harness.changeAgreement(false);
   assert.notEqual(harness.storage.get(storageKey), 'accepted');
   harness.api.syncPaymentAgreement();
   assert.equal(harness.nodes.courtPoliciesAgree.checked, false);
-  assert.equal(harness.nodes.bookingPolicyAgree.checked, true);
   assert.equal(harness.api.open(), true);
   harness.clickAgree();
   assert.equal(harness.nodes.courtPoliciesAgree.checked, true);
   assert.equal(harness.storage.get(storageKey), 'accepted');
 });
 
-test('manually checking the separate court policy checkbox remembers only that agreement', () => {
+test('manually checking the court policy checkbox remembers that agreement', () => {
   const harness = createHarness();
   harness.changeAgreement(true);
   assert.equal(harness.storage.get(storageKey), 'accepted');
   assert.equal(harness.api.open(), false);
-  assert.equal(harness.nodes.bookingPolicyAgree.checked, false);
 });
 
 test('the Court Policies link reopens accepted policies and returns to the payment form without court navigation', () => {
@@ -195,7 +186,6 @@ test('reviewing unaccepted policies lets a customer agree and returns to the pay
   assert.equal(harness.nodes.courtPoliciesAgree.checked, true);
   assert.equal(harness.document.activeElement, harness.trigger);
   assert.equal(harness.scrollCalls.length, 0);
-  assert.equal(harness.nodes.bookingPolicyAgree.checked, false);
 });
 
 test('court agreement still works within the page when session storage is unavailable', () => {

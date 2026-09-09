@@ -20,16 +20,17 @@ test('court receipt starts uploading immediately and must finish before Continue
   );
 
   assert.match(picker, /beginAutomaticReceiptUpload\(f\)/);
-  assert.doesNotMatch(automaticUpload, /bookingPolicyAgree/);
+  assert.doesNotMatch(automaticUpload, /courtPoliciesAgree|verifyGcashReceipt/);
   assert.match(page, /Tap to attach — uploads automatically/);
   assert.match(page, /button\.disabled = locked/);
   assert.match(page, /\['uploading', 'failed'\]\.includes\(kind\)/);
-  assert.match(page, /if \(ready && consentAgreed\) button\.disabled = false/);
+  assert.match(page, /if \(ready && policyAgreed\) button\.disabled = false/);
   assert.match(page, /Agree Below to Continue/);
   assert.match(page, /Continue — Verify Payment/);
   assert.match(page, /Upload complete — ready to verify/);
   assert.match(page, /Upload complete\. Agree below to continue/);
-  assert.match(page, /!\$\('bookingPolicyAgree'\)\?\.checked[\s\S]*?Please agree to the booking and payment policy/);
+  assert.match(page, /!\$\('courtPoliciesAgree'\)\?\.checked[\s\S]*?Please agree to the Court Policies/);
+  assert.doesNotMatch(page, /bookingPolicyAgree|bookingPolicyText/);
   assert.match(
     automaticUpload,
     /const stale(?:BeforeUpload)? = sequence !== _receiptUploadSequence \|\|[\s\S]*?file !== _receiptFile \|\|[\s\S]*?bookingRef !== _reservedRef \|\|[\s\S]*?paymentMethod !==/,
@@ -91,6 +92,62 @@ test('court receipt shows an accessible animated upload state', () => {
   assert.doesNotMatch(verifier, /status === 'rejected'/);
 });
 
+test('a staged receipt needs only court agreement and still waits for explicit verification', () => {
+  const continueState = page.slice(
+    page.indexOf('function setBookingReceiptContinueState'),
+    page.indexOf('function beginAutomaticReceiptUpload'),
+  );
+  const runRegression = new Function(`
+    const button = {
+      disabled: false,
+      textContent: '',
+      classList: { toggle() {}, remove() {} },
+      setAttribute() {},
+    };
+    const nodes = {
+      wizNextBtn: button,
+      bPay: { value: 'gcash' },
+      courtPoliciesAgree: { checked: false },
+    };
+    const $ = id => nodes[id] || null;
+    const wizStep = 5;
+    const _receiptFile = { name: 'receipt.jpg' };
+    const _reservedRef = 'PR-COURT-AGREEMENT';
+    const _receiptFinalRetryNeeded = false;
+    let _receiptUploadState = { status: 'uploaded' };
+    let _bookingSubmissionInFlight = false;
+    const isDigitalPayMethod = method => method === 'gcash';
+    const receiptUploadStateMatchesCurrentContext = () => true;
+    const bookingReceiptUploadReady = () => _receiptUploadState.status === 'uploaded';
+    const snapshot = () => ({ disabled: button.disabled, label: button.textContent });
+    ${continueState}
+
+    setBookingReceiptContinueState('uploaded');
+    const unaccepted = snapshot();
+    nodes.courtPoliciesAgree.checked = true;
+    setBookingReceiptContinueState('uploaded');
+    const accepted = snapshot();
+    nodes.courtPoliciesAgree.checked = false;
+    setBookingReceiptContinueState('uploaded');
+    const revoked = snapshot();
+    nodes.courtPoliciesAgree.checked = true;
+    _receiptUploadState = { status: 'uploading' };
+    setBookingReceiptContinueState('uploading');
+    const uploading = snapshot();
+    _receiptUploadState = { status: 'uploaded' };
+    _bookingSubmissionInFlight = true;
+    setBookingReceiptContinueState('uploaded');
+    return { unaccepted, accepted, revoked, uploading, locked: button.disabled };
+  `);
+
+  const state = runRegression();
+  assert.deepEqual(state.unaccepted, { disabled: true, label: 'Agree Below to Continue' });
+  assert.deepEqual(state.accepted, { disabled: false, label: 'Continue — Verify Payment' });
+  assert.deepEqual(state.revoked, state.unaccepted);
+  assert.deepEqual(state.uploading, { disabled: true, label: 'Uploading receipt...' });
+  assert.equal(state.locked, true);
+});
+
 test('leaving receipt upload restores the shared Next button on earlier wizard steps', () => {
   const continueState = page.slice(
     page.indexOf('function setBookingReceiptContinueState'),
@@ -126,7 +183,7 @@ test('leaving receipt upload restores the shared Next button on earlier wizard s
       wizNextBtn: nextButton,
       wizBackBtn: simpleNode(),
       bPay: { value: 'gcash' },
-      bookingPolicyAgree: { checked: false },
+      courtPoliciesAgree: { checked: false },
     };
     for (let i = 1; i <= 5; i += 1) {
       nodes['wizPanel' + i] = simpleNode();
@@ -336,7 +393,7 @@ test('court CTA serializes discard, replacement upload, and uncertain-result rec
     page.indexOf('function initBookingValidationHighlights'),
     page.indexOf('function wizGoTo', page.indexOf('function initBookingValidationHighlights')),
   );
-  assert.match(policyListener, /for \(const policy of \[\$\('bookingPolicyAgree'\), \$\('courtPoliciesAgree'\)\]\)/);
+  assert.match(policyListener, /const policy = \$\('courtPoliciesAgree'\)/);
   assert.match(policyListener, /setBookingReceiptContinueState\(_receiptUploadState\?\.status \|\| 'idle'\)/);
   assert.doesNotMatch(policyListener, /invalidateBookingReceiptUpload/);
   assert.match(clearing, /_bookingSubmissionInFlight && !options\.force/);

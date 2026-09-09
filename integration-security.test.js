@@ -757,7 +757,7 @@ test('court slot states stay distinct and the public light theme is genuinely li
   assert.match(page, /try \{\s*localStorage\.setItem\('pb_template_theme'/);
 });
 
-test('payment step keeps receipt consent explicit with linked Vision and retention details', () => {
+test('payment step discloses Vision processing next to upload without a second checkbox', () => {
   const page = read('index.html');
   const receiptDetails = read('receipt-verification.html');
   const paymentAmountUI = functionSource(page, 'updatePaymentAmountUI');
@@ -768,10 +768,16 @@ test('payment step keeps receipt consent explicit with linked Vision and retenti
   assert.match(page, /Upload your proof of payment below\./);
   assert.doesNotMatch(page, /Payment window:|id="bPayWindow"|id="bPayWindowStart"|id="bPayWindowEnd"/);
   assert.doesNotMatch(sharedPanel, /<strong>Privacy:<\/strong>|privacy requests/i);
-  for (const source of [page, paymentAmountUI]) {
-    assert.match(source, /I confirm my payment details and allow <a href="receipt-verification\.html" target="_blank" rel="noopener"[^>]*>receipt verification<\/a>/);
-  }
-  assert.match(receiptDetails, /you consent to Google Cloud Vision analyzing your uploaded receipt for payment verification and fraud prevention/);
+  const disclosure = page.match(/<[^>]+id="bookingReceiptDisclosure"[^>]*>[\s\S]*?<\/p>/)?.[0] || '';
+  assert.match(disclosure, /Google (?:Cloud )?Vision/);
+  assert.match(disclosure, /href="receipt-verification\.html" target="_blank" rel="noopener"/);
+  assert.doesNotMatch(page, /bookingPolicyAgree|bookingPolicyText|I confirm my payment details/);
+  assert.match(page, /id="courtPoliciesAgree"/);
+  assert.match(paymentAmountUI, /bookingPaymentNotice/);
+  assert.match(receiptDetails, /Continue — Verify Payment/);
+  assert.doesNotMatch(receiptDetails, /By checking/);
+  assert.match(receiptDetails, /Selecting “Continue — Verify Payment” requests Google Cloud Vision analysis of your uploaded receipt for payment verification and fraud prevention/);
+  assert.match(receiptDetails, /analysis begins when you continue/);
   assert.match(receiptDetails, /keeps the receipt and audit record private/);
   assert.match(receiptDetails, /only as long as needed for disputes, fraud prevention, accounting, and legal requirements/);
   assert.match(receiptDetails, /Contact CHINO staff for privacy requests/);

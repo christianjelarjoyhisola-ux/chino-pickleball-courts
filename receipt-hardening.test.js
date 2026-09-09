@@ -193,10 +193,7 @@ test('automated uncertainty queues owner review while owners retain both deliber
     page.indexOf('async function verifyOpReceipt'),
     page.indexOf('async function submitOpenPlay'),
   );
-  const paymentPolicy = page.slice(
-    page.indexOf('function updatePaymentAmountUI'),
-    page.indexOf('function setPayAmount'),
-  );
+  const receiptDisclosure = page.match(/<[^>]+id="bookingReceiptDisclosure"[^>]*>[\s\S]*?<\/p>/)?.[0] || '';
 
   assert.match(client, /function _pbNormalizeReceiptOutcome[\s\S]*?status: 'manual_review'/);
   assert.match(client, /if \(String\(source\.status \|\| ''\)\.toLowerCase\(\) === 'auto_approved'\) return source/);
@@ -229,7 +226,7 @@ test('automated uncertainty queues owner review while owners retain both deliber
   assert.match(client, /async rejectBookingPaymentTransaction\(ref, reason\)[\s\S]*?\.rpc\('reject_booking_payment_transaction'/);
   assert.ok((client.match(/receiptVerificationId: Number\(reg\.receiptVerificationId\) \|\| null/g) || []).length >= 2);
   assert.doesNotMatch(admin, /Request clearer proof|Request Clearer Proof/i);
-  assert.match(paymentPolicy, /href="receipt-verification\.html"[^>]*>receipt verification<\/a>/);
+  assert.match(receiptDisclosure, /href="receipt-verification\.html"/);
   const receiptDetails = read('receipt-verification.html');
   assert.match(receiptDetails, /a complete, matching receipt can confirm your payment automatically/);
   assert.match(receiptDetails, /Unclear or mismatched details stay pending for the court owner to review/);
