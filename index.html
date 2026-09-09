@@ -25,6 +25,7 @@
 <meta name="twitter:image:alt" content="CHINO Pickleball Courts — Your court. Your community." />
 <link rel="icon" type="image/jpeg" href="logochino.jpg">
 <link rel="stylesheet" href="payment-method-brand.css?v=20260901-payment-icons-v2" />
+<link rel="stylesheet" href="court-policies.css?v=20260909" />
 <script src="payment-method-brand.js?v=20260909-security-bank"></script>
 <script src="booking-balance.js?v=20260831-payment-state-v7"></script>
 <script src="host-balance-payment.js?v=20260831-payment-state-v7"></script>
@@ -10988,14 +10989,15 @@ function dismissSplash() {
   if (!sp || sp.classList.contains('dismissed')) return;
   sp.classList.add('dismissed');
   document.body.style.overflow = '';
-  sp.addEventListener('transitionend', () => { sp.style.display = 'none'; }, { once: true });
+  sp.addEventListener('transitionend', () => { if (sp.classList.contains('dismissed')) sp.style.display = 'none'; }, { once: true });
 }
 
 function dismissSplashAndBook() {
   dismissSplash();
+  window.ChinoCourtPolicies?.open();
   window.setTimeout(() => {
     document.getElementById('courts')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    document.getElementById('courtSharedDateDisplay')?.focus({ preventScroll: true });
+    if (!window.ChinoCourtPolicies?.isOpen()) document.getElementById('courtSharedDateDisplay')?.focus({ preventScroll: true });
   }, 180);
 }
 
@@ -11748,6 +11750,7 @@ async function submitOpenPlay() {
     <span>Logout</span>
   </button>
 </nav>
+<script src="court-policies.js?v=20260909"></script>
 </body>
 </html>
 
