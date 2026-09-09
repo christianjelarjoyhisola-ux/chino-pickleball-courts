@@ -1,42 +1,28 @@
 .court-policies-dialog {
-  /* Match the portrait poster instead of surrounding it with a wide card. */
-  width: min(760px, calc(100% - 12px), calc((100dvh - 112px) * .666667 + 8px));
-  min-width: min(300px, calc(100% - 12px));
-  max-width: calc(100% - 12px);
-  height: min(calc(100dvh - 12px), calc((100vw - 22px) * 1.5 + 102px));
-  max-height: calc(100dvh - 12px); overflow: hidden;
-  margin: auto; padding: 0; border: 1px solid #cbd7e1; border-radius: 12px;
+  width: min(740px, calc(100% - 24px)); min-width: 0; max-width: calc(100% - 24px);
+  height: min(800px, calc(100dvh - 24px)); max-height: calc(100dvh - 24px);
+  overflow: hidden; margin: auto; padding: 0;
+  border: 1px solid #cbd7e1; border-radius: 16px;
   background: #fff; color: #12334f; box-shadow: 0 24px 80px #00192c55;
+  font-family: 'DM Sans', system-ui, sans-serif;
 }
 .court-policies-dialog::backdrop { background: #061b3299; backdrop-filter: blur(9px); -webkit-backdrop-filter: blur(9px); }
-.court-policies-dialog[open] { display: grid; grid-template-rows: minmax(0, 1fr) auto; }
-.court-policies-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
-.court-policies-content { overflow: hidden; min-height: 0; padding: 4px; }
-.court-policies-poster { display: block; height: 100%; width: 100%; cursor: zoom-in; }
-.court-policies-content img { display: block; width: 100%; height: 100%; object-fit: contain; border-radius: 6px; }
-.court-policies-help { margin: 0 0 4px; font-size: .75rem; line-height: 1.4; text-align: center; color: #516579; }
-.court-policies-help a { display: inline-block; padding-block: 3px; color: #145787; text-decoration: underline; }
-.court-policies-actions { margin: 0; padding: 4px 8px max(8px, env(safe-area-inset-bottom)); border-top: 1px solid #dce5ed; background: #f5f8fb; }
+.court-policies-dialog[open] { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
+.court-policies-actions { margin: 0; border-top: 1px solid #dce5ed; background: #f5f8fb; }
 .court-policies-buttons { display: flex; }
 .court-policies-buttons button { min-height: 48px; border-radius: 8px; padding: 10px 12px; font: inherit; font-weight: 700; cursor: pointer; }
 .court-policies-agree { flex: 1; border: 1px solid #104573; background: #104573; color: #fff; }
+.court-policies-close { position: absolute; top: 14px; right: 14px; display: grid; place-items: center; width: 40px; height: 40px; padding: 0; border: 1px solid #d4e0e9; border-radius: 10px; background: #fff; color: #526b80; font: 28px/1 system-ui,sans-serif; cursor: pointer; }
 .court-policies-dialog :focus-visible { outline: 3px solid #e2b623; outline-offset: -3px; }
 .booking-court-policy { align-items: center; font-size: .8rem; }
 .court-policies-inline-link { display: inline; padding: 4px 0; border: 0; background: none; color: var(--text, #145787); font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
 .court-policies-inline-link:focus-visible { outline: 2px solid var(--accent, #145787); outline-offset: 3px; }
 #bookingReceiptDisclosure a { color: inherit; font-weight: 700; text-decoration: underline; }
 
-/* Payment review reads the same structured text as the standalone policy page. */
-.court-policies-dialog [hidden] { display: none !important; }
-.court-policies-dialog[data-view="text"] {
-  width: min(740px, calc(100% - 24px)); min-width: 0;
-  height: min(800px, calc(100dvh - 24px)); max-height: calc(100dvh - 24px);
-  border-radius: 16px; font-family: 'DM Sans', system-ui, sans-serif;
-}
-.court-policies-dialog[open][data-view="text"] { grid-template-rows: auto minmax(0, 1fr) auto; }
-.court-policies-review-heading { padding: 22px 26px 18px; border-bottom: 1px solid #dce5ed; background: #f5f8fb; }
+
+.court-policies-review-heading { position: relative; padding: 22px 64px 18px 26px; border-bottom: 1px solid #dce5ed; background: #f5f8fb; }
 .court-policies-review-heading>span { display: block; color: #526b80; font-size: 10px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; }
-.court-policies-review-heading h3 { margin: 6px 0; color: #12334f; font: 750 25px/1.2 'DM Sans',system-ui,sans-serif; letter-spacing: -.6px; }
+.court-policies-review-heading h2 { margin: 6px 0; color: #12334f; font: 750 25px/1.2 'DM Sans',system-ui,sans-serif; letter-spacing: -.6px; }
 .court-policies-review-heading p { margin: 0; color: #526578; font-size: 13px; line-height: 1.5; }
 .court-policies-dialog>.court-policies-text { overflow-y: auto; overscroll-behavior: contain; min-height: 0; padding: 22px 26px; scrollbar-width: thin; scrollbar-color: #b5c8d8 #f5f8fb; }
 .court-policies-text { color: #263e52; font: 15px/1.65 'DM Sans',system-ui,sans-serif; text-align: left; }
@@ -49,7 +35,7 @@
 .court-policy-section li>strong { display: block; color: #12334f; font-size: 15px; line-height: 1.45; margin-bottom: 3px; }
 .court-policy-section li p { margin: 0; font: inherit; }
 .court-policies-management-note { padding: 15px 17px; margin: 0; border-left: 3px solid #386a94; border-radius: 0 8px 8px 0; background: #f2f6f9; font-size: 13px; line-height: 1.65; color: #36516a; }
-.court-policies-dialog[data-view="text"] .court-policies-actions { padding: 12px 24px max(12px, env(safe-area-inset-bottom)); }
+.court-policies-dialog .court-policies-actions { padding: 12px 24px max(12px, env(safe-area-inset-bottom)); }
 .court-policies-buttons button:disabled { cursor: wait; opacity: .55; }
 .court-policies-load { margin: 30px 0; color: #526578; text-align: center; font-size: 14px; }
 .court-policies-load p { margin-bottom: 14px; }
@@ -62,12 +48,12 @@
 .court-policies-page-footer { border-top: 1px solid #dce5ed; margin-top: 24px; padding-top: 16px; font-size: 13px; color: #526578; }
 .court-policies-page a { color: #145787; }
 @media(max-width:600px) {
-  .court-policies-dialog[data-view="text"] { width: calc(100% - 16px); height: calc(100dvh - 16px); max-height: calc(100dvh - 16px); border-radius: 13px; }
-  .court-policies-review-heading { padding: 18px 18px 15px; }
-  .court-policies-review-heading h3 { font-size: 23px; }
+  .court-policies-dialog { width: calc(100% - 16px); max-width: calc(100% - 16px); height: calc(100dvh - 16px); max-height: calc(100dvh - 16px); border-radius: 13px; }
+  .court-policies-review-heading { padding: 18px 62px 15px 18px; }
+  .court-policies-review-heading h2 { font-size: 23px; }
   .court-policies-dialog>.court-policies-text { padding: 17px 18px; }
   .court-policies-text { font-size: 14px; }
   .court-policy-section li>strong { font-size: 14px; }
-  .court-policies-dialog[data-view="text"] .court-policies-actions { padding: 10px 14px max(10px, env(safe-area-inset-bottom)); }
+  .court-policies-dialog .court-policies-actions { padding: 10px 14px max(10px, env(safe-area-inset-bottom)); }
   .court-policies-page { padding: 24px 18px; }
 }

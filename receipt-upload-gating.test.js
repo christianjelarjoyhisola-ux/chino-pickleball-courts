@@ -4,7 +4,7 @@ const test = require('node:test');
 
 const read = path => fs.readFileSync(path, 'utf8');
 
-const page = read('index.html');
+const page = read('index.html').replace(/\r\n/g, '\n');
 const client = read('supabase-config.js');
 const edge = read('supabase/functions/verify-gcash-receipt/index.ts');
 const admin = read('admin.html');
@@ -398,7 +398,7 @@ test('court CTA serializes discard, replacement upload, and uncertain-result rec
   assert.doesNotMatch(policyListener, /invalidateBookingReceiptUpload/);
   assert.match(clearing, /_bookingSubmissionInFlight && !options\.force/);
   assert.match(clearing, /invalidateBookingReceiptUpload\(\{ discard: options\.discard !== false \}\)/);
-  assert.match(submit, /Object\.freeze\(\{[\s\S]*?bookingRef: _reservedRef[\s\S]*?paymentMethod: payMethod[\s\S]*?stagedReceiptPath/);
+  assert.match(submit, /Object\.freeze\(\{[\s\S]*?bookingRef: _reservedRef[\s\S]*?paymentMethod: payMethod[\s\S]*?result: Object\.freeze\(\{ \.\.\.\(_receiptUploadState\?\.result \|\| \{\}\)/);
   assert.match(submit, /_bookingSubmissionInFlight = true[\s\S]*?setBookingSubmissionControlsLocked\(true\)/);
   assert.match(submit, /recoverStoredBookingReceipt\(receiptSnapshot\.bookingRef/);
   assert.match(submit, /keepBookingReceiptForRetry\([\s\S]*?Retry — Verify Payment/);
@@ -528,4 +528,70 @@ test('missing receipt button remains clickable, but uploading remains locked', (
   `);
   assert.equal(run(null, {status:'idle'}).disabled, false);
   assert.equal(run({}, {status:'uploading'}).disabled, true);
+});
+
+
+function paymentPolicyEntryHarness() {
+  const source = page.slice(page.indexOf('async function wizNext()'), page.indexOf('function wizBack()'));
+  const create = new Function('source', `
+    const state = { active: true, prompts: 0, transitions: [], errors: [], submits: 0 };
+    const nodes = { bPay: { value: 'gcash' }, wizNextBtn: {}, bookModal: { classList: { contains: () => state.active } } };
+    const $ = id => nodes[id];
+    let wizStep = 4;
+    let _reservedRef = 'POLICY-BOOKING-1';
+    const ALL_PAYMENT_METHODS = ['gcash', 'cash'];
+    const paymentMethods = { gcash: true, cash: true };
+    let resolvePolicy;
+    const decision = new Promise(resolve => { resolvePolicy = resolve; });
+    const window = { ChinoCourtPolicies: { requestAgreement: trigger => {
+      if (trigger !== nodes.wizNextBtn) throw Error('Wrong policy focus return target');
+      state.prompts++; return decision;
+    } } };
+    const wizGoTo = n => { wizStep = n; state.transitions.push(n); };
+    const bookingValidationError = message => state.errors.push(message);
+    const submitBooking = async () => { state.submits++; };
+    eval(source);
+    return { state, nodes, paymentMethods, window, next: wizNext,
+      resolve: resolvePolicy, replaceReservation: () => { _reservedRef = 'POLICY-BOOKING-2'; },
+      getStep: () => wizStep };
+  `);
+  return create(source);
+}
+
+test('Start Payment waits for policy agreement, then advances without submitting or verifying', async () => {
+  const h = paymentPolicyEntryHarness();
+  const next = h.next();
+  assert.equal(h.state.prompts, 1);
+  assert.deepEqual(h.state.transitions, []);
+  h.resolve(true); await next;
+  assert.deepEqual(h.state.transitions, [5]);
+  assert.equal(h.state.submits, 0);
+});
+
+test('closing policies keeps the selected method and does not start payment', async () => {
+  const h = paymentPolicyEntryHarness();
+  const next = h.next(); h.resolve(false); await next;
+  assert.deepEqual(h.state.transitions, []);
+  assert.equal(h.getStep(), 4);
+  assert.equal(h.nodes.bPay.value, 'gcash');
+});
+
+test('policy decisions cannot reopen an expired, replaced, or already advanced booking', async () => {
+  for (const change of [h => { h.state.active = false; }, h => h.replaceReservation()]) {
+    const h = paymentPolicyEntryHarness(); const next = h.next(); change(h); h.resolve(true); await next;
+    assert.deepEqual(h.state.transitions, []);
+  }
+  const h = paymentPolicyEntryHarness();
+  const first = h.next(), second = h.next(); h.resolve(true); await Promise.all([first, second]);
+  assert.deepEqual(h.state.transitions, [5]);
+});
+
+test('payment method must remain enabled before and after policy review', async () => {
+  const invalid = paymentPolicyEntryHarness(); invalid.paymentMethods.gcash = false;
+  await invalid.next(); assert.equal(invalid.state.prompts, 0); assert.equal(invalid.state.errors.length, 1);
+  const changed = paymentPolicyEntryHarness(); const next = changed.next();
+  changed.paymentMethods.gcash = false; changed.resolve(true); await next;
+  assert.deepEqual(changed.state.transitions, []); assert.equal(changed.state.errors.length, 1);
+  const missing = paymentPolicyEntryHarness(); missing.window.ChinoCourtPolicies = undefined;
+  await missing.next(); assert.deepEqual(missing.state.transitions, []); assert.match(missing.state.errors[0], /Court Policies could not load/);
 });

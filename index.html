@@ -25,7 +25,7 @@
 <meta name="twitter:image:alt" content="CHINO Pickleball Courts — Your court. Your community." />
 <link rel="icon" type="image/jpeg" href="logochino.jpg">
 <link rel="stylesheet" href="payment-method-brand.css?v=20260901-payment-icons-v2" />
-<link rel="stylesheet" href="court-policies.css?v=20260909-policy-text-v1" />
+<link rel="stylesheet" href="court-policies.css?v=20260909-payment-policies-v2" />
 <script src="payment-method-brand.js?v=20260909-security-bank"></script>
 <script src="booking-balance.js?v=20260831-payment-state-v7"></script>
 <script src="host-balance-payment.js?v=20260831-payment-state-v7"></script>
@@ -6638,6 +6638,7 @@ function clearReservationState() {
   _reservedRef = null;
   _reservedRefs = [];
   _reservationStartedAt = null;
+  window.ChinoCourtPolicies?.resetAgreement();
   clearGuestBookingResume();
 }
 
@@ -6726,7 +6727,7 @@ function restoreGuestResumeDraft(form = {}) {
   if ($('bName')) $('bName').value = form.name || '';
   if ($('bPhone')) $('bPhone').value = form.phone || '';
   if ($('bEmail')) $('bEmail').value = form.email || '';
-  window.ChinoCourtPolicies?.syncPaymentAgreement();
+  window.ChinoCourtPolicies?.setBookingContext(_reservedRef);
   if (form.payMethod && paymentMethods[form.payMethod]) pickPay(form.payMethod);
   if ($('bGcashRef')) {
     $('bGcashRef').value = normalizePaymentRef(form.gcashRef || '', $('bPay')?.value || form.payMethod || 'gcash');
@@ -6811,7 +6812,8 @@ async function maybeResumeGuestBooking() {
   document.body.style.overflow = 'hidden';
   hideHostInvite({ restoreScroll: false });
   const resumeStep = Math.min(5, Math.max(3, Number(resume.form?.step || 3)));
-  wizGoTo(resumeStep);
+  // A restored payment needs consent for this reservation, not a previous booking.
+  wizGoTo(resumeStep === 5 && !$('courtPoliciesAgree')?.checked ? 4 : resumeStep);
   startSlotCountdown(reservationSecondsLeft(resume.startedAt));
   toast('Your unfinished booking was restored. Complete it before the timer ends.', 'ok');
 }
@@ -7184,6 +7186,7 @@ async function proceedToBookLegacy(courtId) {
   }
   _reservedRef = reserveRef;
   _reservationStartedAt = reserveStartedAt;
+  window.ChinoCourtPolicies?.setBookingContext(_reservedRef);
   bookingItems = [savedReserveItem];
 
   selSlots = [...cardSel.slots];
@@ -7308,6 +7311,7 @@ async function proceedToBook(courtId = null) {
   _reservedRefs = reserveItems.map(item => item.ref);
   _reservedRef = _reservedRefs[0] || null;
   _reservationStartedAt = reserveStartedAt;
+  window.ChinoCourtPolicies?.setBookingContext(_reservedRef);
   saveGuestBookingResume();
   selSlots = [...primary.slots];
   await refreshBookingItemViews(reserveItems);
@@ -7333,6 +7337,7 @@ function closeBookModal(options = {}) {
     toast('Please wait while your receipt and booking are being finalized.', 'inf');
     return false;
   }
+  window.ChinoCourtPolicies?.dismiss();
   const itemsToRelease = activeBookingItems();
   if (!options.skipReceiptClear) clearReceipt({ force: true, discard: true });
   const receiptCleanup = _receiptDiscardPromise.catch(() => null);
@@ -7494,7 +7499,7 @@ function wizGoTo(n) {
   }
   $('wizBackBtn').textContent = n <= wizStartStep ? '✕ Cancel' : '← Back';
   const nextButton = $('wizNextBtn');
-  nextButton.textContent = n === 5 ? '🎾 Confirm Booking' : 'Next →';
+  nextButton.textContent = n === 5 ? '🎾 Confirm Booking' : n === 4 ? 'Start Payment →' : 'Next →';
   // Receipt upload locking belongs only to the Payment step. The wizard uses
   // this same button on every step, so always clear stale upload state before
   // returning to Court, Date & Time, Details, or Payment Method.
@@ -7543,6 +7548,18 @@ async function wizNext() {
     if (!ALL_PAYMENT_METHODS.some(m => paymentMethods[m])) { bookingValidationError('No payment method is enabled right now. Please contact admin.', 'payMethodBlock', 4); return; }
     if (!payMethod) { bookingValidationError('Please select a payment method.', 'payMethodBlock', 4); return; }
     if (!paymentMethods[payMethod]) { bookingValidationError('Selected payment method is no longer available.', 'payMethodBlock', 4); return; }
+    if (!window.ChinoCourtPolicies?.requestAgreement) {
+      bookingValidationError('Court Policies could not load. Please refresh and resume your booking.', 'payMethodBlock', 4);
+      return;
+    }
+    const policyReservationRef = _reservedRef;
+    const agreed = await window.ChinoCourtPolicies.requestAgreement($('wizNextBtn'));
+    // Expiry, cancellation, or another completed click must not advance a stale booking.
+    if (!agreed || wizStep !== 4 || _reservedRef !== policyReservationRef || !$('bookModal')?.classList.contains('active')) return;
+    if (!paymentMethods[$('bPay')?.value]) {
+      bookingValidationError('Selected payment method is no longer available.', 'payMethodBlock', 4);
+      return;
+    }
     wizGoTo(5);
   } else if (wizStep === 5) {
     const payMethod = $('bPay')?.value || '';
@@ -10990,10 +11007,9 @@ function dismissSplash() {
 
 function dismissSplashAndBook() {
   dismissSplash();
-  window.ChinoCourtPolicies?.open();
   window.setTimeout(() => {
     document.getElementById('courts')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    if (!window.ChinoCourtPolicies?.isOpen()) document.getElementById('courtSharedDateDisplay')?.focus({ preventScroll: true });
+    document.getElementById('courtSharedDateDisplay')?.focus({ preventScroll: true });
   }, 180);
 }
 
@@ -11746,7 +11762,7 @@ async function submitOpenPlay() {
     <span>Logout</span>
   </button>
 </nav>
-<script src="court-policies.js?v=20260909-policy-text-v1"></script>
+<script src="court-policies.js?v=20260909-payment-policies-v2"></script>
 </body>
 </html>
 
