@@ -43,6 +43,22 @@ test('owner list applies filters and opaque cursor, deduplicating overlapping pa
   assert.equal(h.store.getState().capabilities.authAuditCaptured, true);
 });
 
+test('operators remain selectable with no recorded activity or matching events', async () => {
+  const actors = [{ id: 'new-court-owner', name: 'CHINO Court Owner', role: 'court_owner' }];
+  const calls = [];
+  const h = harness({ getAdminActivity: async filters => {
+    calls.push(filters);
+    return { items: [], actors, nextCursor: null };
+  } });
+  await h.store.load();
+  assert.deepEqual(h.store.getState().actors, actors);
+  assert.deepEqual(h.store.getState().items, []);
+  await h.store.load({ actorId: actors[0].id, category: 'courts' });
+  assert.equal(calls[1].actorId, 'new-court-owner');
+  assert.deepEqual(h.store.getState().actors, actors);
+  assert.deepEqual(h.store.getState().items, []);
+});
+
 test('late history response is erased when owner changes to court owner', async () => {
   const pending = deferred();
   const h = harness({ getAdminActivity: () => pending.promise });

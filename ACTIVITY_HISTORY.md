@@ -4,6 +4,8 @@ The system owner (`accounts.role = owner`, active) can open **Admin → Activity
 
 Recording starts at installation. Earlier actions are not reconstructed.
 
+The Operator filter includes all system-owner, court-owner, and staff accounts, even before their first recorded activity and regardless of account status. Historical operators remain selectable after an account is removed or changes role. Existing accounts use their current name and role; saved events retain the identity recorded at the time. The directory stays available when the selected filters return no events.
+
 ## What is recorded
 
 - Committed inserts, updates, and deletes across public business tables: courts and pauses, bookings and payments, schedules, settings, promotions, maintenance, Open Play, accounts, and finance. Before/after values and changed field names are retained. No-op and rolled-back changes are not presented as completed changes.
@@ -18,6 +20,8 @@ Internal leases, delivery queues, receipt evidence, temporary claims, and existi
 ## Deployment and verification
 
 Apply only `supabase/migrations/20260909230000_admin_activity_history.sql` to the dedicated CHINO project before deploying the dependent Edge Functions and frontend. The migration checks the project URL. Preserve each function's existing JWT setting; `process-host-balance-deadlines` uses its existing internal authorization with `verify_jwt = false`.
+
+Then apply `supabase/migrations/20260909233000_activity_operator_directory.sql` to include operators with no recorded events. This follow-up replaces only the owner-only list function; it does not create or backfill activity entries. Verify it with `supabase/tests/activity_operator_directory.sql`, keeping its final rollback.
 
 Run `supabase/tests/admin_activity_history.sql` in its rollback-only transaction to verify canonical actors, direct/RPC change capture, RLS, spoof rejection, redaction, append-only rules, pagination, rollback semantics, and optional hooks. Do not remove its final rollback when running against production.
 
