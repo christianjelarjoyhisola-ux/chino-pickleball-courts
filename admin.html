@@ -7,7 +7,7 @@
 <link rel="icon" type="image/jpeg" href="logochino.jpg">
 <link rel="stylesheet" href="payment-method-brand.css?v=20260901-payment-icons-v2" />
 <link rel="stylesheet" href="availability-graphic.css?v=20260909-official-logo-v1" />
-<link rel="stylesheet" href="dashboard-court-activity.css?v=20260909-activity-v1" />
+<link rel="stylesheet" href="dashboard-court-activity.css?v=20260909-compact-activity-v2" />
 <script src="dashboard-court-activity.js?v=20260909-activity-v1"></script>
 <script src="payment-method-brand.js?v=20260909-security-bank"></script>
 <script src="chart.min.js"></script>
@@ -964,6 +964,12 @@ tr:hover td { background: var(--bg2); }
 .mb-book-sub { color: var(--muted); font-size: .78rem; }
 .mb-book-line { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .mb-book-schedule { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; margin-top: 7px; }
+.booking-schedule-date { font-size: .78rem; margin-bottom: 4px; }
+.booking-schedule-lines { display: grid; gap: 5px; font-size: .75rem; line-height: 1.5; color: var(--text); }
+.booking-schedule-lines>div { display: flex; flex-wrap: wrap; gap: 3px 10px; }
+.booking-schedule-lines strong { min-width: 48px; font-weight: 700; }
+.booking-schedule-lines span { overflow-wrap: anywhere; }
+.mb-book .booking-schedule-date { margin-top: 8px; color: var(--text2); }
 .mb-book-court { min-width: 0; color: var(--text2); font-size: .8rem; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mb-book-time { color: var(--text); font-weight: 900; white-space: nowrap; }
 .mb-book-summary {
@@ -5041,7 +5047,7 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(45, 62, 79, .1
 
       <section class="court-activity" id="courtActivity" aria-labelledby="courtActivityTitle" aria-busy="true">
         <header class="ca-header">
-          <div class="ca-heading"><span class="ca-eyebrow">Your courts, at a glance</span><h3 id="courtActivityTitle">Court Activity</h3><p>Scheduled play · Philippine time</p></div>
+          <div class="ca-heading"><h3 id="courtActivityTitle">Court Activity</h3><p>Next 7 days · Philippine time</p></div>
           <div class="ca-tools"><span id="courtActivityUpdated" class="ca-updated" role="status">Loading schedule…</span><button type="button" class="ca-refresh" id="courtActivityRefresh" aria-label="Refresh court activity" onclick="refreshCourtActivity()">↻</button><button type="button" class="ca-all" data-perm="bookings" onclick="goto('bookings')">View bookings <span aria-hidden="true">↗</span></button></div>
         </header>
         <div id="courtActivityBody" class="ca-grid"><p class="ca-loading">Loading your court schedule…</p></div>
@@ -7309,28 +7315,19 @@ function bookingGroupTimeLabel(items = []) {
   const labels = [...new Set(sorted.map(b => `${b.startTime || '--'}-${b.endTime || '--'}`))];
   return labels.join(', ');
 }
-function bookingGroupScheduleLabel(items = []) {
-  const dates = [...new Set(items.map(b => b.date).filter(Boolean))].sort();
-  if (dates.length <= 1) return `${bookingGroupDateLabel(items)} · ${bookingGroupTimeLabel(items)}`;
-  return sortBookingsChronologically(items)
-    .map(b => `${fmtD(b.date)} · ${b.startTime || '--'}-${b.endTime || '--'}`)
-    .filter((v, i, arr) => arr.indexOf(v) === i)
-    .join(' | ');
-}
-function bookingGroupBreakdownHtml(items = []) {
-  return sortBookingsChronologically(items).map(b => `
-    <div style="display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-top:1px solid var(--border)">
-      <span>${esc(b.courtName)} · ${esc(b.startTime || '--')}–${esc(b.endTime || '--')}</span>
-      <strong style="color:var(--text)">${fmt(b.total || 0)}</strong>
-    </div>`).join('');
+function bookingItemTimeLabel(item) {
+  return item.timeLabel || `${item.startTime || '--'}–${item.endTime || '--'}`;
 }
 function bookingGroupScheduleLabel(items = []) {
-  const dates = [...new Set(items.map(b => b.date).filter(Boolean))].sort();
-  if (dates.length <= 1) return `${bookingGroupDateLabel(items)} | ${bookingGroupTimeLabel(items)}`;
-  return sortBookingsChronologically(items)
-    .map(b => `${fmtD(b.date)} | ${b.startTime || '--'}-${b.endTime || '--'}`)
-    .filter((v, i, arr) => arr.indexOf(v) === i)
-    .join(' | ');
+  const rows = sortBookingsChronologically(uniqueBookingGroupItems(items));
+  const sharedDate = new Set(rows.map(item => item.date)).size === 1;
+  const label = rows.map(item => `${rows.length > 1 ? `${item.courtName || 'Court'}: ` : ''}${sharedDate ? '' : `${fmtD(item.date)} · `}${bookingItemTimeLabel(item)}`).join('; ');
+  return sharedDate ? `${fmtD(rows[0].date)} | ${label}` : label;
+}
+function bookingScheduleHtml(booking) {
+  const items = sortBookingsChronologically(uniqueBookingGroupItems(booking.items?.length ? booking.items : [booking]));
+  const sharedDate = new Set(items.map(item => item.date)).size === 1;
+  return `${sharedDate ? `<div class="booking-schedule-date">${esc(fmtD(items[0].date))}</div>` : ''}<div class="booking-schedule-lines">${items.map(item => `<div>${items.length > 1 ? `<strong>${esc(item.courtName || 'Court')}</strong>` : ''}<span>${sharedDate ? '' : `${esc(fmtD(item.date))} · `}${esc(bookingItemTimeLabel(item))}</span></div>`).join('')}</div>`;
 }
 function bookingGroupBreakdownHtml(items = []) {
   return sortBookingsChronologically(uniqueBookingGroupItems(items)).map(b => `
@@ -8427,11 +8424,11 @@ function mobileBookingCard(b, canDelete){
         <span class="mb-book-name">${esc(b.fullName || 'Guest')}</span>
       </div>
       ${b.email ? `<span class="mb-book-sub">${esc(b.email)}</span>` : ''}
-      <div class="mb-book-schedule">
+      ${b.isGroup ? bookingScheduleHtml(b) : `<div class="mb-book-schedule">
         <span class="mb-book-court">${esc(courtLabel)}</span>
         <span class="mb-book-time">${esc(timeLabel)}</span>
       </div>
-      <div class="mb-book-sub">${esc(dateLabel)}</div>
+      <div class="mb-book-sub">${esc(dateLabel)}</div>`}
       <div class="mb-book-summary">
         <span class="mb-book-chip amount">${fmt(b.total)}</span>
         <span class="mb-book-chip">${esc(payMethod)}</span>
@@ -9201,15 +9198,16 @@ let _courtActivityTimer = null;
 let _courtActivityError = false;
 
 function courtActivityCard(item, kind) {
-  const initial = Array.from(item.fullName || 'Guest')[0];
   const minutes = kind === 'playing' ? item.minutesUntilEnd : item.minutesUntilStart;
   const countdown = minutes < 60 ? `${Math.max(1, Math.ceil(minutes))} min` : `${Math.floor(minutes / 60)}h${minutes % 60 >= 1 ? ` ${Math.ceil(minutes % 60)}m` : ''}`;
-  const timing = kind === 'playing' ? `${countdown} left` : item.date === phDateKeyFromTimestamp(new Date()) ? `In ${countdown}` : item.dateLabel;
+  const isToday = item.date === phDateKeyFromTimestamp(new Date());
+  const timing = kind === 'playing' ? `${countdown} left` : isToday ? `In ${countdown}` : 'Scheduled';
   const progress = Math.max(0, Math.min(100, (Date.now() - item.startMs) / (item.endMs - item.startMs) * 100));
-  return `<article class="ca-booking"><div class="ca-booking-top"><span class="ca-court">${esc(item.courtName)}</span><span class="ca-timing">${esc(timing)}</span></div>
-    <div class="ca-person"><span class="ca-avatar" aria-hidden="true">${esc(initial)}</span><div><strong>${esc(item.fullName || 'Guest')}</strong><span>${esc(item.startLabel)} – ${esc(item.endLabel)}${kind === 'playing' && item.date !== phDateKeyFromTimestamp(new Date()) ? ' · Overnight' : ''}</span></div></div>
-    ${kind === 'playing' ? `<div class="ca-progress" aria-hidden="true"><span style="width:${progress}%"></span></div>` : ''}
-    <div class="ca-booking-bottom"><span class="ca-confirmed">Confirmed</span>${item.ref ? `<button type="button" data-activity-ref="${esc(item.ref)}" data-activity-start="${item.startMs}" aria-label="View booking for ${esc(item.fullName || 'Guest')} on ${esc(item.courtName)}">Details <span aria-hidden="true">↗</span></button>` : ''}</div></article>`;
+  return `<article class="ca-booking"><span class="ca-court">${esc(item.courtName)}</span>
+    <div class="ca-person"><strong>${esc(item.fullName || 'Guest')}</strong><span class="ca-date">${isToday ? 'Today' : esc(item.dateLabel)}${kind === 'playing' && !isToday ? ' · Overnight' : ''}</span></div>
+    <div class="ca-slot"><strong>${esc(item.startLabel)} – ${esc(item.endLabel)}</strong><span>${esc(timing)}</span></div>
+    ${item.ref ? `<button type="button" class="ca-details" data-activity-ref="${esc(item.ref)}" data-activity-start="${item.startMs}" aria-label="View booking for ${esc(item.fullName || 'Guest')} on ${esc(item.courtName)}">Details <span aria-hidden="true">↗</span></button>` : ''}
+    ${kind === 'playing' ? `<div class="ca-progress" aria-hidden="true"><span style="width:${progress}%"></span></div>` : ''}</article>`;
 }
 
 function renderCourtActivity() {
@@ -9228,13 +9226,13 @@ function renderCourtActivity() {
   const focusLane = focused?.closest('details')?.dataset.lane;
   const snapshot = window.ChinoCourtActivity.buildSnapshot(_courtActivityBookings);
   const lanes = [
-    { key: 'playing', title: 'Playing Now', caption: 'Currently on the schedule', empty: 'No games in progress', detail: 'The courts are between scheduled games.' },
-    { key: 'next', title: 'Up Next', caption: 'The next players to expect', empty: 'No next game scheduled', detail: 'New confirmed bookings will appear here.' },
-    { key: 'upcoming', title: 'Upcoming', caption: 'Coming up in the next 7 days', empty: 'You’re all caught up', detail: 'No other confirmed games in the next 7 days.' },
+    { key: 'playing', title: 'Playing Now', empty: 'No games in progress' },
+    { key: 'next', title: 'Up Next', empty: 'No next game scheduled' },
+    { key: 'upcoming', title: 'Upcoming', empty: 'No other games in the next 7 days' },
   ];
   body.innerHTML = lanes.map(lane => {
     const items = snapshot[lane.key];
-    return `<section class="ca-lane ca-${lane.key}" aria-labelledby="ca-${lane.key}-title"><header class="ca-lane-head"><div><h4 id="ca-${lane.key}-title"><span class="ca-dot" aria-hidden="true"></span>${lane.title}</h4><p>${lane.caption}</p></div><span class="ca-count" aria-label="${items.length} scheduled sessions">${items.length}</span></header><div class="ca-list">${items.length ? items.slice(0,2).map(item => courtActivityCard(item,lane.key)).join('') + (items.length > 2 ? `<details class="ca-more" data-lane="${lane.key}"${expanded.has(lane.key) ? ' open' : ''}><summary>Show ${items.length-2} more</summary>${items.slice(2).map(item => courtActivityCard(item,lane.key)).join('')}</details>` : '') : `<div class="ca-empty"><span class="ca-empty-court" aria-hidden="true"></span><strong>${lane.empty}</strong><p>${lane.detail}</p></div>`}</div></section>`;
+    return `<section class="ca-lane ca-${lane.key}" aria-labelledby="ca-${lane.key}-title"><header class="ca-lane-head"><h4 id="ca-${lane.key}-title"><span class="ca-dot" aria-hidden="true"></span>${lane.title}</h4><span class="ca-count" aria-label="${items.length} scheduled sessions">${items.length}</span></header><div class="ca-list">${items.length ? items.slice(0,4).map(item => courtActivityCard(item,lane.key)).join('') + (items.length > 4 ? `<details class="ca-more" data-lane="${lane.key}"${expanded.has(lane.key) ? ' open' : ''}><summary>Show ${items.length-4} more</summary>${items.slice(4).map(item => courtActivityCard(item,lane.key)).join('')}</details>` : '') : `<div class="ca-empty"><strong>${lane.empty}</strong></div>`}</div></section>`;
   }).join('');
   if (focused) {
     const replacement = focusRef
@@ -10107,7 +10105,7 @@ async function renderBookings(){
       <td data-label="Ref"><code style="color:var(--green);font-size:.76rem">${esc(b.displayRef || b.ref)}</code>${b.isGroup?`<div style="font-size:.68rem;color:var(--muted);margin-top:3px">${b.items.length} courts</div>`:''}</td>
       <td data-label="Customer"><div style="font-weight:600">${esc(b.fullName)}</div><div style="font-size:.75rem;color:var(--text)">${esc(b.email)}</div><div style="margin-top:4px">${bookingSourceBadge(b)}</div></td>
       <td data-label="Court">${esc(b.courtName)}</td>
-      <td data-label="Schedule">${fmtD(b.date)}<div style="font-size:.75rem;color:var(--text);font-weight:600">${esc(b.startTime)}–${esc(b.endTime)}</div>${bookingRescheduleRequestBadge(b)}</td>
+      <td data-label="Schedule">${bookingScheduleHtml(b)}${bookingRescheduleRequestBadge(b)}</td>
       <td data-label="Booked On">${b.createdAt ? (() => { const d=new Date(b.createdAt); return d.toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'}) + '<div style="font-size:.75rem;color:var(--muted);font-weight:600">' + d.toLocaleTimeString('en-PH',{hour:'numeric',minute:'2-digit',hour12:true}) + '</div>'; })() : '<span style="color:var(--muted)">—</span>'}</td>
       <td data-label="Amount">${bookingAmountSummaryHtml(b)}<div class="amount-stack" style="display:none">
         <div class="amount-main">${fmt(b.total)}</div>

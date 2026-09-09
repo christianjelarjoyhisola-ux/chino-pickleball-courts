@@ -996,6 +996,34 @@ test('duplicate payment risk survives a lookup narrowed to one booking group', a
   );
 });
 
+test('grouped schedules keep each court paired with its actual time without changing bookings', () => {
+  const admin = read('admin.html');
+  const helpersStart = admin.indexOf('function bookingStartHour');
+  const helpersEnd = admin.indexOf('async function updateBookingGroupByRef', helpersStart);
+  const model = new Function('fmtD', 'receivedAccountKey', 'esc', `${admin.slice(helpersStart, helpersEnd)}\nreturn {groupBookings, bookingScheduleHtml, bookingGroupScheduleLabel};`)(
+    value => value, () => 'gcash', value => String(value).replaceAll('<','&lt;').replaceAll('>','&gt;'),
+  );
+  const rows = [
+    {ref:'SCHEDULE-3',groupRef:'SCHEDULE-G',fullName:'Anna Mae Donato',courtId:'3',courtName:'Court 3',date:'2026-09-09',slots:[21],startTime:'9:00 PM',endTime:'10:00 PM',status:'confirmed'},
+    {ref:'SCHEDULE-4',groupRef:'SCHEDULE-G',fullName:'Anna Mae Donato',courtId:'4',courtName:'Court 4',date:'2026-09-09',slots:[22],startTime:'10:00 PM',endTime:'11:00 PM',status:'confirmed'},
+  ];
+  const before = JSON.stringify(rows);
+  const group = model.groupBookings(rows)[0];
+  assert.match(group.scheduleLabel, /Court 3: 9:00 PM–10:00 PM; Court 4: 10:00 PM–11:00 PM/);
+  const html = model.bookingScheduleHtml(group);
+  assert.match(html, /<strong>Court 3<\/strong><span>9:00 PM–10:00 PM<\/span>/);
+  assert.match(html, /<strong>Court 4<\/strong><span>10:00 PM–11:00 PM<\/span>/);
+  assert.equal(JSON.stringify(rows), before);
+  const simultaneous = [rows[0], {...rows[1],slots:[21],startTime:'9:00 PM',endTime:'10:00 PM'}];
+  assert.match(model.bookingGroupScheduleLabel(simultaneous), /Court 3: 9:00 PM–10:00 PM; Court 4: 9:00 PM–10:00 PM/);
+  const differentDates = [rows[0], {...rows[1],date:'2026-09-10'}];
+  const multiDate = model.bookingScheduleHtml(model.groupBookings(differentDates)[0]);
+  assert.match(multiDate, /Court 3<\/strong><span>2026-09-09 · 9:00 PM–10:00 PM/);
+  assert.match(multiDate, /Court 4<\/strong><span>2026-09-10 · 10:00 PM–11:00 PM/);
+  assert.match(admin, /<td data-label="Schedule">\$\{bookingScheduleHtml\(b\)\}/);
+  assert.match(admin, /b\.isGroup \? bookingScheduleHtml\(b\)/);
+});
+
 test('row and verify-modal confirmation reuse one atomic transaction with deliberate owner review', () => {
   const admin = read('admin.html');
   const quickButton = functionSource(admin, 'bookingQuickConfirmButton');
