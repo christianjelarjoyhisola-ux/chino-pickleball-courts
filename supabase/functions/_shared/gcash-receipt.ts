@@ -151,6 +151,10 @@ const FULL_MOBILE_RE =
 const MASKED_MOBILE_RE =
   /(?<!\d)(?:(?:\+?\s*63)\s*|0\s*)?9[\d\s\-•‣●◦∙·*xX#._]{4,32}\d(?!\d)/i;
 const NAME_MASK_RE = /[•‣●◦∙·*#]|\.\.|[xX]{2,}/;
+// Vision can collapse GCash's entire phone mask to one dot ("+63 9.2169").
+// Phone parsing is already confined to the recipient block, so keep this
+// separate from the stricter name-mask grammar.
+const PHONE_MASK_RE = /[•‣●◦∙·*#.]|[xX]+/;
 
 function normalizeText(rawText: string): string {
   return String(rawText || "")
@@ -462,7 +466,7 @@ function parsePhoneLine(
   }
 
   const masked = line.match(MASKED_MOBILE_RE);
-  if (masked && NAME_MASK_RE.test(masked[0])) {
+  if (masked && PHONE_MASK_RE.test(masked[0])) {
     const raw = masked[0].trim();
     const visibleSuffix = raw.match(/(?:\d[\s-]*){4}$/)?.[0];
     return {

@@ -605,7 +605,14 @@ Deno.test("detached amount recovery retains contradictions and rejects unbounded
 
 Deno.test("masked recipient requires matching phone suffix and strong independent name", () => {
   const expected = { phone: "09609422169", name: "Kristie Lou Cachuela" };
-  for (const phone of ["+63 9•••••2169", "+63 92169", "+63 960***2169"]) {
+  for (
+    const phone of [
+      "+63 9•••••2169",
+      "+63 9.2169",
+      "+63 92169",
+      "+63 960***2169",
+    ]
+  ) {
     const parsed = parseGcashReceipt(
       DETACHED_AMOUNT_OCR.replace("KRE L. C.", "KR••••E L•• C.").replace(
         "+63 92169",
@@ -644,6 +651,27 @@ Deno.test("masked recipient requires matching phone suffix and strong independen
       `${phone} / ${name}`,
     );
   }
+});
+
+Deno.test("reported single-dot phone OCR retains the visible GCash suffix", () => {
+  const parsed = parseGcashReceipt(
+    DETACHED_AMOUNT_OCR.replace("KRE L. C.", "KR....E L.. C.").replace(
+      "+63 92169",
+      "+63 9.2169",
+    ),
+  );
+  assertEquals(parsed.receiver.phone.last4, "2169", "visible phone suffix");
+  assertEquals(parsed.receiver.phone.visibility, "masked", "masked phone");
+  assertEquals(
+    isGcashRecipientAccepted(
+      compareGcashRecipient(parsed.receiver, {
+        phone: "09609422169",
+        name: "Kristie Lou Cachuela",
+      }),
+    ),
+    true,
+    "single-dot phone and independently masked name agree",
+  );
 });
 
 Deno.test("recipient name can be read without a phone but UI headings are excluded", () => {
