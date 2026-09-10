@@ -7,8 +7,8 @@
 <link rel="icon" type="image/jpeg" href="logochino.jpg">
 <link rel="stylesheet" href="payment-method-brand.css?v=20260901-payment-icons-v2" />
 <link rel="stylesheet" href="availability-graphic.css?v=20260909-official-logo-v1" />
-<link rel="stylesheet" href="dashboard-court-activity.css?v=20260910-tv-type-v2" />
-<script src="dashboard-court-activity.js?v=20260910-tv-type-v2"></script>
+<link rel="stylesheet" href="dashboard-court-activity.css?v=20260911-tv-balance-v3" />
+<script src="dashboard-court-activity.js?v=20260911-tv-balance-v3"></script>
 <script src="payment-method-brand.js?v=20260909-security-bank"></script>
 <script src="chart.min.js"></script>
 <script src="booking-balance.js?v=20260831-payment-state-v7"></script>
@@ -5062,8 +5062,8 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(45, 62, 79, .1
 
       <section class="ca-tv" id="courtActivityTv" role="dialog" aria-modal="true" aria-labelledby="courtActivityTvTitle" hidden>
         <header class="ca-tv-header">
-          <div class="ca-tv-brand"><span class="ca-tv-mark" aria-hidden="true">C</span><div><strong id="courtActivityTvTitle">CHINO Pickleball Courts</strong><span>Today’s court activity</span></div></div>
-          <div class="ca-tv-time"><strong id="courtActivityTvClock">--:--</strong><span id="courtActivityTvDate">Today</span></div>
+          <div class="ca-tv-brand"><img src="assets/chino-logo-transparent.png" alt="CHINO Pickleball Courts" /></div>
+          <div class="ca-tv-time"><strong id="courtActivityTvClock">--:--</strong><span id="courtActivityTvDate">Today</span><h1 id="courtActivityTvTitle">Today’s Court Activity</h1></div>
           <button class="ca-tv-close" type="button" aria-label="Close TV display" onclick="closeCourtActivityTv()">×</button>
         </header>
         <div class="ca-tv-stage" id="courtActivityTvBody"><p class="ca-tv-loading">Preparing today’s court schedule…</p></div>
@@ -9480,7 +9480,7 @@ function courtActivityTvNowCard(court) {
 
 function courtActivityTvNextCard(court) {
   const item = court.upNext;
-  return `<article class="ca-tv-next-card"><div><span>Court ${court.number}</span><strong>${item ? esc(item.startLabel) : 'Open'}</strong></div><div>${item ? `<strong>${esc(item.displayName)}</strong><span>${esc(item.startLabel)} – ${esc(item.endLabel)}</span>` : '<strong>No more bookings</strong><span>Available for the rest of today</span>'}</div></article>`;
+  return `<article class="ca-tv-next-card"><time>${item ? esc(item.startLabel) : 'Open'}</time><span>${esc(court.name)}</span><div>${item ? `<strong>${esc(item.displayName)}</strong><small>${esc(item.startLabel)} – ${esc(item.endLabel)}</small>` : '<strong>No more bookings</strong><small>Available for the rest of today</small>'}</div></article>`;
 }
 
 function updateCourtActivityTvClock() {

@@ -76,12 +76,16 @@ test('premium TV display keeps four now-playing cards above separated schedule p
   assert.match(source, /class="ca-tv-open"[\s\S]*?>[^<]*<span[^>]*>▣<\/span> TV display/);
   assert.match(source, /ca-tv-now-grid[\s\S]*?snapshot\.courts\.map\(courtActivityTvNowCard\)[\s\S]*?ca-tv-lower[\s\S]*?ca-tv-next[\s\S]*?ca-tv-upcoming/);
   assert.match(css, /\.ca-tv-now-grid\s*\{[^}]*grid-template-columns:repeat\(2/);
-  assert.match(css, /\.ca-tv-lower\s*\{[^}]*grid-template-columns:minmax\(0,45fr\) minmax\(0,55fr\)/);
+  assert.match(css, /\.ca-tv-lower\s*\{[^}]*grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
   assert.match(css, /\.ca-tv-stage\s*\{[^}]*grid-template-rows:minmax\(0,7fr\) minmax\(240px,3fr\)/);
   assert.doesNotMatch(source, /class="ca-tv-court-number"/);
   assert.match(css, /\.ca-tv-court > header\s*\{[^}]*grid-template-columns:minmax\(0,1fr\) auto/);
   assert.match(css, /\.ca-tv-court h2\s*\{[^}]*font-family:'DM Sans',sans-serif[^}]*text-transform:none/);
   assert.match(css, /\.ca-tv-next h2,\.ca-tv-upcoming h2\s*\{[^}]*font-family:'DM Sans',sans-serif[^}]*text-transform:none/);
+  assert.match(source, /ca-tv-brand[^>]*><img src="assets\/chino-logo-transparent\.png"/);
+  assert.match(source, /ca-tv-time[\s\S]*?courtActivityTvClock[\s\S]*?courtActivityTvDate[\s\S]*?courtActivityTvTitle">Today’s Court Activity/);
+  assert.match(css, /\.ca-tv-next-grid\s*\{[^}]*grid-template-columns:1fr/);
+  assert.match(css, /\.ca-tv-next-card,\.ca-tv-upcoming-list article\s*\{[^}]*min-height:clamp\(42px,4\.3vh,56px\)/);
 });
 
 test('TV display is today-only, privacy-safe, self-updating and closable', () => {
