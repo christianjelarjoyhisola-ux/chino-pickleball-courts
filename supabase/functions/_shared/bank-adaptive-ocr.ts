@@ -302,12 +302,29 @@ export async function recoverBankReceipt(
   ) return result("original_complete");
   if (layout === "unknown") return result("recovery_layout_unavailable");
   if (
-    !visionKey || !receiptImageSafeToDecode(bytes, undefined, 2_000_000, 4096)
+    !visionKey || !receiptImageSafeToDecode(bytes, undefined, 8_000_000, 4096)
   ) return result("recovery_image_unavailable");
   let prepared: Record<BankRecoveryStrategy, Uint8Array>;
   try {
     const image = await Image.decode(bytes);
+    // Original bank downloads can exceed 2 MP (for example 1206 x 2567).
+    // Derive each view directly from the original pixels: shrinking a shared
+    // base before enlarging it would discard small account/reference strokes.
+    // Keep the full receipt in 2 MP contrast / 4 MP color output budgets.
     const contrast = image.clone();
+    const baseScale = Math.min(
+      1,
+      Math.sqrt(2_000_000 / (image.width * image.height)),
+    );
+    if (baseScale < 1) {
+      contrast.resize(
+        Math.max(1, Math.floor(image.width * baseScale)),
+        Math.max(1, Math.floor(image.height * baseScale)),
+      );
+    }
+    if (Date.now() - started >= deadlineMs) {
+      return result("recovery_deadline_exceeded");
+    }
     for (let offset = 0; offset < contrast.bitmap.length; offset += 4) {
       const bitmap = contrast.bitmap;
       const alpha = bitmap[offset + 3] / 255;
@@ -326,11 +343,15 @@ export async function recoverBankReceipt(
       4096 / image.width,
       8192 / image.height,
     );
-    if (scale <= 1) return result("recovery_enlargement_unavailable");
-    const enlarged = image.clone().resize(
-      Math.floor(image.width * scale),
-      Math.floor(image.height * scale),
-    );
+    const colorWidth = Math.max(1, Math.floor(image.width * scale));
+    const colorHeight = Math.max(1, Math.floor(image.height * scale));
+    if (colorWidth <= contrast.width && colorHeight <= contrast.height) {
+      return result("recovery_enlargement_unavailable");
+    }
+    // Large (>4 MP) originals are downsampled once to the color bound; small
+    // originals keep the existing 1.5x enlargement. The color view remains
+    // larger than the contrast view in both cases.
+    const enlarged = image.resize(colorWidth, colorHeight);
     prepared = {
       bank_full_contrast_v1: await contrast.encode(1),
       bank_full_enlarged_v1: await enlarged.encode(1),

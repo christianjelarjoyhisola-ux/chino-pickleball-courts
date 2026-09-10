@@ -373,3 +373,176 @@ Deno.test("unknown receipt layout and malformed images never consume recovery re
   );
   eq(calls, 0);
 });
+
+Deno.test("1206 x 2567 bank download reaches both full-image rereads within existing output budgets", async () => {
+  const fixture = BANK_FIXTURES[3];
+  const bytes = await new Image(1206, 2567).fill(0xffffffff).encode();
+  const snapshot = bytes.slice();
+  const observed: Array<{ width: number; height: number }> = [];
+  const result = await recoverBankReceipt(
+    bytes,
+    weak(fixture),
+    fixture.context,
+    "test",
+    {
+      ocr: async (_key, encoded, options) => {
+        const png = Uint8Array.from(
+          atob(encoded),
+          (value) => value.charCodeAt(0),
+        );
+        const dimensions = receiptImageDimensions(png)!;
+        observed.push(dimensions);
+        assert(
+          png.length <= 4 * 1024 * 1024,
+          "each encoded image remains bounded",
+        );
+        assert(
+          options?.timeoutMs! <= 10000 && options?.timeoutMs! > 0,
+          "preparation spends the shared recovery deadline",
+        );
+        return bankFixtureRead(fixture.text);
+      },
+    },
+  );
+  eq(result.accepted, true, result.reason);
+  eq(observed.length, 2, "large original receives both optical strategies");
+  assert(
+    observed[0].width * observed[0].height <= 2_000_000,
+    "contrast view fits 2 MP",
+  );
+  assert(
+    observed[1].width * observed[1].height <= 4_000_000,
+    "enlarged view fits 4 MP",
+  );
+  assert(
+    observed[1].width > observed[0].width,
+    "distinct resolutions retained",
+  );
+  for (const dimensions of observed) {
+    assert(
+      Math.abs(dimensions.width / dimensions.height - 1206 / 2567) < .001,
+      "full receipt aspect ratio retained",
+    );
+  }
+  eq(bytes, snapshot, "uploaded original remains unchanged");
+});
+
+Deno.test("oversized image headers are rejected before decode and before recovery requests", async () => {
+  let calls = 0;
+  for (const [width, height] of [[4000, 2500], [5000, 100]]) {
+    const png = new Uint8Array(24);
+    png.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    png.set([0x49, 0x48, 0x44, 0x52], 12);
+    const header = new DataView(png.buffer);
+    header.setUint32(16, width);
+    header.setUint32(20, height);
+    const result = await recoverBankReceipt(
+      png,
+      weak(),
+      BANK_FIXTURES[0].context,
+      "test",
+      {
+        ocr: async () => {
+          calls++;
+          return bankFixtureRead(BANK_FIXTURES[0].text);
+        },
+      },
+    );
+    eq(result.reason, "recovery_image_unavailable");
+    eq(result.audit.attempted, false);
+  }
+  eq(calls, 0);
+});
+
+Deno.test("large receipt color view keeps fine original pixels instead of enlarging an already reduced image", async () => {
+  const originalImage = new Image(1206, 2567).fill(0xffffffff);
+  // Fine alternating strokes represent details susceptible to loss in small
+  // recipient suffixes. Keep them inside the full receipt, not in a crop.
+  for (let y = 1200; y < 1240; y++) {
+    for (let x = 600; x < 640; x++) {
+      const offset = (y * originalImage.width + x) * 4;
+      originalImage.bitmap[offset] = x % 2 ? 240 : 20;
+      originalImage.bitmap[offset + 1] = y % 2 ? 20 : 240;
+      originalImage.bitmap[offset + 2] = (x + y) % 2 ? 240 : 20;
+    }
+  }
+  const bytes = await originalImage.encode();
+  let calls = 0;
+  let checkedPixels = false;
+  const result = await recoverBankReceipt(
+    bytes,
+    weak(),
+    BANK_FIXTURES[0].context,
+    "test",
+    {
+      ocr: async (_key, encoded) => {
+        if (calls++ === 1) {
+          const actual = await Image.decode(
+            Uint8Array.from(atob(encoded), (value) => value.charCodeAt(0)),
+          );
+          const direct = originalImage.clone().resize(
+            actual.width,
+            actual.height,
+          );
+          const baseScale = Math.sqrt(2_000_000 / (1206 * 2567));
+          const reducedThenEnlarged = originalImage.clone().resize(
+            Math.floor(1206 * baseScale),
+            Math.floor(2567 * baseScale),
+          ).resize(actual.width, actual.height);
+          assert(
+            actual.bitmap.every((value, index) =>
+              value === direct.bitmap[index]
+            ),
+            "color evidence derives directly from original pixels",
+          );
+          assert(
+            actual.bitmap.some((value, index) =>
+              value !== reducedThenEnlarged.bitmap[index]
+            ),
+            "regression image distinguishes direct resizing from detail-losing double resizing",
+          );
+          checkedPixels = true;
+        }
+        return bankFixtureRead(BANK_FIXTURES[0].text);
+      },
+    },
+  );
+  eq(result.accepted, true, result.reason);
+  eq(checkedPixels, true);
+});
+
+Deno.test("a receipt above 4 MP gets a directly reduced color view larger than the contrast view", async () => {
+  const bytes = await new Image(2000, 3000).fill(0xffffffff).encode();
+  const dimensions: Array<{ width: number; height: number }> = [];
+  const result = await recoverBankReceipt(
+    bytes,
+    weak(),
+    BANK_FIXTURES[0].context,
+    "test",
+    {
+      ocr: async (_key, encoded) => {
+        dimensions.push(
+          receiptImageDimensions(
+            Uint8Array.from(atob(encoded), (value) => value.charCodeAt(0)),
+          )!,
+        );
+        return bankFixtureRead(BANK_FIXTURES[0].text);
+      },
+    },
+  );
+  eq(result.accepted, true, result.reason);
+  eq(dimensions.length, 2);
+  assert(
+    dimensions[0].width * dimensions[0].height <= 2_000_000,
+    "contrast bound",
+  );
+  assert(
+    dimensions[1].width * dimensions[1].height <= 4_000_000,
+    "color bound",
+  );
+  assert(
+    dimensions[1].width > dimensions[0].width &&
+      dimensions[1].height > dimensions[0].height,
+    "distinct resolutions even when original requires downsampling",
+  );
+});
