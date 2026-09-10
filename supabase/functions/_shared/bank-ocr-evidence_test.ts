@@ -22,6 +22,225 @@ function assert(value: unknown, message: string): asserts value {
   if (!value) throw new Error(message);
 }
 
+Deno.test("explicit GoTyme name-only policy retains a weak or missing account as optional evidence", () => {
+  const fixture = BANK_FIXTURES[3];
+  for (const suffix of ["****************9W07", "***"]) {
+    const original = bankFixtureOriginal(
+      fixture,
+      bankFixtureRead(
+        fixture.text.replace("****************9WO7", suffix),
+      ),
+    );
+    for (
+      const word of original.read.nativeLines!.flatMap((line) => line.words)
+    ) {
+      if (word.text === suffix) {
+        word.confidence = .5;
+        word.symbols.forEach((symbol) => symbol.confidence = .5);
+      }
+    }
+    const before = JSON.stringify(original);
+    const strict = bankApprovalConfidence(
+      original.read,
+      original.parsed,
+      fixture.context,
+    );
+    assert(
+      strict.confidence < .9,
+      "default policy retains account requirement",
+    );
+    const relaxed = bankApprovalConfidence(original.read, original.parsed, {
+      ...fixture.context,
+      gotymeRecipientPolicy: "masked_name_only",
+    });
+    eq(relaxed.confidence, .97);
+    eq(relaxed.fields.recipientAccount, undefined);
+    eq(
+      relaxed.optionalFields!.recipientAccount.text,
+      original.parsed.receipt.recipient.accountRaw || "",
+    );
+    eq(
+      relaxed.optionalFields!.recipientAccount.confidence,
+      strict.fields.recipientAccount.confidence,
+    );
+    eq(
+      relaxed.optionalFields!.recipientAccount.optionalReason,
+      "gotyme_recipient_policy",
+    );
+    eq(
+      JSON.stringify(original),
+      before,
+      "observed recipient remains unchanged",
+    );
+  }
+});
+
+Deno.test("GoTyme name-only policy does not relax another provider or a weak recipient name", () => {
+  for (const fixture of BANK_FIXTURES) {
+    const original = bankFixtureOriginal(fixture);
+    const approval = bankApprovalConfidence(original.read, original.parsed, {
+      ...fixture.context,
+      gotymeRecipientPolicy: "masked_name_only",
+    });
+    if (fixture.provider !== "gotyme") {
+      assert(
+        approval.fields.recipientAccount,
+        `${fixture.provider} still requires account`,
+      );
+      eq(approval.optionalFields!.recipientAccount, undefined);
+    } else {
+      const name = original.read.nativeLines!.flatMap((line) => line.words)
+        .find((word) => word.text.includes("KR****E"))!;
+      name.confidence = .62;
+      name.symbols.forEach((symbol) => symbol.confidence = .62);
+      eq(
+        bankApprovalConfidence(original.read, original.parsed, {
+          ...fixture.context,
+          gotymeRecipientPolicy: "masked_name_only",
+        }).confidence,
+        .62,
+      );
+    }
+  }
+});
+
+Deno.test("GoTyme zero fee remains audit evidence when native strong principal equals total", () => {
+  const fixture = BANK_FIXTURES[3], original = bankFixtureOriginal(fixture);
+  const fee = original.read.nativeLines!.flatMap((line) => line.words).find((
+    word,
+  ) => word.text === "₱0.00")!;
+  fee.confidence = .48;
+  fee.symbols.forEach((symbol) => symbol.confidence = .48);
+  const approval = bankApprovalConfidence(
+    original.read,
+    original.parsed,
+    fixture.context,
+  );
+  eq(approval.confidence, .97);
+  eq(approval.fields.fee0, undefined);
+  eq(approval.optionalFields!.fee0.confidence, .48);
+  eq(approval.optionalFields!.fee0.optionalReason, "zero_fee_reconciled");
+});
+
+Deno.test("GoTyme zero-fee exception requires complete strong matching principal and total", () => {
+  const fixture = BANK_FIXTURES[3];
+  for (
+    const [note, text] of [
+      ["missing total", fixture.text.replace("Total ₱265.00\n", "")],
+      [
+        "different total",
+        fixture.text.replace("Total ₱265.00", "Total ₱266.00"),
+      ],
+      [
+        "missing principal",
+        fixture.text.replace("Amount ₱265.00", "Amount $265.00"),
+      ],
+      ["extra fee", fixture.text.replace("Fee ₱0.00", "Fee ₱0.00\nFee ₱1.00")],
+      ["nonzero fee", fixture.text.replace("Fee ₱0.00", "Fee ₱1.00")],
+    ]
+  ) {
+    const original = bankFixtureOriginal(fixture, bankFixtureRead(text));
+    const approval = bankApprovalConfidence(
+      original.read,
+      original.parsed,
+      fixture.context,
+    );
+    assert(approval.fields.fee0, `${note} retains fee requirement`);
+    eq(approval.optionalFields!.fee0, undefined, note);
+  }
+  const original = bankFixtureOriginal(fixture);
+  const total = original.read.nativeLines!.flatMap((line) => line.words).filter(
+    (word) => word.text === "₱265.00",
+  ).at(-1)!;
+  total.confidence = .89;
+  total.symbols.forEach((symbol) => symbol.confidence = .89);
+  const approval = bankApprovalConfidence(
+    original.read,
+    original.parsed,
+    fixture.context,
+  );
+  assert(approval.fields.fee0, "low native total retains fee");
+  eq(approval.optionalFields!.fee0, undefined);
+});
+
+Deno.test("exact zero fee uses observed zero digits without currency glyph confidence", () => {
+  const fixture = BANK_FIXTURES[3], original = bankFixtureOriginal(fixture);
+  const fee = original.read.nativeLines!.flatMap((line) => line.words).find((
+    word,
+  ) => word.text === "₱0.00")!;
+  fee.confidence = .82;
+  fee.symbols.forEach((symbol) =>
+    symbol.confidence = symbol.text === "₱" ? .30 : .98
+  );
+  const evidence = bankApprovalConfidence(
+    original.read,
+    original.parsed,
+    fixture.context,
+  );
+  eq(
+    evidence.optionalFields!.fee0.text,
+    "₱0.00",
+    "full original monetary text is preserved",
+  );
+  eq(evidence.optionalFields!.fee0.confidence, .98);
+  fee.symbols.find((symbol) => symbol.text === "0")!.confidence = .64;
+  eq(
+    bankApprovalConfidence(original.read, original.parsed, fixture.context)
+      .optionalFields!.fee0.confidence,
+    .64,
+    "a weak zero stays weak",
+  );
+});
+
+Deno.test("zero fee without independent digit evidence retains its low native word score", () => {
+  const fixture = BANK_FIXTURES[3], original = bankFixtureOriginal(fixture);
+  const fee = original.read.nativeLines!.flatMap((line) => line.words).find((
+    word,
+  ) => word.text === "₱0.00")!;
+  fee.confidence = .82;
+  fee.symbols = [];
+  eq(
+    bankApprovalConfidence(original.read, original.parsed, fixture.context)
+      .optionalFields!.fee0.confidence,
+    .82,
+  );
+});
+
+Deno.test("partly missing zero symbols never erase a genuinely low observed digit", () => {
+  const fixture = BANK_FIXTURES[1], original = bankFixtureOriginal(fixture);
+  const fee = original.read.nativeLines!.flatMap((line) => line.words).find((
+    word,
+  ) => word.text === "0.00")!;
+  fee.confidence = .98;
+  fee.symbols[0].confidence = .4;
+  fee.symbols[2].confidence = undefined;
+  eq(
+    bankApprovalConfidence(original.read, original.parsed, fixture.context)
+      .fields.fee0.confidence,
+    .4,
+  );
+});
+
+Deno.test("nonzero fee and principal currency confidence remain strict", () => {
+  const fixture = BANK_FIXTURES[0], original = bankFixtureOriginal(fixture);
+  for (const token of ["₱10.00", "₱800.00"]) {
+    const word = original.read.nativeLines!.flatMap((line) => line.words).find((
+      word,
+    ) => word.text === token)!;
+    word.confidence = .82;
+    word.symbols.forEach((symbol) =>
+      symbol.confidence = symbol.text === "₱" ? .30 : .99
+    );
+  }
+  const evidence = bankApprovalConfidence(
+    original.read,
+    original.parsed,
+    fixture.context,
+  );
+  eq(evidence.fields.fee0.confidence, .82);
+  eq(evidence.fields.amount.confidence, .82);
+});
+
 for (const fixture of BANK_FIXTURES) {
   Deno.test(`${fixture.provider} measures every critical observed field without unrelated page text`, () => {
     const original = bankFixtureOriginal(fixture);
@@ -161,9 +380,11 @@ Deno.test("two amount displays cannot hide one weak display or fee", () => {
     .65,
   );
   displays[1].confidence = .97;
-  original.read.nativeLines!.flatMap((line) => line.words).find((word) =>
-    word.text === "0.00"
-  )!.confidence = .6;
+  const zeroFee = original.read.nativeLines!.flatMap((line) => line.words).find(
+    (word) => word.text === "0.00",
+  )!;
+  zeroFee.confidence = .6;
+  zeroFee.symbols.forEach((symbol) => symbol.confidence = .6);
   eq(
     bankApprovalConfidence(original.read, original.parsed, fixture.context)
       .fields.fee0.confidence,

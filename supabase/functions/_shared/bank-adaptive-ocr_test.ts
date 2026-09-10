@@ -339,6 +339,34 @@ Deno.test("page-only confidence cannot approve recovery even when both full text
   eq(result.reason, "recovery_incomplete");
 });
 
+Deno.test("unusable native layout stays uncertain without inventing a contradictory payment", () => {
+  const fixture = BANK_FIXTURES[0];
+  const read = bankFixtureRead(fixture.text.replace("₱1,500.00", "₱1,700.00"));
+  delete read.nativeLines;
+  delete read.layoutText;
+  const evaluated = evaluateBankRecoveryRead(
+    "bank_full_contrast_v1",
+    read,
+    weak(),
+    fixture.context,
+  );
+  eq(evaluated.reading.outcome, "uncertain");
+  assert(
+    evaluated.reading.flags.includes("PAYMENT_FIELD_CONFIDENCE_INCOMPLETE"),
+    "candidate still fails",
+  );
+  const pending = { ...read, text: read.text + "\nProcessing" };
+  eq(
+    evaluateBankRecoveryRead(
+      "bank_full_contrast_v1",
+      pending,
+      weak(),
+      fixture.context,
+    ).reading.outcome,
+    "conflict",
+  );
+});
+
 Deno.test("unknown receipt layout and malformed images never consume recovery requests", async () => {
   const fixture = BANK_FIXTURES[0];
   let calls = 0;

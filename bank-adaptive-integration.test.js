@@ -107,7 +107,7 @@ test('unknown layouts never use another layout\'s learned preference',async()=>{
 test('bank approval keeps selected payment-field confidence distinct from original image score',()=>{
   const from=edge.indexOf('    const approval = provider === "gcash"');
   const to=edge.indexOf('    const minimumOcrConfidence',from);
-  const context={provider:'maya',readingRecovery:null,gotymeFieldRecovery:null,bankReadingRecovery:{accepted:true,selected:{approval:{confidence:.93,source:'bank_payment_fields'}}},ocrConfidence:.88,ocrConfidenceSource:'native'};
+  const context={provider:'maya',readingRecovery:null,gotymeFieldRecovery:null,gotymeNativeFusion:null,bankReadingRecovery:{accepted:true,selected:{approval:{confidence:.93,source:'bank_payment_fields'}}},ocrConfidence:.88,ocrConfidenceSource:'native'};
   vm.runInNewContext(edge.slice(from,to)+'\nthis.observed = {approvalConfidence,approvalConfidenceSource};',context);
   assert.equal(context.observed.approvalConfidence,.93);
   assert.equal(context.observed.approvalConfidenceSource,'bank_payment_fields');
@@ -143,4 +143,61 @@ test('raw original adverse status remains a veto even when reconstructed rows om
   const context={provider:'gotyme',isBankAdaptiveProvider:()=>true,ocrOriginalText:'Transfer successful\nProcessing time: Instant',readReceiptTransferStatus:status,flags:[]};
   vm.runInNewContext(edge.slice(from,to),context);
   assert.equal(context.flags.length,0);
+});
+
+test('native field recovery updates readable evidence but retains global review flags and original account confidence', async()=>{
+  const from=edge.indexOf('    // Recover a missing principal from actual whole-image reads');
+  const to=edge.indexOf('    // A failed optional panel read',from);
+  assert.ok(from>0 && to>from);
+  const original={read:{text:'original'},parsed:{provider:'gotyme',receipt:{}}};
+  const improved={provider:'gotyme',receipt:{amount:{amount:4240},recipient:{accountSuffix:'9W07'}}};
+  const context={providerParse:original.parsed,originalBankReading:original,
+    bankReadingRecovery:{accepted:false,observations:[{read:{text:'observed'}}]},
+    gotymeFieldRecovery:null,recipientRefinement:null,gotymeNativeFusion:null,
+    providerContext:{},flags:['DUPLICATE_REF'],ocrFallbackReason:'google_missing_amount',
+    recoverGotymeNativeFields:input=>{
+      assert.equal(input.original,original);
+      return {safeToUse:true,applied:true,parsed:improved,recoveredFields:['amount'],conservationFlags:[],approval:{confidence:.5,source:'bank_payment_fields'}};
+    }};
+  vm.runInNewContext(edge.slice(from,to),context);
+  assert.equal(context.providerParse,improved);
+  assert.deepEqual(context.flags,['DUPLICATE_REF']);
+  assert.equal(context.ocrFallbackReason,null);
+  const approvalFrom=edge.indexOf('    const approval = provider === "gcash"');
+  const approvalTo=edge.indexOf('    const minimumOcrConfidence',approvalFrom);
+  context.provider='gotyme';
+  vm.runInNewContext(edge.slice(approvalFrom,approvalTo)+'\nthis.observedConfidence=approvalConfidence;',context);
+  assert.equal(context.observedConfidence,.5,'recovered amount cannot raise account confidence');
+  context.recipientRefinement={accepted:true};
+  context.providerParse=original.parsed;
+  vm.runInNewContext(edge.slice(from,to),context);
+  assert.equal(context.providerParse,original.parsed,'successful dedicated recipient refinement keeps priority');
+});
+
+test('owner selected GoTyme name policy ignores the account only for GoTyme and still requires a matching name',()=>{
+  const from=edge.indexOf('    const recipientMatch = providerVerification?.provider === "gcash"');
+  const to=edge.indexOf('    const cleanEvidence',from);
+  for (const [provider,policy,name,expected] of [
+    ['gotyme','masked_name_only','masked_compatible',true],
+    ['gotyme','masked_name_only','mismatch',false],
+    ['gotyme','masked_name_only','missing',false],
+    ['gotyme','name_and_account','masked_compatible',false],
+    ['maribank','masked_name_only','masked_compatible',false],
+  ]) {
+    const context={providerVerification:{provider,recipientComparison:{name,phone:'missing',account:'mismatch'}},providerContext:{gotymeRecipientPolicy:policy}};
+    vm.runInNewContext(edge.slice(from,to)+'\nthis.match=recipientMatch;',context);
+    assert.equal(context.match,expected,`${provider}/${policy}/${name}`);
+  }
+  assert.match(edge,/gotymeRecipientPolicy: settings\.gotyme_receipt_recipient_policy === "masked_name_only"/,'policy comes from server settings');
+});
+
+test('name-only GoTyme skips recipient crops when the original name already has strong native evidence',async()=>{
+  let recipientCalls=0;
+  const {calls}=await runRecovery({provider:'gotyme',context:{
+    providerContext:{gotymeRecipientPolicy:'masked_name_only'},
+    bankApprovalConfidence:()=>({confidence:.5,fields:{recipientName:{confidence:.94}}}),
+    recoverGotymeFields:async()=>{recipientCalls++;throw Error('unnecessary recipient reread');},
+  }});
+  assert.equal(recipientCalls,0);
+  assert.equal(calls.filter(call=>call.type==='recovery').length,1,'amount can use bounded full-image recovery');
 });

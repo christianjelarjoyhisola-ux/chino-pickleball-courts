@@ -55,8 +55,63 @@ export type BankApprovalConfidence = {
     | "native_whole_image"
     | "missing_native_payment_evidence";
   fields: Record<string, BankPaymentFieldEvidence>;
+  /** Actual observed evidence retained for audit but excluded from the minimum
+   * only by an explicit recipient policy or independently reconciled zero fee. */
+  optionalFields?: Record<
+    string,
+    BankPaymentFieldEvidence & {
+      optionalReason: "gotyme_recipient_policy" | "zero_fee_reconciled";
+    }
+  >;
   complete: boolean;
 };
+
+/** Apply payment requirements without rewriting any observed text or native
+ * score. Fusion calls this again after recovering a reliable principal. */
+export function partitionBankPaymentFields(
+  parsed: BankProviderParse,
+  context: ReceiptVerificationContext,
+  observed: Record<string, BankPaymentFieldEvidence>,
+): Pick<BankApprovalConfidence, "fields" | "optionalFields"> {
+  const fields = { ...observed };
+  const optionalFields: NonNullable<BankApprovalConfidence["optionalFields"]> =
+    {};
+  const omit = (
+    key: string,
+    optionalReason: "gotyme_recipient_policy" | "zero_fee_reconciled",
+  ) => {
+    if (!fields[key]) return;
+    optionalFields[key] = { ...fields[key], optionalReason };
+    delete fields[key];
+  };
+  if (parsed.provider !== "gotyme") return { fields, optionalFields };
+  if (context.gotymeRecipientPolicy === "masked_name_only") {
+    omit("recipientAccount", "gotyme_recipient_policy");
+  }
+  const feeKeys = Object.keys(fields).filter((key) => /^fee\d+$/.test(key));
+  const totals = Object.entries(fields).filter(([key]) =>
+    /^total\d+$/.test(key)
+  );
+  const principal = fields.amount;
+  const amount = parsed.receipt.amount;
+  const strong = (field: BankPaymentFieldEvidence | undefined) =>
+    !!field && score(field.confidence) && field.confidence >= .9;
+  // An observed zero fee has no effect on the transfer only when independently
+  // strong principal and total evidence agree. Missing/ambiguous totals and
+  // additional fee rows cannot use this exception.
+  if (
+    feeKeys.length === 1 &&
+    /^(?:PHP|₱|P)?\s*0\.00$/i.test(fields[feeKeys[0]].text) &&
+    amount.reliable && !amount.ambiguous && amount.amount != null &&
+    amount.amount > 0 && strong(principal) && totals.length > 0 &&
+    totals.every(([, total]) =>
+      strong(total) &&
+      bankFieldIdentity("amount", total.text) ===
+        bankFieldIdentity("amount", principal.text)
+    )
+  ) omit(feeKeys[0], "zero_fee_reconciled");
+  return { fields, optionalFields };
+}
 
 export function bankOcrText(read: GoogleVisionOcrResult): string {
   return read.layoutText ||
@@ -150,11 +205,42 @@ function nativeWordConfidence(
   return score(word.confidence) ? word.confidence : undefined;
 }
 
+/** Units cannot alter an exactly zero fee. Use the actually observed zero
+ * digits when available; never apply this exception to a nonzero amount. */
+function zeroFeeDigitConfidence(
+  words: GoogleVisionNativeWord[],
+): number | undefined {
+  const digits = words.flatMap((word) => word.symbols).filter((symbol) =>
+    /\d/.test(symbol.text)
+  );
+  if (
+    digits.map((symbol) => symbol.text).join("") === "000" &&
+    digits.every((symbol) => score(symbol.confidence))
+  ) {
+    return Math.min(...digits.map((symbol) => symbol.confidence!));
+  }
+  // A separate numeric word also has native confidence independent of a
+  // separate currency word. A combined P0.00 word needs real symbol evidence.
+  const numeric = words.filter((word) => compact(word.text) === "0.00");
+  const observedDigits = digits.map((symbol) => symbol.confidence).filter(
+    score,
+  );
+  if (numeric.length === 1 && score(numeric[0].confidence)) {
+    return Math.min(numeric[0].confidence, ...observedDigits);
+  }
+  const wordScores = words.map((word) => word.confidence);
+  return digits.map((symbol) => symbol.text).join("") === "000" &&
+      observedDigits.length && wordScores.every(score)
+    ? Math.min(...observedDigits, ...wordScores as number[])
+    : undefined;
+}
+
 /** Match OCR-derived values to native observed words, never to typed/expected values. */
 function fieldEvidence(
   read: GoogleVisionOcrResult,
   raw: string | null | undefined,
   masked = false,
+  zeroFee = false,
 ): BankPaymentFieldEvidence {
   const text = String(raw || "").trim();
   const value = compact(text);
@@ -203,8 +289,13 @@ function fieldEvidence(
           masked && /[•‣●◦∙·*#]|\.{2,}|X{2,}/.test(text),
         )
       );
+      const zeroConfidence = zeroFee && /^(?:PHP|₱|P)?\s*0\.00$/i.test(text)
+        ? zeroFeeDigitConfidence(matched.map((span) => span.word))
+        : undefined;
       occurrences.push(
-        scores.length && scores.every(score)
+        zeroConfidence != null
+          ? zeroConfidence
+          : scores.length && scores.every(score)
           ? Math.min(...scores as number[])
           : undefined,
       );
@@ -261,7 +352,7 @@ export function bankApprovalConfidence(
   recipientRefinement?: BankRecipientRefinement | null,
 ): BankApprovalConfidence {
   const receipt = parsed.receipt;
-  const fields: Record<string, BankPaymentFieldEvidence> = {};
+  let fields: Record<string, BankPaymentFieldEvidence> = {};
   const add = (key: string, value?: string | null, masked = false) =>
     fields[key] = fieldEvidence(read, value, masked);
   add("reference", receipt.reference.raw);
@@ -315,7 +406,9 @@ export function bankApprovalConfidence(
     bankOcrText(read),
     /^(?:\+?\s*fee|(?:transfer|service|processing|convenience)\s+fee)\s*:?\s*/i,
   )
-    .forEach((value, index) => add(`fee${index}`, value));
+    .forEach((value, index) =>
+      fields[`fee${index}`] = fieldEvidence(read, value, false, true)
+    );
   labelledMoney(bankOcrText(read), /^total(?:\s+amount(?:\s+sent)?)?\s*:?\s*/i)
     .forEach((value, index) => add(`total${index}`, value));
   if (
@@ -385,6 +478,9 @@ export function bankApprovalConfidence(
       }
     }
   }
+  const requirements = partitionBankPaymentFields(parsed, context, fields);
+  fields = requirements.fields;
+  const optionalFields = requirements.optionalFields;
   const values = Object.values(fields);
   const complete = values.length > 0 &&
     values.every((field) => score(field.confidence));
@@ -394,6 +490,7 @@ export function bankApprovalConfidence(
       source: "bank_payment_fields",
       basis: "native_payment_value_words",
       fields,
+      optionalFields,
       complete: true,
     };
   }
@@ -412,6 +509,7 @@ export function bankApprovalConfidence(
       source: "native",
       basis: "native_whole_image",
       fields,
+      optionalFields,
       complete: false,
     };
   }
@@ -420,6 +518,7 @@ export function bankApprovalConfidence(
     source: "none",
     basis: "missing_native_payment_evidence",
     fields,
+    optionalFields,
     complete: false,
   };
 }

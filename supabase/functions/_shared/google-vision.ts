@@ -374,7 +374,19 @@ function layoutWord(
   // receipt. Their bounding rectangle is sufficient to preserve the glyph in
   // GCash audit text. Never apply this exception to letters, digits, currency,
   // mask characters, or punctuation used by a payment field.
-  if (allowUiSymbols && /^[☐□▢⇓↑↓←→✓✔]+$/.test(text)) {
+  // Vision sometimes calls the small, rotated right-hand "Get help" chevron
+  // a Greek lambda. Accept that shape only in the far lower-right corner;
+  // retain its exact observed text and native scores in the audit. A letter
+  // inside the receipt body never receives this geometry exception.
+  const footerChevron = text === "Λ" && typeof width === "number" &&
+    typeof height === "number" && width > 0 && height > 0 &&
+    Math.min(...points.map((point) => point.x)) >= width * .85 &&
+    Math.min(...points.map((point) => point.y)) >= height * .9 &&
+    Math.max(...points.map((point) => point.x)) -
+        Math.min(...points.map((point) => point.x)) <= width * .04 &&
+    Math.max(...points.map((point) => point.y)) -
+        Math.min(...points.map((point) => point.y)) <= height * .04;
+  if (allowUiSymbols && (/^[☐□▢⇓↑↓←→✓✔]+$/.test(text) || footerChevron)) {
     const left = Math.min(...points.map((point) => point.x));
     const right = Math.max(...points.map((point) => point.x));
     const top = Math.min(...points.map((point) => point.y));

@@ -14,7 +14,7 @@ function receiptReviewUi() {
   const vm = require('node:vm');
   const admin = read('admin.html');
   const source = admin.slice(admin.indexOf('const RECEIPT_FLAG_LABELS ='), admin.indexOf('function bookingSourceLabel('));
-  return vm.runInNewContext(source + '\n({bankReceiptAccountDisplay,receiptFlagLabel,receiptReasonText,receiptFlagChips,receiptDetailsHtml});', {
+  return vm.runInNewContext(source + '\n({bankReceiptAccountDisplay,receiptFlagsForDisplay,receiptFlagLabel,receiptReasonText,receiptFlagChips,receiptDetailsHtml});', {
     esc: value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])),
     fmt: value => `₱${value}`,
   });
@@ -41,9 +41,62 @@ test('GoTyme review explains actual low-confidence O/0 account evidence without 
   assert.match(html,/85\.29%/);
   assert.match(html,/\*\*\*9W07/);
   assert.doesNotMatch(html,/Number not read|Receiver number unreadable|Account not read|Auto-verified/);
-  assert.match(ui.receiptFlagChips(booking.receiptFlags,false,booking),/Account needs review/);
+  const chips=ui.receiptFlagChips(booking.receiptFlags,false,booking);
+  assert.match(chips,/Recipient account character unclear \(O\/0\)/);
+  assert.doesNotMatch(chips,/Account needs review|Receiver number unreadable/);
   assert.match(ui.receiptReasonText(booking.receiptFlags,booking),/OCR confidence below threshold/);
   assert.equal(JSON.stringify(booking),before,'display never changes stored flags, OCR values, or payment state');
+});
+
+test('GoTyme display removes only duplicate destination warnings and preserves saved review status', () => {
+  const ui=receiptReviewUi();
+  const booking=uncertainAccountBooking();
+  booking.receiptFlags.push('RECEIVER_ACCOUNT_UNREADABLE','AMOUNT_MISMATCH');
+  const before=JSON.stringify(booking);
+  assert.deepEqual(Array.from(ui.receiptFlagsForDisplay(booking)),['RECEIVER_ACCOUNT_MISMATCH','LOW_OCR_CONFIDENCE','AMOUNT_MISMATCH']);
+  const reason=ui.receiptReasonText(booking.receiptFlags,booking);
+  assert.match(reason,/Recipient account character unclear \(O\/0\)/);
+  assert.match(reason,/OCR confidence below threshold|Amount mismatch/);
+  assert.doesNotMatch(reason,/Account needs review|Recipient account could not be read/);
+  assert.equal(JSON.stringify(booking),before);
+  const manuallyConfirmed=structuredClone(booking);
+  manuallyConfirmed.paymentStatus='paid';manuallyConfirmed.status='confirmed';
+  assert.doesNotMatch(ui.receiptDetailsHtml(manuallyConfirmed),/Character Check|Verified Account Ending|Destination matched by character check/);
+  assert.equal(manuallyConfirmed.receiptStatus,'manual_review');
+
+  const single=uncertainAccountBooking();single.receiptFlags=['NUMBER_UNREADABLE','LOW_OCR_CONFIDENCE'];
+  assert.deepEqual(Array.from(ui.receiptFlagsForDisplay(single)),single.receiptFlags);
+  assert.match(ui.receiptFlagChips(single.receiptFlags,false,single),/Account needs review/);
+  const missing=uncertainAccountBooking();
+  Object.assign(missing.receiptExtracted.bankTransfer.recipient,{accountRaw:null,accountSuffix:null});
+  assert.deepEqual(Array.from(ui.receiptFlagsForDisplay(missing)),missing.receiptFlags,'genuinely missing account evidence must remain visible');
+});
+
+test('GoTyme saved name-only policy displays the configured masked-name check without hiding other failures', () => {
+  const ui=receiptReviewUi();
+  const booking=uncertainAccountBooking();
+  Object.assign(booking.receiptExtracted,{recipientVerificationPolicy:'masked_name_only',expectedReceiverName:'KRISTIE LOU CACHUELA'});
+  booking.receiptExtracted.bankTransfer.recipient.nameRaw='KR****E L** C*';
+  booking.receiptFlags.push('AMOUNT_MISMATCH');
+  const before=JSON.stringify(booking);
+  const html=ui.receiptDetailsHtml(booking);
+  assert.match(html,/Receiver Check[\s\S]*?Configured masked name matched/);
+  assert.match(html,/Recipient Account Read[\s\S]*?\*\*\*9W07/,'observed account remains available for audit');
+  assert.doesNotMatch(html,/Saved GCash QR Account Ending|character unclear \(O\/0\)|Account does not match|Auto-verified/);
+  assert.match(html,/Configured Recipient[\s\S]*?KRISTIE LOU CACHUELA/);
+  assert.doesNotMatch(html,/DWQM4TK3JDNZU9WO7/,'the optional destination account is not presented as the configured receiver gate');
+  assert.deepEqual(Array.from(ui.receiptFlagsForDisplay(booking)),['LOW_OCR_CONFIDENCE','AMOUNT_MISMATCH']);
+  assert.equal(JSON.stringify(booking),before);
+  const mismatch=structuredClone(booking);
+  mismatch.receiptExtracted.bankTransfer.recipientComparison.name='mismatch';
+  mismatch.receiptFlags.push('RECEIVER_NAME_MISMATCH');
+  assert.match(ui.receiptDetailsHtml(mismatch),/Configured masked name needs review/);
+  assert.match(ui.receiptReasonText(mismatch.receiptFlags,mismatch),/Receiver name mismatch/);
+  assert.deepEqual(Array.from(ui.receiptFlagsForDisplay(mismatch)),['RECEIVER_ACCOUNT_MISMATCH','LOW_OCR_CONFIDENCE','AMOUNT_MISMATCH','RECEIVER_NAME_MISMATCH']);
+  const unsupported=structuredClone(booking);unsupported.receiptExtracted.recipientVerificationPolicy='unknown';
+  assert.doesNotMatch(ui.receiptDetailsHtml(unsupported),/Configured masked name matched/);
+  const missing=structuredClone(booking);missing.receiptExtracted.bankTransfer.recipient.nameRaw=null;
+  assert.match(ui.receiptDetailsHtml(missing),/Configured masked name needs review/);
 });
 
 test('account ambiguity requires matching native field evidence and exactly one O/0 difference', () => {

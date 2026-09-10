@@ -92,6 +92,8 @@ export type BankRecipientComparison = {
 };
 
 export type ReceiptVerificationContext = {
+  /** Server-owned GoTyme setting. Other providers ignore this option. */
+  gotymeRecipientPolicy?: "name_and_account" | "masked_name_only";
   typedReference?: string;
   expectedAmount: number | null;
   pricingAvailable: boolean;
@@ -117,6 +119,7 @@ export type BankReceiptVerificationEvidence = {
   parserVersion: BankToGcashReceiptParse["parserVersion"];
   flags: string[];
   recipientComparison: BankRecipientComparison;
+  recipientPolicy?: "name_and_account" | "masked_name_only";
   dedupeKeys: ReceiptDedupeKey[];
 };
 
@@ -711,10 +714,14 @@ export function verifyBankToGcashReceipt(
   if (parsed.indicators.competingProviderBrand) {
     addUnique(flags, "METHOD_MISMATCH");
   }
-  if (parsed.indicators.failureStatus) addUnique(flags, "TRANSFER_STATUS_INVALID");
+  if (parsed.indicators.failureStatus) {
+    addUnique(flags, "TRANSFER_STATUS_INVALID");
+  }
   if (parsed.indicators.pendingStatus) addUnique(flags, "TRANSFER_PENDING");
-  if (!parsed.indicators.transferSuccess && !parsed.indicators.failureStatus &&
-    !parsed.indicators.pendingStatus) {
+  if (
+    !parsed.indicators.transferSuccess && !parsed.indicators.failureStatus &&
+    !parsed.indicators.pendingStatus
+  ) {
     addUnique(flags, "TRANSFER_STATUS_UNREADABLE");
   }
   if (!parsed.indicators.destinationGcash) {

@@ -21,6 +21,7 @@ const isGcashRecipientAccepted = vm.runInNewContext(stripTypeScriptTypes(
 function verifyGate(provider = 'gotyme', comparison = {}, overrides = {}) {
   return vm.runInNewContext(evidenceGate, {
     isGcashRecipientAccepted,
+    providerContext: { gotymeRecipientPolicy: 'name_and_account' },
     providerParse: {
       provider,
       receipt: {

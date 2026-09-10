@@ -7644,6 +7644,13 @@ Object.assign(RECEIPT_FLAG_LABELS, {
   RECEIVER_ACCOUNT_MISMATCH: 'Recipient account does not match',
   REVIEW_FINALIZATION_FAILED: 'Receipt check was saved in the audit but could not finish updating the booking',
 });
+function gotymeNameOnlyReceiver(ex){
+  if (ex?.provider !== 'gotyme' || ex.parserVersion !== 'gotyme_to_gcash_v1' || ex.recipientVerificationPolicy !== 'masked_name_only' ||
+    (ex.bankTransfer?.provider != null && ex.bankTransfer.provider !== 'gotyme')) return null;
+  const matched = Boolean(String(ex.expectedReceiverName || '').trim()) && Boolean(String(ex.bankTransfer?.recipient?.nameRaw || '').trim()) &&
+    ['exact','masked_compatible'].includes(ex.bankTransfer?.recipientComparison?.name);
+  return { matched, label: matched ? 'Configured masked name matched' : 'Configured masked name needs review' };
+}
 function bankReceiptAccountDisplay(ex){
   const provider = ({maya_to_gcash_v1:'maya',bdopay_to_gcash_v1:'bdopay',bpi_to_gcash_v1:'bpi',gotyme_to_gcash_v1:'gotyme',maribank_to_gcash_v1:'maribank'})[ex?.parserVersion];
   const bank = ex?.bankTransfer;
@@ -7664,16 +7671,17 @@ function bankReceiptAccountDisplay(ex){
   const comparedExpected = masked ? expected.slice(-observed.length) : expected;
   const differences = [...observed].map((character, index) => [character, comparedExpected[index]])
     .filter(([actual, configured]) => actual !== configured);
-  const characterUnclear = provider === 'gotyme' && comparison === 'mismatch' && confidence !== null && confidence < .9 &&
+  const nameOnly = gotymeNameOnlyReceiver(ex);
+  const characterUnclear = !nameOnly && provider === 'gotyme' && comparison === 'mismatch' && confidence !== null && confidence < .9 &&
     observed.length >= 4 && expected.length >= observed.length && comparedExpected.length === observed.length && differences.length === 1 &&
     differences[0].every(character => character === 'O' || character === '0');
-  const label = characterUnclear ? 'Recipient account character unclear (O/0)' : ({
+  const label = nameOnly?.label || (characterUnclear ? 'Recipient account character unclear (O/0)' : ({
     exact:'Account matches saved GCash QR',
     suffix_only:'Visible account ending matches saved GCash QR',
     mismatch:'Account does not match — check original receipt',
     missing:'Account read but comparison is uncertain — owner review required',
     not_configured:'GCash QR account not configured',
-  })[comparison] || 'Account needs review';
+  })[comparison] || 'Account needs review');
   return { raw, comparison, confidence, characterUnclear, label };
 }
 function receiptFlagLabel(flag, b){
@@ -7682,9 +7690,23 @@ function receiptFlagLabel(flag, b){
   if (account?.characterUnclear && flag === 'RECEIVER_ACCOUNT_MISMATCH') return account.label;
   return RECEIPT_FLAG_LABELS[flag] || flag;
 }
+function receiptAccountFlagsForDisplay(flags, b){
+  const list = Array.isArray(flags) ? flags : [];
+  const ex = b?.receiptExtracted || b?.receipt_extracted;
+  if (gotymeNameOnlyReceiver(ex)?.matched) {
+    return list.filter(flag => !['NUMBER_UNREADABLE','WRONG_GCASH_NUMBER','RECEIVER_ACCOUNT_UNREADABLE','RECEIVER_ACCOUNT_MISMATCH'].includes(flag));
+  }
+  const account = bankReceiptAccountDisplay(ex);
+  // A read account with an explicit mismatch already explains the destination
+  // failure. Keep the saved audit flags; omit only duplicate generic warnings.
+  if (ex?.provider === 'gotyme' && account?.comparison === 'mismatch' && list.includes('RECEIVER_ACCOUNT_MISMATCH')) {
+    return list.filter(flag => flag !== 'NUMBER_UNREADABLE' && flag !== 'RECEIVER_ACCOUNT_UNREADABLE');
+  }
+  return list;
+}
 function receiptReasonText(flags, b){
   if (!flags || !flags.length) return 'No specific reason saved';
-  return flags.map(f => receiptFlagLabel(f, b)).join(', ');
+  return receiptAccountFlagsForDisplay(flags, b).map(f => receiptFlagLabel(f, b)).join(', ');
 }
 function removeReceiptFlags(flags, blocked){
   const blockedSet = new Set(blocked);
@@ -7723,7 +7745,7 @@ function receiptFlagsForDisplay(b){
   if (Number.isFinite(age) && age <= windowMinutes) {
     flags = removeReceiptFlags(flags, ['TIME_EXPIRED']);
   }
-  return flags;
+  return method === 'gotyme' ? receiptAccountFlagsForDisplay(flags, b) : flags;
 }
 function receiptBadge(b){
   const s = b.receiptStatus || 'none';
@@ -7790,7 +7812,7 @@ function duplicatePaymentRefBadge(b){
 function receiptFlagChips(flags, transferResolved = false, b){
   if (!flags || !flags.length) return '';
   const duplicateFlags = new Set(['DUPLICATE_REF','POSSIBLE_DUPLICATE_REF']);
-  return flags.map(f => {
+  return receiptAccountFlagsForDisplay(flags, b).map(f => {
     const label = transferResolved && duplicateFlags.has(f)
       ? `Historical: ${RECEIPT_FLAG_LABELS[f] || f} · ownership resolved`
       : receiptFlagLabel(f, b);
@@ -7826,6 +7848,7 @@ function receiptTimeValue(extracted){
 }
 function receiptReceiverValue(extracted){
   if (!extracted) return '--';
+  if (gotymeNameOnlyReceiver(extracted)) return extracted.expectedReceiverName ? esc(extracted.expectedReceiverName) : '--';
   const parts = [extracted.expectedReceiverName, extracted.expectedReceiverNumber, extracted.expectedReceiverAccount].filter(Boolean);
   return parts.length ? esc(parts.join(' / ')) : '--';
 }
@@ -7891,6 +7914,7 @@ function receiptDetailsHtml(b){
   const bankTransfer = ex.bankTransfer || null;
   const recipientCheck = gcash?.recipientComparison || {};
   const bankAccountDisplay = bankReceiptAccountDisplay(ex);
+  const gotymeNameOnly = gotymeNameOnlyReceiver(ex);
   const bankReceiptProvider = ({
     gotyme_to_gcash_v1: 'gotyme',
     maribank_to_gcash_v1: 'maribank',
@@ -7975,7 +7999,9 @@ function receiptDetailsHtml(b){
       ['Payment Route', receiptDetailValue(bankReceiptProvider === 'gotyme' ? 'GoTyme Bank → GCash' : 'MariBank → GCash'), true],
       ['Recipient Name', receiptDetailValue(bankTransfer.recipient?.nameRaw), true],
       ['Recipient Account Read', receiptDetailValue(bankTransfer.recipient?.accountRaw), true],
-      ...(bankUsesQrAccount ? [
+      ...(gotymeNameOnly ? [
+        ['Receiver Check', receiptDetailValue(gotymeNameOnly.label), true],
+      ] : bankUsesQrAccount ? [
         ['Saved GCash QR Account Ending', receiptDetailValue(String(ex.expectedReceiverAccount || '').slice(-4)), true],
         ['Destination Check', receiptDetailValue(bankAccountDisplay?.label || ({
           exact: 'Matches saved GCash QR',
@@ -7987,7 +8013,7 @@ function receiptDetailsHtml(b){
       ] : [
         ['Destination Check', receiptDetailValue(gcashPhoneCheckLabel(bankTransfer.recipientComparison?.phone)), true],
       ]),
-      ['Name Check', receiptDetailValue(gcashNameCheckLabel(bankTransfer.recipientComparison?.name)), true],
+      ...(!gotymeNameOnly ? [['Name Check', receiptDetailValue(gcashNameCheckLabel(bankTransfer.recipientComparison?.name)), true]] : []),
       ['InstaPay Trace ID (not payment ref)', receiptDetailValue(bankTransfer.railReference?.value), true],
     ] : []),
     ...(bankAccountDisplay && !showBankReceipt ? [['Destination Account Check', receiptDetailValue(bankAccountDisplay.label), true]] : []),

@@ -3,6 +3,10 @@ import {
   parseGotymeToGcashReceipt,
   verifyGotymeToGcashReceipt,
 } from "./gotyme.ts";
+import {
+  parseMaribankToGcashReceipt,
+  verifyMaribankToGcashReceipt,
+} from "./maribank.ts";
 
 function equal(actual: unknown, expected: unknown, message: string): void {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {
@@ -57,6 +61,114 @@ const CONTEXT = {
 function verify(text = OCR, context = CONTEXT) {
   return verifyGotymeToGcashReceipt(parseGotymeToGcashReceipt(text), context);
 }
+
+Deno.test("server-selected GoTyme name-only policy retains observed account but omits its gate", () => {
+  const receipt = parseGotymeToGcashReceipt(OCR.replace("9WO7", "9W07"));
+  includes(
+    verifyGotymeToGcashReceipt(receipt, CONTEXT).flags,
+    "RECEIVER_ACCOUNT_MISMATCH",
+    "default stays strict",
+  );
+  const selected = verifyGotymeToGcashReceipt(receipt, {
+    ...CONTEXT,
+    gotymeRecipientPolicy: "masked_name_only",
+  });
+  equal(selected.flags, [], "masked recipient name matches");
+  equal(selected.recipientPolicy, "masked_name_only", "policy is audited");
+  equal(
+    selected.recipientComparison.account,
+    "mismatch",
+    "raw comparison remains factual",
+  );
+  equal(receipt.recipient.accountSuffix, "9W07", "no correction is invented");
+  equal(
+    selected.dedupeKeys.length,
+    2,
+    "both primary and rail keys remain required",
+  );
+});
+
+Deno.test("GoTyme name-only policy accepts missing account but requires a matching configured name", () => {
+  const noAccount = OCR.replace("****************9WO7\n", "");
+  equal(
+    verifyGotymeToGcashReceipt(parseGotymeToGcashReceipt(noAccount), {
+      ...CONTEXT,
+      gotymeRecipientPolicy: "masked_name_only",
+    }).flags,
+    [],
+    "account optional",
+  );
+  const wrongName = OCR.replace("KR****E L** C*", "OTHER RECIPIENT");
+  includes(
+    verifyGotymeToGcashReceipt(parseGotymeToGcashReceipt(wrongName), {
+      ...CONTEXT,
+      gotymeRecipientPolicy: "masked_name_only",
+    }).flags,
+    "RECEIVER_NAME_MISMATCH",
+    "wrong name remains blocked",
+  );
+  includes(
+    verifyGotymeToGcashReceipt(parseGotymeToGcashReceipt(noAccount), {
+      ...CONTEXT,
+      expectedRecipientName: "",
+      gotymeRecipientPolicy: "masked_name_only",
+    }).flags,
+    "MERCHANT_CONFIG_MISSING",
+    "a name configuration is mandatory",
+  );
+  const noName = OCR.replace("KR****E L** C*", "********");
+  includes(
+    verifyGotymeToGcashReceipt(parseGotymeToGcashReceipt(noName), {
+      ...CONTEXT,
+      gotymeRecipientPolicy: "masked_name_only",
+    }).flags,
+    "RECEIVER_NAME_UNREADABLE",
+    "unreadable name remains blocked",
+  );
+});
+
+Deno.test("GoTyme name-only policy preserves transfer amount time destination and reference gates", () => {
+  for (
+    const [text, flag] of [
+      [`${OCR}\nProcessing`, "TRANSFER_PENDING"],
+      [`${OCR}\nReversed`, "TRANSFER_STATUS_INVALID"],
+      [OCR.replaceAll("265.00", "300.00"), "AMOUNT_MISMATCH"],
+      [OCR.replace("1:59 PM", "2:30 PM"), "TIME_EXPIRED"],
+      [
+        OCR.replace("G-Xchange, Inc (GCash)", "Another bank"),
+        "GXI_DESTINATION_UNREADABLE",
+      ],
+      [OCR.replace("ITO260909055941016", ""), "REF_UNREADABLE"],
+    ]
+  ) {
+    includes(
+      verifyGotymeToGcashReceipt(parseGotymeToGcashReceipt(text), {
+        ...CONTEXT,
+        gotymeRecipientPolicy: "masked_name_only",
+      }).flags,
+      flag,
+      flag,
+    );
+  }
+});
+
+Deno.test("GoTyme name-only setting does not relax MariBank recipient checks", () => {
+  const receipt = parseMaribankToGcashReceipt(
+    OCR.replace("GoTyme", "MariBank").replace(
+      "Transferred",
+      "Transfer successful",
+    ).replace("9WO7", "9W07"),
+  );
+  const evidence = verifyMaribankToGcashReceipt(receipt, {
+    ...CONTEXT,
+    gotymeRecipientPolicy: "masked_name_only",
+  });
+  includes(
+    evidence.flags,
+    "RECEIVER_ACCOUNT_MISMATCH",
+    "other providers stay strict",
+  );
+});
 
 Deno.test("GoTyme transferred heading cannot override an adverse transaction status", () => {
   equal(verify().flags, [], "baseline receipt must be clean");

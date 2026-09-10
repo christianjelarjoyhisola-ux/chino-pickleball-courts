@@ -959,6 +959,26 @@ Deno.test("GCash layout preserves rotated Android navigation glyphs without acce
   );
 });
 
+Deno.test("native layout retains a small footer chevron without accepting rotated payment text", async () => {
+  const nav = visionWord("Λ", 900, 1860);
+  nav.boundingBox.vertices = [{ x: 920, y: 1860 }, { x: 920, y: 1890 },
+    { x: 900, y: 1890 }, { x: 900, y: 1860 }];
+  const words = [visionWord("Amount", 20, 100), visionWord("P4240.00", 400, 100), nav];
+  const read = async (tail: string) => googleVisionOcr("test", "test", {
+    fetcher: async () => Response.json({ responses: [{ fullTextAnnotation: {
+      text: "Amount\nP4240.00\n" + tail, pages: [visionPage(words)],
+    } }] }),
+  });
+  const result = await read("Λ");
+  assertEquals(result.nativeLines?.map(line => line.text).join("\n"), "Amount P4240.00\nΛ", "footer retains valid receipt rows");
+  assertEquals(result.text, "Amount\nP4240.00\nΛ", "raw evidence stays unchanged");
+  nav.symbols = [{ text: "Failed" }];
+  assertEquals((await read("Failed")).nativeLines, undefined, "rotated status is not a UI glyph");
+  nav.symbols = [{ text: "Λ" }];
+  nav.boundingBox.vertices = nav.boundingBox.vertices.map(p => ({ ...p, y: p.y - 900 }));
+  assertEquals((await read("Λ")).nativeLines, undefined, "body letters keep strict geometry");
+});
+
 Deno.test("recipient crop confidence measures native visible characters and never fabricates missing symbol scores", () => {
   const word = (text: string, x: number, y: number) => ({
     ...visionWord(text, x, y),

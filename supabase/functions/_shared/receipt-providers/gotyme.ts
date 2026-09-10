@@ -108,9 +108,42 @@ export function verifyGotymeToGcashReceipt(
   parsed: BankToGcashReceiptParse & { provider: "gotyme" },
   context: ReceiptVerificationContext,
 ): BankReceiptVerificationEvidence & { provider: "gotyme" } {
-  return verifyBankToGcashReceipt(
+  const evidence = verifyBankToGcashReceipt(
     parsed,
     context,
     GOTYME_CONFIG.unreadableFlag,
   ) as BankReceiptVerificationEvidence & { provider: "gotyme" };
+  evidence.recipientPolicy =
+    context.gotymeRecipientPolicy === "masked_name_only"
+      ? "masked_name_only"
+      : "name_and_account";
+  if (evidence.recipientPolicy === "masked_name_only") {
+    // The owner-selected policy checks the actually observed recipient name.
+    // Keep account observations in the audit, but they do not decide receipt
+    // eligibility. All transfer, destination, amount, time and replay gates stay.
+    const accountOnlyFlags = new Set([
+      "MERCHANT_CONFIG_MISSING",
+      "RECEIVER_ACCOUNT_MISMATCH",
+      "RECEIVER_ACCOUNT_UNREADABLE",
+      "WRONG_GCASH_NUMBER",
+      "NUMBER_UNREADABLE",
+    ]);
+    evidence.flags = evidence.flags.filter((flag) =>
+      !accountOnlyFlags.has(flag)
+    );
+    if (!String(context.expectedRecipientName || "").trim()) {
+      evidence.flags.push("MERCHANT_CONFIG_MISSING");
+    }
+    if (
+      !["exact", "masked_compatible"].includes(
+        evidence.recipientComparison.name,
+      )
+    ) {
+      const flag = evidence.recipientComparison.name === "mismatch"
+        ? "RECEIVER_NAME_MISMATCH"
+        : "RECEIVER_NAME_UNREADABLE";
+      if (!evidence.flags.includes(flag)) evidence.flags.push(flag);
+    }
+  }
+  return evidence;
 }

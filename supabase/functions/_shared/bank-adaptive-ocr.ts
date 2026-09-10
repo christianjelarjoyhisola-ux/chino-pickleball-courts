@@ -62,6 +62,9 @@ export type BankRecoveryResult = {
   accepted: boolean;
   reason: string;
   selected?: BankRecoverySelected;
+  /** Server-only native observations for a later independent-field check.
+   * Persist the bounded audit below, not these full in-memory structures. */
+  observations?: BankRecoverySelected[];
   audit: {
     version: "bank_adaptive_v1";
     provider: BankProviderParse["provider"];
@@ -80,6 +83,12 @@ export type BankRecoveryResult = {
 function nativeScore(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= .9 &&
     value <= 1;
+}
+
+function conservedFields(approval: BankApprovalConfidence) {
+  return { ...Object.fromEntries(Object.entries(approval.optionalFields || {})
+    .filter(([, field]) => field.optionalReason !== "gotyme_recipient_policy")),
+    ...approval.fields };
 }
 
 export function bankOriginalRecoveryVeto(
@@ -135,8 +144,8 @@ export function bankRecoveryConservationFlags(
     context,
   );
   const flags: string[] = [];
-  const candidateFields = candidate.approval.fields;
-  for (const [key, field] of Object.entries(primary.fields)) {
+  const candidateFields = conservedFields(candidate.approval);
+  for (const [key, field] of Object.entries(conservedFields(primary))) {
     const trusted = nativeScore(field.confidence) ||
       field.occurrenceConfidences?.some(nativeScore) ||
       (!original.read.nativeLines?.length &&
@@ -168,7 +177,7 @@ export function bankRecoveryConservationFlags(
 }
 
 function signature(candidate: BankRecoverySelected): string {
-  const fields = candidate.approval.fields;
+  const fields = conservedFields(candidate.approval);
   return JSON.stringify({
     provider: candidate.parsed.provider,
     destination: candidate.parsed.destinationProvider,
@@ -214,15 +223,20 @@ export function evaluateBankRecoveryRead(
     context,
   );
   flags.push(...vetoes, ...conservation);
+  // Column-order text without a usable native layout can lose a label/value
+  // association. It is not a new high-confidence financial contradiction.
+  // Keep its failed checks in the audit and reject it as a candidate, while
+  // allowing another independent strategy to retain the original good fields.
+  const adverseStatus = bankReceiptHasIncompleteStatus(read.text) ||
+    bankReceiptHasIncompleteStatus(bankOcrText(read));
+  const hardConflict = adverseStatus || vetoes.includes("COMPETING_PROVIDER") ||
+    (!!read.nativeLines?.length &&
+      (vetoes.length > 0 || conservation.length > 0));
   return {
     selected,
     reading: {
       strategy,
-      outcome: vetoes.length || conservation.length
-        ? "conflict"
-        : flags.length
-        ? "uncertain"
-        : "clean",
+      outcome: hardConflict ? "conflict" : flags.length ? "uncertain" : "clean",
       flags: [...new Set(flags)],
       elapsedMs: read.requestMetrics?.durationMs ?? 0,
       confidence: approval.confidence,
@@ -263,6 +277,7 @@ export async function recoverBankReceipt(
     id === options.preferredStrategy
   );
   const readings: BankRecoveryReading[] = [];
+  const observations: BankRecoverySelected[] = [];
   const layout = bankLayoutFamily(
     original.parsed.provider,
     bankOcrText(original.read),
@@ -274,6 +289,7 @@ export async function recoverBankReceipt(
     accepted: !!selected,
     reason,
     ...(selected ? { selected } : {}),
+    observations,
     audit: {
       version: "bank_adaptive_v1",
       provider: original.parsed.provider,
@@ -399,6 +415,11 @@ export async function recoverBankReceipt(
     }
   }));
   readings.push(...candidates.map((candidate) => candidate.reading));
+  observations.push(
+    ...candidates.flatMap((candidate) =>
+      candidate.selected ? [candidate.selected] : []
+    ),
+  );
   if (Date.now() - started > deadlineMs) {
     return result("recovery_deadline_exceeded");
   }
