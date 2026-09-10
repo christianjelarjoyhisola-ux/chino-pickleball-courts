@@ -4,6 +4,7 @@ import {
   isGcashRecipientAccepted,
   normalizeGcashMobile,
   parseGcashReceipt,
+  recoverGcashReferenceText,
 } from "./gcash-receipt.ts";
 
 function assertEquals(
@@ -671,6 +672,48 @@ Deno.test("reported single-dot phone OCR retains the visible GCash suffix", () =
     ),
     true,
     "single-dot phone and independently masked name agree",
+  );
+});
+
+Deno.test("original OCR recovers a reference lost by layout reconstruction", () => {
+  const original = `4:46
+Amount
+Express Send
+KR....E L.. C.
++63 960 942 2169
+Sent via GCash
+Total Amount Sent
+LTE 68
+530.00
+P530.00
+Ref No. 0044896805912
+Sep 10, 2026 4:46 PM`;
+  const layout = original.replace("\nRef No. 0044896805912", "");
+  const recovered = recoverGcashReferenceText(layout, original);
+  const parsed = parseGcashReceipt(recovered);
+  assertEquals(parsed.reference.value, "0044896805912", "labelled OCR ref");
+  assertEquals(parsed.reference.source, "ref_label", "label remains explicit");
+
+  const visibleConflict = layout.replace(
+    "Sep 10, 2026 4:46 PM",
+    "Ref No. 9999999999999\nSep 10, 2026 4:46 PM",
+  );
+  assertEquals(
+    recoverGcashReferenceText(visibleConflict, original),
+    visibleConflict,
+    "never replace a visible layout reference",
+  );
+
+  const ambiguousOriginal = `${original}\nRef No. 1111111111111`;
+  assertEquals(
+    recoverGcashReferenceText(layout, ambiguousOriginal),
+    layout,
+    "never recover conflicting original references",
+  );
+  assertEquals(
+    recoverGcashReferenceText(layout, `${layout}\n0044896805912`),
+    layout,
+    "standalone digits are not enough for cross-reading recovery",
   );
 });
 

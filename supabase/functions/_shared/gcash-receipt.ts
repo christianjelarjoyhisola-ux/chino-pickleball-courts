@@ -320,6 +320,29 @@ function parseReference(
   };
 }
 
+/**
+ * Preserve a uniquely labelled reference from Vision's original text when its
+ * geometry-based reading loses that row. Never replace a visible layout
+ * reference, recover an ambiguous reading, or consult a submitted reference.
+ */
+export function recoverGcashReferenceText(
+  layoutText: string,
+  originalText: string,
+): string {
+  const layout = parseReference(receiptLines(layoutText), undefined);
+  if (layout.ambiguous || layout.field.value) return layoutText;
+
+  const original = parseReference(receiptLines(originalText), undefined);
+  if (
+    original.ambiguous || !original.field.value ||
+    original.field.source !== "ref_label" ||
+    original.field.confidence !== "high"
+  ) return layoutText;
+
+  const recovered = original.field.raw || original.field.value;
+  return `${layoutText.trimEnd()}\nRef No. ${recovered}`;
+}
+
 function validCalendarDate(year: number, month: number, day: number): boolean {
   const date = new Date(Date.UTC(year, month, day));
   return date.getUTCFullYear() === year &&

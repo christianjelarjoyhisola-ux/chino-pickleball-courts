@@ -7685,7 +7685,11 @@ function bankReceiptAccountDisplay(ex){
   return { raw, comparison, confidence, characterUnclear, label };
 }
 function receiptFlagLabel(flag, b){
-  const account = bankReceiptAccountDisplay(b?.receiptExtracted || b?.receipt_extracted);
+  const extracted = b?.receiptExtracted || b?.receipt_extracted;
+  const account = bankReceiptAccountDisplay(extracted);
+  if (flag === 'REF_UNREADABLE' && extracted?.provider === 'gcash' &&
+    extracted?.ocrFallbackReason === 'google_missing_reference' &&
+    !extracted?.gcash?.reference?.value) return 'Reference lost during OCR layout reading';
   if (account && flag === 'NUMBER_UNREADABLE') return 'Account needs review';
   if (account?.characterUnclear && flag === 'RECEIVER_ACCOUNT_MISMATCH') return account.label;
   return RECEIPT_FLAG_LABELS[flag] || flag;

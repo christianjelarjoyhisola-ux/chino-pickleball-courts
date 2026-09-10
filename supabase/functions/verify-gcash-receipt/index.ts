@@ -38,6 +38,7 @@ import {
   type GcashReceiptParse,
   type GcashRecipientComparison,
   isGcashRecipientAccepted,
+  recoverGcashReferenceText,
 } from "../_shared/gcash-receipt.ts";
 import { gcashApprovalConfidence } from "../_shared/gcash-approval-confidence.ts";
 import { rereadGcashRecipient } from "../_shared/gcash-recipient-ocr.ts";
@@ -1147,8 +1148,11 @@ async function runOCR(
       const v = await ocr(visionKey, base64);
       // Preserve the original read for audit while matching values to their
       // labels with validated word geometry on supported receipt layouts.
+      const gcashLayoutText = v.gcashEvidence?.layoutText;
       const layoutText = provider === "gcash"
-        ? v.gcashEvidence?.layoutText
+        ? gcashLayoutText?.trim()
+          ? recoverGcashReferenceText(gcashLayoutText, v.text)
+          : gcashLayoutText
         : isBankAdaptiveProvider(provider) && (v.layoutText?.trim() || v.nativeLines?.length)
         ? bankOcrText(v)
         : undefined;

@@ -136,6 +136,14 @@ test('observed bank accounts use account status while genuinely missing destinat
   assert.doesNotMatch(ui.receiptDetailsHtml(missing),/Recipient Account OCR Confidence|character unclear \(O\/0\)/);
 });
 
+test('GCash layout-loss diagnostics distinguish a recovered OCR reference from an unreadable one', () => {
+  const ui=receiptReviewUi();
+  const layoutLoss={receiptExtracted:{provider:'gcash',ocrFallbackReason:'google_missing_reference',gcash:{reference:{value:null}}}};
+  assert.equal(ui.receiptFlagLabel('REF_UNREADABLE',layoutLoss),'Reference lost during OCR layout reading');
+  const ordinary={receiptExtracted:{provider:'gcash',ocrFallbackReason:null,gcash:{reference:{value:null}}}};
+  assert.equal(ui.receiptFlagLabel('REF_UNREADABLE',ordinary),'Reference unreadable');
+});
+
 test('receipt reading history shows only saved attempts and keeps agreement separate from confidence', () => {
   assert.deepEqual(readingHistoryRows({}), [], 'legacy records do not invent a check time or readings');
   const rows = readingHistoryRows({receiptExtracted: {
