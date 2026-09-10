@@ -14,6 +14,10 @@ const courtBreakdownMigrationSource = fs.readFileSync(
   path.join(root, 'supabase', 'migrations', '20260901210000_platform_allocation_court_breakdown.sql'),
   'utf8',
 );
+const preRemittanceReleaseMigrationSource = fs.readFileSync(
+  path.join(root, 'supabase', 'migrations', '20260911100000_pre_remittance_booking_fee_releases.sql'),
+  'utf8',
+);
 const courtBreakdownDashboardSql = courtBreakdownMigrationSource.match(
   /create or replace function public\.get_booking_fee_remittance_dashboard\(\)[\s\S]*?\n\$\$;/i,
 )?.[0] || '';
@@ -153,6 +157,43 @@ test('the SQL ledger preserves audit history and excludes released rows from pay
   assert.match(migrationSource, /sum\(r\.amount_settled\)[\s\S]*?where r\.status <> 'cancelled'/i);
   assert.match(migrationSource, /booking_fee_adjustment_applications[\s\S]*?void_delete_booking_group/i);
   assert.match(migrationSource, /already used for a different platform-fee adjustment/i);
+});
+
+test('cancelled rejected fees receive an immutable pre-remittance release instead of being erased', () => {
+  assert.match(preRemittanceReleaseMigrationSource, /create table if not exists public\.booking_fee_pre_remittance_releases/i);
+  assert.match(preRemittanceReleaseMigrationSource, /released_amount < 0[\s\S]*?released_amount = -original_fee_amount/i);
+  assert.match(preRemittanceReleaseMigrationSource, /prevent_booking_fee_pre_release_change/i);
+  assert.match(preRemittanceReleaseMigrationSource, /after update of status, payment_status on public\.bookings/i);
+  assert.match(preRemittanceReleaseMigrationSource, /new\.status <> 'cancelled'[\s\S]*?new\.payment_status not in \('rejected', 'failed', 'unpaid'\)/i);
+  assert.match(preRemittanceReleaseMigrationSource, /active_remittance\.status not in \('prepared', 'payment_rejected'\)/i);
+  assert.match(preRemittanceReleaseMigrationSource, /from public\.booking_fee_pre_remittance_releases release[\s\S]*?release\.booking_ref = b\.ref/i);
+  assert.match(preRemittanceReleaseMigrationSource, /affected_count <> 4 or affected_amount <> 240 or active_item_count <> 0/i);
+  assert.match(preRemittanceReleaseMigrationSource, /booking_group_ref = 'PB-MTVPNME6-1MQO-G'/i);
+  assert.doesNotMatch(preRemittanceReleaseMigrationSource, /update\s+public\.bookings[\s\S]*?booking_fee_earned_at\s*=/i);
+});
+
+test('local remittance preview excludes a cancelled rejected earned fee but keeps manual bookings billable', async () => {
+  const common = {
+    total: 400,
+    slots: [18],
+    status: 'confirmed',
+    paymentStatus: 'paid',
+    bookingFeeEarnedAt: '2026-09-10T00:00:00.000Z',
+    bookingFeeLedgerEligibleSnapshot: true,
+    bookingFeeAmountSnapshot: 15,
+    bookingFeeRateSnapshot: 15,
+    bookingFeeTypeSnapshot: 'per_hour',
+    bookingFeeUnitsSnapshot: 1,
+    courtName: 'Court 1',
+    createdVia: 'admin',
+  };
+  const dashboard = await runLocalRemittanceDashboard([
+    { ...common, ref: 'PB-BOOK-FOR-CUSTOMER' },
+    { ...common, ref: 'CANCELLED-NO-PAYMENT', status: 'cancelled', paymentStatus: 'rejected' },
+  ]);
+  assert.equal(dashboard.accumulated.booking_rows_count, 1);
+  assert.equal(dashboard.accumulated.billable_hours, 1);
+  assert.equal(dashboard.accumulated.amount, 15);
 });
 
 test('the accumulating dashboard derives additive court totals from its authoritative unclaimed snapshot', () => {

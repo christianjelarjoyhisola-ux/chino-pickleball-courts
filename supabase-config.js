@@ -7305,12 +7305,17 @@ window.DB = {
       const earned = readDb().bookings.filter(booking => {
         const earnedAt = booking.bookingFeeEarnedAt || booking.booking_fee_earned_at;
         const transferredOut = booking.paymentReassignedToRef || booking.payment_reassigned_to_ref;
+        const bookingStatus = String(booking.status || '').toLowerCase();
+        const paymentStatus = String(booking.paymentStatus || booking.payment_status || '').toLowerCase();
+        const releasedBeforeRemittance = bookingStatus === 'cancelled'
+          && ['rejected', 'failed', 'unpaid'].includes(paymentStatus);
         const eligible = booking.bookingFeeLedgerEligibleSnapshot
           ?? booking.booking_fee_ledger_eligible_snapshot;
         const amount = Number(
           booking.bookingFeeAmountSnapshot ?? booking.booking_fee_amount_snapshot ?? 0,
         );
-        return !!earnedAt && !transferredOut && eligible !== false && Number.isFinite(amount) && amount > 0;
+        return !!earnedAt && !transferredOut && !releasedBeforeRemittance
+          && eligible !== false && Number.isFinite(amount) && amount > 0;
       });
       const reservations = new Set(earned.map(reservationKeyFor).filter(Boolean));
       const breakdown = new Map();
