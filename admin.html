@@ -9493,7 +9493,7 @@ function renderCourtActivityTv() {
   const body = $('courtActivityTvBody');
   if (!overlay || overlay.hidden || !body || !_courtActivityBookings || !window.ChinoCourtActivity?.buildTvSnapshot) return;
   const snapshot = window.ChinoCourtActivity.buildTvSnapshot(_courtActivityBookings);
-  const pageSize = 4;
+  const pageSize = 8;
   const pageCount = Math.max(1, Math.ceil(snapshot.upcomingToday.length / pageSize));
   _courtActivityTvPage %= pageCount;
   const upcoming = snapshot.upcomingToday.slice(_courtActivityTvPage * pageSize, (_courtActivityTvPage + 1) * pageSize);

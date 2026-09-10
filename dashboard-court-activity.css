@@ -135,16 +135,15 @@ body.ca-tv-opened { overflow: hidden; }
 .ca-tv-kicker { display:block; color:#d7a956; font-size:clamp(10px,.66vw,12px); font-weight:800; letter-spacing:.14em; text-transform:uppercase; }
 .ca-tv-next h2,.ca-tv-upcoming h2 { margin:4px 0 0; font-family:'DM Sans',sans-serif; font-size:clamp(20px,1.45vw,28px); font-stretch:normal; font-weight:800; line-height:1.15; letter-spacing:-.01em; text-transform:none; }
 .ca-tv-section-count,.ca-tv-pages { color:var(--tv-muted); font-size:clamp(11px,.72vw,13px); }
-.ca-tv-next-grid { display:grid; grid-template-columns:1fr; align-content:start; gap:6px; }
+.ca-tv-next-grid,.ca-tv-upcoming-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-content:start; gap:clamp(6px,.5vw,10px); }
 .ca-tv-next-card,.ca-tv-upcoming-list article { min-width:0; display:grid; grid-template-columns:minmax(82px,.65fr) minmax(80px,.6fr) minmax(0,1.75fr); align-items:center; gap:10px; min-height:clamp(42px,4.3vh,56px); padding:6px 12px; border:1px solid rgba(148,171,204,.1); border-radius:10px; background:rgba(255,255,255,.025); }
 .ca-tv-next-card time,.ca-tv-upcoming-list time { color:#f0bf69; font-size:clamp(12px,.8vw,15px); font-weight:800; font-variant-numeric:tabular-nums; }
 .ca-tv-next-card > span,.ca-tv-upcoming-list article > span { color:var(--tv-muted); font-size:clamp(11px,.74vw,14px); }
 .ca-tv-next-card div,.ca-tv-next-card strong,.ca-tv-next-card small { display:block; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .ca-tv-next-card strong { color:var(--tv-ink); font-size:clamp(12px,.82vw,15px); }
 .ca-tv-next-card small { margin-top:2px; color:var(--tv-muted); font-size:clamp(10px,.68vw,12px); }
-.ca-tv-upcoming-list { display:grid; gap:6px; }
 .ca-tv-upcoming-list article strong { overflow:hidden; color:var(--tv-ink); font-size:clamp(12px,.82vw,15px); text-overflow:ellipsis; white-space:nowrap; }
-.ca-tv-finished { min-height:clamp(86px,10vh,130px); display:grid; align-content:center; justify-items:center; text-align:center; border:1px dashed rgba(148,171,204,.14); border-radius:12px; }
+.ca-tv-finished { grid-column:1/-1; min-height:clamp(86px,10vh,130px); display:grid; align-content:center; justify-items:center; text-align:center; border:1px dashed rgba(148,171,204,.14); border-radius:12px; }
 .ca-tv-finished strong { font-size:clamp(15px,1vw,18px); }
 .ca-tv-finished span { margin-top:4px; color:var(--tv-muted); font-size:clamp(11px,.72vw,13px); }
 .ca-tv-loading { align-self:center; justify-self:center; color:var(--tv-muted); font-size:18px; }
@@ -200,4 +199,5 @@ body.ca-tv-opened { overflow: hidden; }
   .ca-tv-lower { gap:10px; }
   .ca-tv-upcoming-list article { grid-template-columns:74px 70px minmax(0,1fr); }
   .ca-tv-next-card { grid-template-columns:74px 70px minmax(0,1fr); }
+  .ca-tv-next-grid,.ca-tv-upcoming-list { grid-template-columns:1fr; }
 }

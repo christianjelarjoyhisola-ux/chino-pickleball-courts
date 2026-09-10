@@ -84,7 +84,8 @@ test('premium TV display keeps four now-playing cards above separated schedule p
   assert.match(css, /\.ca-tv-next h2,\.ca-tv-upcoming h2\s*\{[^}]*font-family:'DM Sans',sans-serif[^}]*text-transform:none/);
   assert.match(source, /ca-tv-brand[^>]*><img src="assets\/chino-logo-transparent\.png"/);
   assert.match(source, /ca-tv-time[\s\S]*?courtActivityTvClock[\s\S]*?courtActivityTvDate[\s\S]*?courtActivityTvTitle">Today’s Court Activity/);
-  assert.match(css, /\.ca-tv-next-grid\s*\{[^}]*grid-template-columns:1fr/);
+  assert.match(css, /\.ca-tv-next-grid,\.ca-tv-upcoming-list\s*\{[^}]*grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
+  assert.match(source, /const pageSize = 8/);
   assert.match(css, /\.ca-tv-next-card,\.ca-tv-upcoming-list article\s*\{[^}]*min-height:clamp\(42px,4\.3vh,56px\)/);
 });
 
