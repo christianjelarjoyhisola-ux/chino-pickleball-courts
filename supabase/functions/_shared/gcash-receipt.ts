@@ -325,7 +325,7 @@ function validCalendarDate(year: number, month: number, day: number): boolean {
 
 function timestampLineIndex(lines: string[]): number | null {
   const datePattern =
-    /\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}/i;
+    /(?<![a-z])(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}/i;
   const index = lines.findIndex((line) => datePattern.test(line));
   return index >= 0 ? index : null;
 }
@@ -333,7 +333,7 @@ function timestampLineIndex(lines: string[]): number | null {
 function parseTimestamp(text: string, lines: string[]): GcashTimestamp {
   const flat = text.replace(/[|]/g, " ").replace(/\s+/g, " ").trim();
   const datePattern =
-    /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?[\s,.\-]+(\d{4})\b/i;
+    /(?<![a-z])(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?[\s,.\-]+(\d{4})\b/i;
   const dateMatch = flat.match(datePattern);
   const lineIndex = timestampLineIndex(lines);
   const base: Pick<GcashTimestamp, "zone" | "lineIndex"> = {
@@ -672,7 +672,14 @@ function recoverDetachedAmountDisplay(
     displayIndex == null ||
     nextNonEmptyLineIndex(lines, displayIndex) !== totalIndex
   ) return amount;
-  const referenceIndex = nextNonEmptyLineIndex(lines, totalIndex);
+  // Vision may emit the total label and its currency value on separate lines.
+  // Accept only the adjacent currency amount followed immediately by Ref No.
+  const splitTotal = /^Total\s+Amount\s+Sent\s*[:=]?$/i.test(lines[totalIndex]);
+  const totalValueIndex = splitTotal
+    ? nextNonEmptyLineIndex(lines, totalIndex)
+    : totalIndex;
+  if (totalValueIndex == null) return amount;
+  const referenceIndex = nextNonEmptyLineIndex(lines, totalValueIndex);
   if (
     referenceIndex == null || !REFERENCE_LABEL_RE.test(lines[referenceIndex])
   ) {
@@ -681,7 +688,10 @@ function recoverDetachedAmountDisplay(
   const bare = lines[displayIndex].match(
     /^(\d{1,3}(?:,\d{3})+|\d+)\.\d{2}$/,
   );
-  const total = lines[totalIndex].match(
+  const totalLine = splitTotal
+    ? `${lines[totalIndex]} ${lines[totalValueIndex]}`
+    : lines[totalIndex];
+  const total = totalLine.match(
     /^Total\s+Amount\s+Sent\s*[:=]?\s*(?:PHP|₱|P)\s*((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})$/i,
   );
   if (!bare || !total) return amount;

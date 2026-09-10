@@ -38,6 +38,43 @@ const EXPECTED_RECIPIENT = {
   name: "Jan Kennith Magallano",
 };
 
+// Anonymized saved Vision output: detached Amount, split total, joined date.
+const SPLIT_TOTAL_JOINED_DATE = `Amount
+J•• KE••••H M.
++63 998 123 4567
+Sent via GCash
+530.00
+Total Amount Sent
+P 530.00
+Ref No. 2043 350 406766Sep 10, 2026 3:48 PM
+279g (CO2e)`;
+
+Deno.test("split total and reference-adjacent date retain independent receipt evidence", () => {
+  const parsed = parseGcashReceipt(SPLIT_TOTAL_JOINED_DATE);
+  assertEquals(parsed.reference.value, "2043350406766", "reference unchanged");
+  assertEquals(parsed.timestamp.date, "2026-09-10", "joined date");
+  assertEquals(parsed.timestamp.time24, "15:48", "receipt time");
+  assertEquals(parsed.timestamp.instant, "2026-09-10T07:48:00.000Z", "Philippine timezone");
+  assertEquals(parsed.timestamp.lineIndex, 7, "original OCR line");
+  assertEquals(parsed.amount.amount, 530, "amount");
+  assertEquals(parsed.amount.matchingPrimaryAmountDisplays, true, "two displays");
+  assertEquals(parsed.amount.conflictingPrimaryAmounts, false, "consistent displays");
+});
+
+Deno.test("split total recovery preserves mismatches and requires bounded currency evidence", () => {
+  const conflicting = parseGcashReceipt(SPLIT_TOTAL_JOINED_DATE.replace("\n530.00\n", "\n520.00\n"));
+  assertEquals(conflicting.amount.conflictingPrimaryAmounts, true, "mismatch retained");
+  assertEquals(conflicting.amount.matchingPrimaryAmountDisplays, false, "no agreement");
+  for (const text of [
+    SPLIT_TOTAL_JOINED_DATE.replace("P 530.00", "Fee\nP 530.00"),
+    SPLIT_TOTAL_JOINED_DATE.replace("P 530.00", "P 530.00\nAdvertisement"),
+    SPLIT_TOTAL_JOINED_DATE.replace("P 530.00", "530.00"),
+  ]) {
+    assertEquals(parseGcashReceipt(text).amount.matchingPrimaryAmountDisplays, false, "do not infer confirmation");
+  }
+  assertEquals(parseGcashReceipt(SPLIT_TOTAL_JOINED_DATE.replace("Sep 10", "Sep 31")).timestamp.completeness, "invalid", "invalid date retained");
+});
+
 // Anonymized production Vision ordering: left-column Ref precedes amounts.
 const REFERENCE_FIRST_OCR = `11:23 1
 Amount
