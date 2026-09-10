@@ -4075,8 +4075,13 @@ try {
                 <span aria-hidden="true">📸</span>
                 <strong>Upload your proof of payment below.</strong>
               </div>
-              <input type="hidden" id="bGcashRef" value="" />
-              <p class="bpay-help">Upload the complete receipt. We’ll read the payment reference automatically.</p>
+              <div id="mayaReferenceField" hidden>
+                <label for="bGcashRef" class="bpay-ref-label">Maya Reference ID <span aria-hidden="true">*</span></label>
+                <input type="text" class="fi" id="bGcashRef" value="" maxlength="14" placeholder="e.g. B6DC F633 F08C" autocomplete="off" spellcheck="false" aria-describedby="bRefHelp" oninput="updateRefCount(); saveGuestBookingResume();" />
+                <p id="bRefHelp" class="bpay-help">Enter the Maya Reference ID, not the InstaPay Ref. No.</p>
+                <span id="gcRefCount" aria-live="polite"></span>
+              </div>
+              <p id="receiptReferenceHelp" class="bpay-help">Upload the complete receipt. We’ll read the payment reference automatically.</p>
 
               <!-- Receipt screenshot upload (owner-reviewed verification) -->
               <div class="bpay-receipt" id="bReceiptUploadRegion" aria-busy="false">
@@ -8425,7 +8430,15 @@ function paymentRefHelpText(method) {
 
 function syncBookingRefUi(method = $('bPay')?.value || 'gcash') {
   const input = $('bGcashRef');
+  const requiresReference = method === 'maya';
+  if ($('mayaReferenceField')) $('mayaReferenceField').hidden = !requiresReference;
+  if ($('receiptReferenceHelp')) $('receiptReferenceHelp').textContent = requiresReference
+    ? 'Upload the complete Maya receipt. We’ll check that its Reference ID matches your entry.'
+    : 'Upload the complete receipt. We’ll read the payment reference automatically.';
   if (input) {
+    input.disabled = !requiresReference;
+    input.required = requiresReference;
+    if (!requiresReference) input.value = '';
     input.maxLength = paymentRefMaxLength(method);
     input.placeholder = method === 'gcash' ? 'e.g. 1234567890123' : method === 'bdopay' ? 'e.g. BN-20260627-91811670' : method === 'maya' ? 'e.g. B6DC F633 F08C' : method === 'bpi' ? 'e.g. 1783397488347' : `Enter ${method === 'gotyme' ? 'GoTyme' : method === 'maribank' ? 'MariBank' : 'payment'} reference`;
     input.inputMode = ['bdopay', 'maya', 'gotyme', 'maribank', 'pnb', 'securitybank'].includes(method) ? 'text' : 'numeric';
@@ -8565,11 +8578,12 @@ async function submitBookingLegacy(e) {
     submitBtn.textContent = 'Saving booking...';
   }
   const payMethod = $('bPay').value;
-  const gcashRef = ''; // Reference is extracted server-side from the receipt.
+  const gcashRef = payMethod === 'maya' ? normalizePaymentRef($('bGcashRef')?.value || '', payMethod) : '';
   const hasPaymentMethod = ALL_PAYMENT_METHODS.some(m => paymentMethods[m]);
   const digitalPay = isDigitalPayMethod(payMethod);
   const gcashNeedsCheckout = false; // QR flow: customer pays and uploads the complete receipt
   const checks = [
+    [payMethod === 'maya' && !isMayaRefValid(gcashRef), paymentRefHelpText('maya'), 'bGcashRef', 5],
     [!court, 'Please select a court.', 'courtDisp', 1],
     [!$('bDate').value, 'Please select a date.', 'bDate', 2],
     [!isPublicBookingDateAllowed($('bDate').value), publicBookingDateMessage(), 'bDate', 2],
@@ -8816,12 +8830,13 @@ async function submitBooking(e) {
   const items = uniqueBookingSelections(activeBookingItems());
   const bookingDate = bookingItemsDate(items);
   const payMethod = $('bPay').value;
-  const gcashRef = ''; // Reference is extracted server-side from the receipt.
+  const gcashRef = payMethod === 'maya' ? normalizePaymentRef($('bGcashRef')?.value || '', payMethod) : '';
   const hasPaymentMethod = ALL_PAYMENT_METHODS.some(m => paymentMethods[m]);
   const digitalPay = isDigitalPayMethod(payMethod);
   const repairItem = items.find(item => getCourtRepair(item.courtName, item.date));
 
   const checks = [
+    [payMethod === 'maya' && !isMayaRefValid(gcashRef), paymentRefHelpText('maya'), 'bGcashRef', 5],
     [items.length === 0, 'Please select at least one time slot.', 'slotsGrid', 2],
     [!bookingDate, 'Please select a date.', 'bDate', 2],
     [items.some(item => !isPublicBookingDateAllowed(item.date)), publicBookingDateMessage(), 'bDate', 2],
