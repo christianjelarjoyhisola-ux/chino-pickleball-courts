@@ -5360,7 +5360,7 @@ window.DB = {
         const normalized = provider === 'gcash'
           ? raw.replace(/[^0-9]/g, '')
           : raw.toUpperCase().replace(/[^A-Z0-9]/g, '');
-        if (!normalized) throw new Error('A payment reference is required before confirming payment.');
+        if (!raw.trim()) return '';
         if (provider === 'gcash' && !/^[0-9]{13}$/.test(normalized)) {
           throw new Error('The GCash reference must contain exactly 13 digits.');
         }
@@ -5470,11 +5470,7 @@ window.DB = {
       if (receiptUrls.size > 1 || receiptHashes.size > 1) {
         throw new Error('Grouped receipt evidence is inconsistent. Review the payment details before confirming.');
       }
-      if (digitalPayment && paymentStatus === 'for_verification' && receiptUrls.size === 0) {
-        throw new Error('A receipt image is required before confirming this payment.');
-      }
-
-      if (digitalPayment) {
+      if (digitalPayment && paymentReferenceKey) {
         const currentRefs = new Set(refs);
         const safeReferenceKey = item => {
           const method = lowerValue(item.paymentMethod ?? item.payment_method);
@@ -5513,6 +5509,15 @@ window.DB = {
 
       const refSet = new Set(refs);
       const confirmedAt = nowIso();
+      if (digitalPayment) {
+        db.bookingOwnerPaymentConfirmations = db.bookingOwnerPaymentConfirmations || [];
+        db.bookingOwnerPaymentConfirmations.push({
+          bookingRef, refs, confirmedBy: session.id || session.userId,
+          confirmedRole: session.role, confirmedAt, paymentMethod,
+          confirmedAmount: expectedDue, missingReference: !paymentReferenceKey,
+          missingReceipt: receiptUrls.size === 0,
+        });
+      }
       db.bookings = db.bookings.map(booking => {
         if (!refSet.has(String(booking.ref))) return booking;
         const next = {

@@ -8389,10 +8389,9 @@ function bookingQuickConfirmIssue(b) {
   if (!digitalPayment && methods[0] !== 'cash') return 'Use the regular booking status control.';
   if (digitalPayment) {
     const refs = [...new Set(items.map(item => String(item?.gcashRef || '').toUpperCase().replace(/[^A-Z0-9]/g, '')).filter(Boolean))];
-    if (refs.length !== 1) return 'Payment reference is missing or inconsistent.';
+    if (refs.length > 1) return 'Payment reference is inconsistent.';
     const paymentAccepted = paymentState === 'paid' || (b?.hostBooking && paymentState === 'downpayment_paid');
     if (!paymentAccepted && paymentState !== 'for_verification') return 'Payment is not ready for confirmation.';
-    if (!paymentAccepted && !items.some(item => !!item?.receiptImageUrl)) return 'Receipt image is missing.';
   } else if (!['unpaid','pending','paid','downpayment_paid'].includes(paymentState)) {
     return 'Cash booking is not ready for confirmation.';
   }
@@ -11192,6 +11191,7 @@ async function confirmBookingTransaction(ref, {
 
     const priorPaymentState = String(current.paymentStatus || '').toLowerCase();
     const verifiedPaymentNow = isDigitalPayment(current.paymentMethod) && !['paid','downpayment_paid'].includes(priorPaymentState);
+    if (verifiedPaymentNow && !confirm(`Confirm that CHINO received ₱${Number(current.downpayment || current.total).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} for this booking?\n\nYou can confirm even if the reference or receipt details are missing. This records your manual confirmation and does not mark the receipt as automatically verified.`)) return false;
     const result = await DB.confirmBookingTransaction(current.primaryRef || key);
     const transitioned = result?.transitioned !== false;
     if (closePaymentModal) closeVerifyModal({ restoreFocus: false });
@@ -19136,7 +19136,7 @@ async function checkAgreementGate(session) {
 
 <script src="supabase.min.js"></script>
 <script src="open-play-rating.js?v=20260729-head-to-head-v1"></script>
-<script src="supabase-config.js?v=20260910-complete-activity-v1"></script>
+<script src="supabase-config.js?v=20260910-owner-confirm-v1"></script>
 <script src="qrcode.min.js?v=1.5.4"></script>
 <script src="availability-graphic.js?v=20260909-domain-v1"></script>
 <script src="play-manager.js?v=20260909-official-logo-v1"></script>
