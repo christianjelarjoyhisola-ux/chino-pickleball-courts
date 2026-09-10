@@ -963,3 +963,134 @@ Deno.test("recipient crop confidence measures native visible characters and neve
     "partial hierarchy cannot conceal another recipient",
   );
 });
+
+Deno.test("Vision retries transient HTTP and embedded RPC failures once with actual request metrics", async () => {
+  for (const failure of [429, 503, 4, 8, 13, 14]) {
+    let calls = 0;
+    const result = await googleVisionOcr("test-key", "QUJD", {
+      retryDelayMs: 0,
+      fetcher: (async () => {
+        calls++;
+        if (calls === 1) {
+          return failure >= 400
+            ? Response.json({ error: { message: "temporary" } }, {
+              status: failure,
+            })
+            : Response.json({
+              responses: [{ error: { code: failure, message: "temporary" } }],
+            });
+        }
+        return Response.json({
+          responses: [{
+            fullTextAnnotation: {
+              text: "valid receipt",
+              pages: [{ confidence: .97 }],
+            },
+          }],
+        });
+      }) as typeof fetch,
+    });
+    assertEquals(calls, 2, "one recovery attempt");
+    assertEquals(result.requestMetrics?.calls, 2, "actual calls recorded");
+    assertEquals(result.requestMetrics?.retries, 1, "retry recorded");
+  }
+});
+
+Deno.test("Vision retries network failures but never authentication/configuration errors", async () => {
+  let networkCalls = 0;
+  const result = await googleVisionOcr("test-key", "QUJD", {
+    retryDelayMs: 0,
+    fetcher: (async () => {
+      if (++networkCalls === 1) throw new TypeError("temporary network error");
+      return Response.json({
+        responses: [{
+          fullTextAnnotation: {
+            text: "valid receipt",
+            pages: [{ confidence: .97 }],
+          },
+        }],
+      });
+    }) as typeof fetch,
+  });
+  assertEquals(result.requestMetrics?.calls, 2, "network error retried once");
+  for (const status of [400, 401, 403]) {
+    let calls = 0;
+    let metrics: unknown;
+    try {
+      await googleVisionOcr("test-key", "QUJD", {
+        retryDelayMs: 0,
+        fetcher: (async () => {
+          calls++;
+          return Response.json(
+            { error: { message: "configuration failure" } },
+            { status },
+          );
+        }) as typeof fetch,
+      });
+    } catch (error) {
+      metrics = (error as { requestMetrics: unknown }).requestMetrics;
+    }
+    assertEquals(calls, 1, "configuration errors are not retried");
+    assertEquals(
+      (metrics as { calls: number }).calls,
+      1,
+      "failed request metrics retained",
+    );
+  }
+});
+
+Deno.test("Vision aborts a stalled first request and retries within the same total deadline", async () => {
+  let calls = 0;
+  let firstSignal: AbortSignal | null | undefined;
+  const started = Date.now();
+  const result = await googleVisionOcr("test-key", "QUJD", {
+    timeoutMs: 100,
+    retryDelayMs: 0,
+    fetcher: (async (_input, init) => {
+      if (++calls === 1) {
+        firstSignal = init?.signal;
+        return {
+          ok: true,
+          status: 200,
+          json: () => new Promise(() => {}),
+        } as unknown as Response;
+      }
+      return Response.json({
+        responses: [{
+          fullTextAnnotation: {
+            text: "recovered receipt",
+            pages: [{ confidence: .97 }],
+          },
+        }],
+      });
+    }) as typeof fetch,
+  });
+  assert(firstSignal?.aborted, "first fetch is aborted, not left running");
+  assertEquals(calls, 2, "one retry after timeout");
+  assertEquals(result.text, "recovered receipt", "second attempt result");
+  assert(Date.now() - started < 200, "retry shares total budget");
+});
+
+Deno.test("Vision repeated transient errors stop after two calls and preserve failure metrics", async () => {
+  let calls = 0;
+  let caught: unknown;
+  try {
+    await googleVisionOcr("test-key", "QUJD", {
+      retryDelayMs: 0,
+      fetcher: (async () => {
+        calls++;
+        return Response.json({ error: { message: "unavailable" } }, {
+          status: 503,
+        });
+      }) as typeof fetch,
+    });
+  } catch (error) {
+    caught = error;
+  }
+  assertEquals(calls, 2, "bounded attempts");
+  assertEquals(
+    (caught as { requestMetrics: { retries: number } }).requestMetrics.retries,
+    1,
+    "failure audit includes retry",
+  );
+});

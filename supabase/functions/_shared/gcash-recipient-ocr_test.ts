@@ -188,8 +188,13 @@ Deno.test("GCash recipient crop uses binary native and fourfold color PNG pixels
         calls.push({
           key,
           dimensions: receiptImageDimensions(decoded),
-          options,
+          options: { featureType: options?.featureType },
         });
+        assertEquals(
+          (options?.timeoutMs ?? 0) > 0 && (options?.timeoutMs ?? 0) <= 10000,
+          true,
+          "shared deadline includes preparation time",
+        );
         return observation();
       },
     },
@@ -198,12 +203,12 @@ Deno.test("GCash recipient crop uses binary native and fourfold color PNG pixels
     {
       key: "test-key",
       dimensions: { width: 160, height: 60 },
-      options: { featureType: "DOCUMENT_TEXT_DETECTION", timeoutMs: 10000 },
+      options: { featureType: "DOCUMENT_TEXT_DETECTION" },
     },
     {
       key: "test-key",
       dimensions: { width: 640, height: 240 },
-      options: { featureType: "DOCUMENT_TEXT_DETECTION", timeoutMs: 10000 },
+      options: { featureType: "DOCUMENT_TEXT_DETECTION" },
     },
   ]);
   assertEquals(result.accepted, true);

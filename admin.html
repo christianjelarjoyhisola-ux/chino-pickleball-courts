@@ -7624,10 +7624,11 @@ const RECEIPT_FLAG_LABELS = {
   TIME_STALE:'Stale time', TIME_FUTURE:'Receipt before booking', RECEIVER_NAME_MISMATCH:'Receiver name mismatch',
   METHOD_MISMATCH:'Wrong payment method selected', GCASH_RECEIPT_UNREADABLE:'GCash receipt unreadable',
   EDITED_METADATA:'Edited image metadata', SUSPECTED_FAKE:'Not a receipt', REF_FORMAT_INVALID:'Bad reference format',
-  REF_UNREADABLE:'Reference unreadable', INVOICE_UNREADABLE:'Invoice unreadable', LOW_OCR_CONFIDENCE:'OCR confidence below threshold', OCR_UNAVAILABLE:'OCR unavailable', AMOUNT_UNREADABLE:'Amount unreadable',
+  REF_UNREADABLE:'Reference unreadable', INVOICE_UNREADABLE:'Invoice unreadable', LOW_OCR_CONFIDENCE:'OCR confidence below threshold', OCR_UNAVAILABLE:'Receipt-checking service unavailable', IMAGE_UNREADABLE:'Receipt text could not be read', AMOUNT_UNREADABLE:'Amount unreadable',
   AMOUNT_REVIEW:'Amount needs owner review', AMOUNT_CONFIRMATION_UNREADABLE:'Amount confirmation incomplete',
   REF_MISMATCH:'Reference does not match', INSTAPAY_REF_UNREADABLE:'InstaPay reference unreadable', INSTAPAY_UNREADABLE:'InstaPay unreadable', TRANSFER_STATUS_UNREADABLE:'Transfer status needs review', PROVIDER_REVIEW_REQUIRED:'Payment provider requires owner review',
   TRANSFER_STATUS_INVALID:'Transfer failed or reversed', TRANSFER_PENDING:'Transfer still pending',
+  PAYMENT_STATUS_NOT_COMPLETED:'Transfer is not completed', OCR_READINGS_DISAGREE:'Receipt readings conflict', OCR_REREAD_UNAVAILABLE:'Additional receipt reading unavailable',
   DATE_UNREADABLE:'Date unreadable', TIME_UNREADABLE:'Time unreadable', NUMBER_UNREADABLE:'Receiver number unreadable', REF_LABEL_UNREADABLE:'Reference label unreadable',
   BDO_PAY_UNREADABLE:'BDO Pay/InstaPay unreadable', MAYA_UNREADABLE:'Maya unreadable', BPI_UNREADABLE:'BPI success unreadable', BPI_CONFIRMATION_UNREADABLE:'BPI confirmation unreadable', BPI_TRANSACTION_UNREADABLE:'BPI transaction ref unreadable', INSTAPAY_QRPH_UNREADABLE:'InstaPay/QRPh unreadable', GXI_DESTINATION_UNREADABLE:'GXI/GCash destination unreadable', RECEIVER_NAME_UNREADABLE:'Receiver name unreadable', MERCHANT_CONFIG_MISSING:'Recipient account details incomplete', BOOKING_GROUP_PAYMENT_MISMATCH:'Booking payment details need review', AUTO_APPROVAL_FAILED:'Auto-verification could not finalize', REJECTION_FINALIZATION_FAILED:'Duplicate rejection could not finalize',
 };
@@ -7810,6 +7811,42 @@ function gcashNameCheckLabel(value, raw){
   })[value] || '--';
   return raw ? `${label} · ${raw}` : label;
 }
+function receiptReadingHistoryRows(b){
+  const ex = b?.receiptExtracted || b?.receipt_extracted || {};
+  const rows = [];
+  const checkedAt = ex.checkedAt || b?.receiptVerifiedAt || b?.receipt_verified_at;
+  const checkedDate = checkedAt ? new Date(checkedAt) : null;
+  if (checkedDate && Number.isFinite(checkedDate.getTime())) {
+    const formatted = checkedDate.toLocaleString('en-PH', {
+      timeZone:'Asia/Manila', year:'numeric', month:'short', day:'numeric',
+      hour:'numeric', minute:'2-digit', hour12:true,
+    });
+    rows.push(['Saved Receipt Check', receiptDetailValue(`${formatted} PH`), true]);
+  }
+  const recovery = ex.readingRecovery;
+  if (recovery?.attempted === true) {
+    const readings = Array.isArray(recovery.readings) ? recovery.readings.filter(reading => reading && typeof reading === 'object') : [];
+    const serviceUnavailable = /unavailable|failed|timeout|transport|network/.test(String(recovery.reason || ''));
+    const disagreed = /disagree|conflict|changed/.test(String(recovery.reason || ''));
+    const readingResult = recovery.accepted === true
+      ? 'Additional reading matched'
+      : serviceUnavailable
+        ? 'Additional reading could not finish — service unavailable'
+        : disagreed
+          ? 'Readings did not agree — owner review needed'
+          : 'Receipt details remain unclear — owner review needed';
+    rows.push(['Additional Reading', receiptDetailValue(readingResult), true]);
+    if (readings.length) rows.push(['Additional Reading Attempts', receiptDetailValue(readings.length)]);
+    const confidences = readings.map(reading => reading.confidence)
+      .filter(value => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1);
+    if (confidences.length) {
+      rows.push(['Additional OCR Confidence', receiptDetailValue(confidences.map(value => `${Math.round(value * 100)}%`).join(' / '))]);
+    }
+  }
+  const retries = ex.ocrMetrics?.retries;
+  if (Number.isSafeInteger(retries) && retries > 0) rows.push(['Automatic Service Retries', receiptDetailValue(retries)]);
+  return rows;
+}
 function receiptDetailsHtml(b){
   const ex = b.receiptExtracted || {};
   const gcash = ex.gcash || null;
@@ -7846,8 +7883,9 @@ function receiptDetailsHtml(b){
       : !ex.parserVersion
         ? 'Verification details unavailable — owner review required'
         : 'Receipt checks recorded — owner confirmation required';
-  const ocrConfidenceNumber = Number(ex.ocrConfidence);
-  const ocrConfidence = ex.ocrConfidence != null && Number.isFinite(ocrConfidenceNumber)
+  const originalOcrConfidence = ex.originalOcrConfidence ?? ex.ocrConfidence;
+  const ocrConfidenceNumber = Number(originalOcrConfidence);
+  const ocrConfidence = originalOcrConfidence != null && Number.isFinite(ocrConfidenceNumber)
     ? `${Math.round(ocrConfidenceNumber * 100)}%`
     : '--';
   const approvalConfidenceNumber = Number(ex.approvalConfidence);
@@ -7968,6 +8006,7 @@ function receiptDetailsHtml(b){
     ...(ex.ocrFallbackReason ? [[ocrDiagnosticLabel, receiptDetailValue(ex.ocrFallbackReason), true]] : []),
     ...(ex.amountReliable !== undefined ? [['Amount Parse', receiptDetailValue(amountParse), true]] : []),
     ['Reason', receiptDetailValue(reason), true],
+    ...receiptReadingHistoryRows(b),
     [hasApprovalConfidence ? 'Original OCR Confidence' : 'OCR Confidence', receiptDetailValue(ocrConfidence)],
     ...(hasApprovalConfidence ? [
       ['Approval Confidence', receiptDetailValue(approvalConfidence)],

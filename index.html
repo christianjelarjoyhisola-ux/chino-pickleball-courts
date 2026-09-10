@@ -4081,7 +4081,7 @@ try {
                 <p id="bRefHelp" class="bpay-help">Enter the Maya Reference ID, not the InstaPay Ref. No.</p>
                 <span id="gcRefCount" aria-live="polite"></span>
               </div>
-              <p id="receiptReferenceHelp" class="bpay-help">Upload the complete receipt. We’ll read the payment reference automatically.</p>
+              <p id="receiptReferenceHelp" class="bpay-help">In GCash, tap Download on the completed receipt and upload that original image. We’ll read the payment reference automatically.</p>
 
               <!-- Receipt screenshot upload (owner-reviewed verification) -->
               <div class="bpay-receipt" id="bReceiptUploadRegion" aria-busy="false">
@@ -4100,7 +4100,7 @@ try {
                 </div>
                 <div id="bReceiptStatus" class="bpay-upload-status" role="status" aria-live="polite" aria-atomic="true" style="display:none"></div>
                 <div id="bReceiptRequired" class="bpay-help">
-                  Selecting a receipt starts its secure upload and payment checks.<br>
+                  Selecting a receipt starts its secure upload. Continue starts the payment check.<br>
                   Choose the payment app you actually used. When automated confirmation is available for that method, a clean receipt can confirm automatically; otherwise it stays pending for court-owner review.
                 </div>
                 <p id="bookingReceiptDisclosure" class="bpay-help">Receipts are checked using Google Vision. <a href="receipt-verification.html" target="_blank" rel="noopener">Details</a></p>
@@ -4757,7 +4757,7 @@ function hostSessionPaymentHtml(session) {
     <div class="fg">
       <label class="fl">Receipt Screenshot</label>
       <label id="hsReceiptDrop" class="op-receipt-drop">
-        <span>📷</span><span>Attach receipt screenshot</span>
+        <span>📷</span><span>Attach receipt image</span>
         <input type="file" id="hsReceiptImg" accept="image/*" style="display:none" onchange="onHostSessionReceiptPicked(event)" />
       </label>
       <div id="hsReceiptPreviewWrap" class="op-receipt-preview" style="display:none">
@@ -4767,6 +4767,7 @@ function hostSessionPaymentHtml(session) {
           <button type="button" onclick="clearHostSessionReceipt()">Remove</button>
         </div>
       </div>
+      <p class="bpay-help">For GCash, use Download on the completed receipt and upload the original image with all payment details visible.</p>
     </div>
     <label class="booking-policy-check" style="margin-top:10px">
       <input type="checkbox" id="hsOcrConsent" />
@@ -4823,7 +4824,7 @@ function clearHostSessionReceipt() {
 
 async function verifyHostSessionReceipt(ref, method, inlineData) {
   const st = $('hsReceiptStatus');
-  if (st) { st.style.display = ''; st.style.background = 'rgba(74,154,220,.1)'; st.style.color = '#4b5563'; st.textContent = 'Checking receipt details…'; }
+  if (st) { st.style.display = ''; st.style.background = 'rgba(74,154,220,.1)'; st.style.color = '#4b5563'; st.textContent = receiptCheckingMessage(); }
   const res = await DB.verifyGcashReceipt({
     bookingRef: ref,
     provider: method,
@@ -6202,7 +6203,7 @@ function receiptReasonFromFlags(flags) {
     TIME_EXPIRED: 'Payment time expired',
     TIME_FUTURE: 'Receipt before booking',
     SUSPECTED_FAKE: 'Receipt content not recognized',
-    IMAGE_UNREADABLE: 'Image unreadable',
+    IMAGE_UNREADABLE: 'Receipt text could not be read',
     REF_UNREADABLE: 'Reference unreadable',
     INVOICE_UNREADABLE: 'Invoice number unreadable',
     BDO_PAY_UNREADABLE: 'BDO Pay/InstaPay text unreadable',
@@ -6216,7 +6217,10 @@ function receiptReasonFromFlags(flags) {
     NUMBER_UNREADABLE: 'Receiver number unreadable',
     EDITED_METADATA: 'Edited image metadata',
     LOW_OCR_CONFIDENCE: 'Low OCR confidence',
-    OCR_UNAVAILABLE: 'OCR unavailable',
+    OCR_UNAVAILABLE: 'Receipt-checking service unavailable',
+    OCR_REREAD_UNAVAILABLE: 'Additional receipt reading unavailable',
+    OCR_READINGS_DISAGREE: 'Receipt readings conflict',
+    PAYMENT_STATUS_NOT_COMPLETED: 'Transfer is not completed',
     AMOUNT_UNREADABLE: 'Amount unreadable',
     AMOUNT_REVIEW: 'Amount needs owner review',
   };
@@ -8301,8 +8305,8 @@ function syncGcashSharedPanel(method) {
     gcash: {
       header: 'GCash Payment',
       title: 'Send GCash Payment To',
-      guide: ['Open or scan in GCash.', 'Pay the exact amount.', 'Save the complete receipt.', 'Upload the complete receipt.'],
-      help: 'GCash → GCash. Clean receipts can confirm automatically; anything doubtful stays pending for owner review.',
+      guide: ['Open or scan in GCash.', 'Pay the exact amount.', 'Tap Download on the receipt.', 'Upload the original receipt.'],
+      help: 'GCash → GCash. Use Download on the completed receipt and upload the original image. Matching receipts can confirm automatically; unclear details go to the owner for review.',
     },
     bdopay: {
       header: 'BDO Pay → GCash',
@@ -8434,7 +8438,9 @@ function syncBookingRefUi(method = $('bPay')?.value || 'gcash') {
   if ($('mayaReferenceField')) $('mayaReferenceField').hidden = !requiresReference;
   if ($('receiptReferenceHelp')) $('receiptReferenceHelp').textContent = requiresReference
     ? 'Upload the complete Maya receipt. We’ll check that its Reference ID matches your entry.'
-    : 'Upload the complete receipt. We’ll read the payment reference automatically.';
+    : method === 'gcash'
+      ? 'In GCash, tap Download on the completed receipt and upload that original image. We’ll read the payment reference automatically.'
+      : 'Upload the complete receipt. We’ll read the payment reference automatically.';
   if (input) {
     input.disabled = !requiresReference;
     input.required = requiresReference;
@@ -9128,6 +9134,10 @@ function bookingReceiptUploadedMessage() {
     : 'Upload complete. Agree below to continue.';
 }
 
+function receiptCheckingMessage() {
+  return 'Checking receipt details… We may automatically reread unclear details or retry a busy service. Keep this window open and do not pay again.';
+}
+
 function setBookingReceiptUploadMessage(kind, message) {
   const status = $('bReceiptStatus');
   if (!status) return;
@@ -9149,7 +9159,7 @@ function setBookingReceiptUploadMessage(kind, message) {
   status.textContent = message;
   if (region) {
     region.dataset.uploadState = kind;
-    region.setAttribute('aria-busy', String(kind === 'uploading'));
+    region.setAttribute('aria-busy', String(kind === 'uploading' || kind === 'verifying'));
   }
 }
 
@@ -9500,7 +9510,7 @@ async function verifyUploadedReceipt(
   receiptFile = _receiptFile,
   stagedResult = null,
 ) {
-  setBookingReceiptUploadMessage('verifying', 'Checking receipt details…');
+  setBookingReceiptUploadMessage('verifying', receiptCheckingMessage());
   try {
     if (!receiptFile) throw new Error('Receipt screenshot is required.');
     const staged = stagedResult?.stagedReceiptPath
@@ -9542,7 +9552,7 @@ async function verifyUploadedReceipt(
       bookingStatus: status === 'auto_approved' ? (res?.bookingStatus || null) : 'pending',
     };
   } catch (err) {
-    setBookingReceiptUploadMessage('failed', 'Receipt verification failed. Your upload is still selected — please retry.');
+    setBookingReceiptUploadMessage('failed', 'The payment check could not finish. Your receipt is still selected. Do not pay again; contact CHINO if this continues.');
     throw err;
   }
 }
@@ -10517,7 +10527,8 @@ function renderHostBalancePaymentForm() {
       <div class="host-balance-field"><label for="hostBalancePaymentReference">New transaction reference</label>
         <input class="fi" id="hostBalancePaymentReference" type="text" value="${esc(state.reference)}" placeholder="${esc(hostBalancePaymentReferencePlaceholder(method))}" maxlength="${paymentRefMaxLength(method)}" autocomplete="off" ${lockedAttempt ? 'disabled' : ''} oninput="syncHostBalancePaymentReference(this)" />
         <div class="host-balance-field-help">${esc(paymentRefHelpText(method))} Do not reuse the deposit reference.</div></div>
-      <div class="host-balance-section"><div class="host-balance-section-label">New payment receipt</div>${receiptHtml}</div>
+      <div class="host-balance-section"><div class="host-balance-section-label">New payment receipt</div>${receiptHtml}
+        ${method === 'gcash' ? '<div class="host-balance-field-help">Use Download on the completed GCash receipt and upload the original image.</div>' : ''}</div>
       <label class="booking-policy-check host-balance-policy"><input type="checkbox" id="hostBalancePaymentAgree" />
         <span><strong>I agree</strong> this is a new payment for the exact balance shown, its reference and receipt are correct, and all payments are final and non-refundable.</span></label>
       <div class="host-balance-payment-status" id="hostBalancePaymentStatus" role="status" aria-live="polite"></div>
@@ -10706,6 +10717,7 @@ async function submitHostBalancePayment() {
     let receiptVerificationId = receiptResult?.receiptVerificationId ?? receiptResult?.receipt_verification_id;
     if (!receiptVerificationId) {
       setHostBalancePaymentBusy(true, 'Uploading & verifying receipt…');
+      setHostBalancePaymentProgress(true, receiptCheckingMessage());
       const verificationBookingData = api.buildVerificationBookingData(state.payment);
       const verificationPayload = {
         bookingRef: state.payment.verificationRef,
@@ -11456,6 +11468,7 @@ function opPickPay(method) {
                 <button type="button" onclick="clearOpReceipt()" style="background:transparent;border:0;color:var(--red);font-size:.72rem;font-weight:800;cursor:pointer;padding:2px 0">Remove</button>
               </div>
             </div>
+            ${method === 'gcash' ? '<p class="bpay-help">Use Download on the completed GCash receipt and upload the original image with all payment details visible.</p>' : ''}
             <div id="opReceiptStatus" style="display:none;margin-top:7px;padding:7px 8px;border-radius:7px;font-size:.75rem;font-weight:700"></div>
           </div>
         </div>
@@ -11546,7 +11559,7 @@ function clearOpReceipt() {
 
 async function verifyOpReceipt(ref, method, inlineData) {
   const st = $('opReceiptStatus');
-  if (st) { st.style.display = ''; st.style.background = 'rgba(74,154,220,.1)'; st.style.color = '#4b5563'; st.textContent = '🔎 Checking your receipt…'; }
+  if (st) { st.style.display = ''; st.style.background = 'rgba(74,154,220,.1)'; st.style.color = '#4b5563'; st.textContent = receiptCheckingMessage(); }
   try {
     const res = await DB.verifyGcashReceipt({
       bookingRef: ref,
@@ -11585,7 +11598,7 @@ async function verifyOpReceipt(ref, method, inlineData) {
       bookingStatus: res?.bookingStatus || null,
     };
   } catch (err) {
-    if (st) { st.style.background = 'rgba(229,57,53,.1)'; st.style.color = '#e53935'; st.textContent = 'Receipt upload failed. Please attach the screenshot again and retry.'; }
+    if (st) { st.style.background = 'rgba(229,57,53,.1)'; st.style.color = '#e53935'; st.textContent = 'The payment check could not finish. Your receipt is still selected. Do not pay again; contact CHINO if this continues.'; }
     throw err;
   }
 }

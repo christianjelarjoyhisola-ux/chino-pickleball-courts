@@ -344,8 +344,21 @@ test('receipt and confirmation delivery use recoverable single-worker leases', (
   );
   assert.match(
     receiptEdge,
-    /verifyProviderReceipt\(providerParse,[\s\S]*?expectedRecipientNumber: expectedNumber,[\s\S]*?expectedRecipientName: expectedName/
+    /verifyProviderReceipt\(providerParse, providerContext\)/
   );
+  const providerContext = receiptEdge.match(/const providerContext: ReceiptVerificationContext = \{([\s\S]*?)\n    \};/)?.[1] || '';
+  for (const requiredEvidence of [
+    /typedReference: typedRef/,
+    /expectedAmount: pricingError \? null : expectedAmount/,
+    /pricingAvailable: !pricingError/,
+    /amountTolerance: 0\.01/,
+    /expectedRecipientNumber: expectedNumber/,
+    /expectedRecipientName: expectedName/,
+    /bookingStartedAt: bookingStartedInstant\?\.toISOString\(\) \|\| null/,
+    /bookingStartedDate/,
+    /paymentWindowMinutes: PAYMENT_WINDOW_MINUTES/,
+    /earlyToleranceMinutes: PAYMENT_EARLY_TOLERANCE_MINUTES/,
+  ]) assert.match(providerContext, requiredEvidence, 'the shared verifier context retains authoritative evidence');
 
   // Auto-verification is deliberately narrow: exact dedicated-parser evidence,
   // native 90%+ OCR, a valid timestamp inside the same customer hold window,

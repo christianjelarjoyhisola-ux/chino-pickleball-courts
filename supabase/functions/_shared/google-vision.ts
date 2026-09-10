@@ -11,6 +11,13 @@ export type GoogleVisionOcrResult = {
   confidenceSource: "native" | "heuristic" | "none";
   gcashEvidence?: GoogleVisionGcashEvidence;
   recipientCropEvidence?: GoogleVisionRecipientCropEvidence;
+  requestMetrics?: GoogleVisionRequestMetrics;
+};
+
+export type GoogleVisionRequestMetrics = {
+  calls: number;
+  retries: number;
+  durationMs: number;
 };
 
 export type GoogleVisionRecipientCropEvidence = {
@@ -877,6 +884,9 @@ export type GoogleVisionOcrOptions = {
   fetcher?: typeof fetch;
   timeoutMs?: number;
   featureType?: "DOCUMENT_TEXT_DETECTION" | "TEXT_DETECTION";
+  /** At most one retry, sharing the original request deadline. */
+  maxAttempts?: 1 | 2;
+  retryDelayMs?: number;
 };
 
 export async function googleVisionOcr(
@@ -884,15 +894,31 @@ export async function googleVisionOcr(
   base64: string,
   options: GoogleVisionOcrOptions = {},
 ): Promise<GoogleVisionOcrResult> {
+  const started = Date.now();
+  let calls = 0;
+  const requestMetrics = (): GoogleVisionRequestMetrics => ({
+    calls,
+    retries: Math.max(0, calls - 1),
+    durationMs: Math.max(0, Date.now() - started),
+  });
+  const withMetrics = (error: unknown): Error =>
+    Object.assign(
+      error instanceof Error ? error : new Error(errorMessage(error)),
+      { requestMetrics: requestMetrics() },
+    );
   const key = apiKey.trim();
-  if (!key) throw new Error("Google Vision API key is missing");
+  if (!key) throw withMetrics(new Error("Google Vision API key is missing"));
 
   const comma = base64.indexOf(",");
   const content = base64.startsWith("data:") && comma !== -1
     ? base64.slice(comma + 1)
     : base64;
-  if (!content) throw new Error("Google Vision image content is empty");
+  if (!content) {
+    throw withMetrics(new Error("Google Vision image content is empty"));
+  }
   const featureType = options.featureType || "DOCUMENT_TEXT_DETECTION";
+  const totalTimeoutMs = Math.max(1, options.timeoutMs ?? 25_000);
+  const maxAttempts = options.maxAttempts === 1 ? 1 : 2;
 
   const controller = new AbortController();
   let rejectTimeout: (error: Error) => void = () => {};
@@ -904,70 +930,159 @@ export async function googleVisionOcr(
       controller.abort();
       rejectTimeout(new Error("Google Vision request timed out"));
     },
-    options.timeoutMs ?? 25_000,
+    totalTimeoutMs,
   );
   let response: Response;
   let data: Record<string, unknown>;
   try {
     const readResponse = async () => {
-      const received = await (options.fetcher || fetch)(
-        GOOGLE_VISION_ANNOTATE_URL,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            // Keep credentials out of URLs, proxy logs, and exception traces.
-            "x-goog-api-key": key,
-          },
-          body: JSON.stringify({
-            requests: [{
-              image: { content },
-              features: [{ type: featureType, maxResults: 1 }],
-              imageContext: {
-                languageHints: ["en"],
-                ...(featureType === "TEXT_DETECTION"
-                  ? {
-                    // REST field documented at ImageContext#TextDetectionParams.
-                    textDetectionParams: {
-                      enableTextDetectionConfidenceScore: true,
-                    },
-                  }
-                  : {}),
-              },
-            }],
-          }),
-          signal: controller.signal,
-        },
+      calls++;
+      const attemptController = new AbortController();
+      const outerAbort = () => attemptController.abort();
+      controller.signal.addEventListener("abort", outerAbort, { once: true });
+      if (controller.signal.aborted) attemptController.abort();
+      const remaining = Math.max(1, totalTimeoutMs - (Date.now() - started));
+      const attemptBudget = Math.max(
+        1,
+        Math.floor(calls < maxAttempts ? remaining * 0.6 : remaining),
       );
-      const data = await received.json().catch(() => ({})) as Record<
-        string,
-        unknown
-      >;
-      return { response: received, data };
+      let attemptTimer: ReturnType<typeof setTimeout>;
+      const attemptTimeout = new Promise<never>((_resolve, reject) => {
+        attemptTimer = setTimeout(() => {
+          attemptController.abort();
+          const error = new Error("Google Vision request timed out");
+          error.name = "GoogleVisionAttemptTimeout";
+          reject(error);
+        }, attemptBudget);
+      });
+      const fetchResponse = async () => {
+        const received = await (options.fetcher || fetch)(
+          GOOGLE_VISION_ANNOTATE_URL,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              // Keep credentials out of URLs, proxy logs, and exception traces.
+              "x-goog-api-key": key,
+            },
+            body: JSON.stringify({
+              requests: [{
+                image: { content },
+                features: [{ type: featureType, maxResults: 1 }],
+                imageContext: {
+                  languageHints: ["en"],
+                  ...(featureType === "TEXT_DETECTION"
+                    ? {
+                      // REST field documented at ImageContext#TextDetectionParams.
+                      textDetectionParams: {
+                        enableTextDetectionConfidenceScore: true,
+                      },
+                    }
+                    : {}),
+                },
+              }],
+            }),
+            signal: attemptController.signal,
+          },
+        );
+        const data = await received.json().catch(() => ({})) as Record<
+          string,
+          unknown
+        >;
+        return { response: received, data };
+      };
+      try {
+        return await Promise.race([fetchResponse(), attemptTimeout]);
+      } finally {
+        clearTimeout(attemptTimer!);
+        controller.signal.removeEventListener("abort", outerAbort);
+      }
+    };
+    const delay = async () => {
+      const waitMs = Math.min(
+        1000,
+        Math.max(0, (totalTimeoutMs - (Date.now() - started)) / 10),
+        Math.max(0, options.retryDelayMs ?? 200),
+      );
+      if (controller.signal.aborted) {
+        throw new Error("Google Vision request timed out");
+      }
+      await new Promise<void>((resolve, reject) => {
+        const done = () => {
+          controller.signal.removeEventListener("abort", cancel);
+          resolve();
+        };
+        const handle = setTimeout(done, waitMs);
+        const cancel = () => {
+          clearTimeout(handle);
+          reject(new Error("Google Vision request timed out"));
+        };
+        controller.signal.addEventListener("abort", cancel, { once: true });
+      });
+    };
+    const readWithRetry = async () => {
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        let observed: { response: Response; data: Record<string, unknown> };
+        try {
+          observed = await readResponse();
+        } catch (error) {
+          const transientNetworkFailure = error instanceof TypeError ||
+            (error instanceof DOMException && error.name === "NetworkError") ||
+            (error instanceof Error &&
+              error.name === "GoogleVisionAttemptTimeout");
+          if (
+            controller.signal.aborted || attempt >= maxAttempts ||
+            !transientNetworkFailure
+          ) throw error;
+          await delay();
+          continue;
+        }
+        const imageResponses = Array.isArray(observed.data.responses)
+          ? observed.data.responses
+          : [];
+        const imageError = record(record(imageResponses[0])?.error);
+        const embeddedCode = imageError?.code;
+        // AnnotateImageResponse.error is google.rpc.Status: DEADLINE_EXCEEDED,
+        // RESOURCE_EXHAUSTED, INTERNAL and UNAVAILABLE are transient candidates.
+        const embeddedTransient = observed.response.ok &&
+          typeof embeddedCode === "number" &&
+          [4, 8, 13, 14, 429, 500, 502, 503, 504].includes(embeddedCode);
+        const retryable = observed.response.status === 429 ||
+          (observed.response.status >= 500 &&
+            observed.response.status <= 599) ||
+          embeddedTransient;
+        if (!retryable || attempt >= maxAttempts) return observed;
+        await delay();
+      }
+      throw new Error("Google Vision request failed");
     };
     // Headers alone do not complete OCR: apply the same deadline to body reads.
-    ({ response, data } = await Promise.race([readResponse(), timeout]));
+    ({ response, data } = await Promise.race([readWithRetry(), timeout]));
   } catch (error) {
     if (controller.signal.aborted) {
-      throw new Error("Google Vision request timed out");
+      throw withMetrics(new Error("Google Vision request timed out"));
     }
-    throw error;
+    throw withMetrics(error);
   } finally {
     clearTimeout(timer);
   }
 
   if (!response.ok) {
-    throw new Error(
-      `Google Vision error ${response.status}: ${
-        errorMessage(data).slice(0, 500)
-      }`,
+    throw withMetrics(
+      new Error(
+        `Google Vision error ${response.status}: ${
+          errorMessage(data).slice(0, 500)
+        }`,
+      ),
     );
   }
   const responses = Array.isArray(data.responses) ? data.responses : [];
   const result = (responses[0] || {}) as Record<string, unknown>;
   if (result.error) {
-    throw new Error(
-      `Google Vision: ${errorMessage(result.error).slice(0, 500)}`,
+    throw withMetrics(
+      new Error(
+        `Google Vision: ${errorMessage(result.error).slice(0, 500)}`,
+      ),
     );
   }
 
@@ -997,5 +1112,6 @@ export async function googleVisionOcr(
       layout || googleVisionLayout(fullText, text, true),
     ),
     recipientCropEvidence: recipientCropEvidenceFromLayout(layout),
+    requestMetrics: requestMetrics(),
   };
 }

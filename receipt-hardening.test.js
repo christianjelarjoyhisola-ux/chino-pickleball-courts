@@ -4,6 +4,53 @@ const test = require('node:test');
 
 const read = path => fs.readFileSync(path, 'utf8');
 
+function readingHistoryRows(booking) {
+  const admin = read('admin.html');
+  const source = admin.slice(admin.indexOf('function receiptReadingHistoryRows('), admin.indexOf('function receiptDetailsHtml('));
+  return new Function('receiptDetailValue', `${source}; return receiptReadingHistoryRows;`)(String)(booking);
+}
+
+test('receipt reading history shows only saved attempts and keeps agreement separate from confidence', () => {
+  assert.deepEqual(readingHistoryRows({}), [], 'legacy records do not invent a check time or readings');
+  const rows = readingHistoryRows({receiptExtracted: {
+    checkedAt: '2026-09-10T01:06:00.000Z',
+    readingRecovery: {
+      attempted: true, accepted: true, reason: 'consistent_readings',
+      readings: [
+        {strategy:'gcash_full_contrast_v1',outcome:'clean',confidence:0.932},
+        {strategy:'gcash_full_enlarged_v1',outcome:'clean',confidence:0.947},
+      ],
+    },
+    ocrMetrics: {calls:3,retries:1,durationMs:5500},
+  }});
+  const values = Object.fromEntries(rows.map(([label, value]) => [label, value]));
+  assert.match(values['Saved Receipt Check'], /2026.*9:06.*AM.*PH/);
+  assert.equal(values['Additional Reading'], 'Additional reading matched');
+  assert.equal(values['Additional Reading Attempts'], '2');
+  assert.equal(values['Additional OCR Confidence'], '93% / 95%');
+  assert.equal(values['Automatic Service Retries'], '1');
+  assert.doesNotMatch(JSON.stringify(rows), /100%|3\/3|proof of payment|learned/i);
+  assert.match(read('admin.html'), /ex\.originalOcrConfidence \?\? ex\.ocrConfidence/);
+});
+
+test('saved OCR service failures and conflicting readings have different owner explanations', () => {
+  const service = readingHistoryRows({receiptExtracted:{readingRecovery:{
+    attempted:true, accepted:false, reason:'transport_unavailable', readings:[{outcome:'error'}],
+  }}});
+  const conflict = readingHistoryRows({receiptExtracted:{readingRecovery:{
+    attempted:true, accepted:false, reason:'readings_disagree', readings:[{outcome:'conflict',confidence:'99%'}],
+  }}});
+  assert.match(JSON.stringify(service), /service unavailable/);
+  assert.match(JSON.stringify(conflict), /Readings did not agree/);
+  assert.doesNotMatch(JSON.stringify(service), /OCR Confidence/);
+  assert.doesNotMatch(JSON.stringify(conflict), /OCR Confidence|Additional reading matched/);
+  assert.deepEqual(readingHistoryRows({receiptExtracted:{checkedAt:'invalid',readingRecovery:{attempted:false},ocrMetrics:{retries:-1}}}), []);
+  const admin = read('admin.html');
+  assert.match(admin, /OCR_UNAVAILABLE:'Receipt-checking service unavailable'/);
+  assert.match(admin, /IMAGE_UNREADABLE:'Receipt text could not be read'/);
+  assert.doesNotMatch(admin, /<button[^>]*>[\s\n]*Recheck Receipt/i);
+});
+
 test('dedicated Maya review keeps recipient and reference failures visible to staff', () => {
   const vm = require('node:vm');
   const admin = read('admin.html');

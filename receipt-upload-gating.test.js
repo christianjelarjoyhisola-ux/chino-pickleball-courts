@@ -9,6 +9,23 @@ const client = read('supabase-config.js');
 const edge = read('supabase/functions/verify-gcash-receipt/index.ts');
 const admin = read('admin.html');
 
+test('automatic receipt checking explains rereads without fabricated progress and requests original GCash downloads', () => {
+  const source = page.slice(page.indexOf('function receiptCheckingMessage('), page.indexOf('function setBookingReceiptUploadMessage('));
+  const message = new Function(`${source}; return receiptCheckingMessage();`)();
+  assert.match(message, /automatically reread unclear details/);
+  assert.match(message, /retry a busy service/);
+  assert.match(message, /do not pay again/);
+  assert.doesNotMatch(message, /\d+\s*(?:%|\/\d|seconds)|3 of 3/i);
+  assert.match(page, /In GCash, tap Download on the completed receipt and upload that original image/);
+  assert.match(read('receipt-verification.html'), /tap <strong>Download<\/strong>/);
+  for (const name of ['verifyUploadedReceipt', 'verifyHostSessionReceipt', 'verifyOpReceipt']) {
+    const start = page.indexOf(`async function ${name}(`);
+    assert.ok(start >= 0, `${name} exists`);
+    assert.match(page.slice(start, start + 600), /receiptCheckingMessage\(\)/);
+  }
+  assert.doesNotMatch(page, /<button[^>]*>[\s\n]*Recheck Receipt/i);
+});
+
 test('court receipt starts uploading immediately and must finish before Continue', () => {
   const picker = page.slice(
     page.indexOf('function onReceiptPicked'),
@@ -79,13 +96,13 @@ test('court receipt shows an accessible animated upload state', () => {
   assert.match(reducedMotion, /animation:none !important/);
   assert.match(statusHelper, /status\.dataset\.state = kind/);
   assert.match(statusHelper, /region\.dataset\.uploadState = kind/);
-  assert.match(statusHelper, /region\.setAttribute\('aria-busy', String\(kind === 'uploading'\)\)/);
+  assert.match(statusHelper, /region\.setAttribute\('aria-busy', String\(kind === 'uploading' \|\| kind === 'verifying'\)\)/);
   assert.match(statusHelper, /kind === 'failed' \? 'assertive' : 'polite'/);
   assert.match(continueState, /button\.classList\.toggle\('is-receipt-uploading', uploadActive\)/);
   assert.match(continueState, /button\.setAttribute\('aria-busy', String\(uploadActive\)\)/);
   assert.match(clearing, /setBookingReceiptUploadMessage\('idle', ''\)/);
-  assert.match(verifier, /setBookingReceiptUploadMessage\('verifying', 'Checking receipt details…'\)/);
-  assert.match(hostSessionVerifier, /st\.textContent = 'Checking receipt details…'/);
+  assert.match(verifier, /setBookingReceiptUploadMessage\('verifying', receiptCheckingMessage\(\)\)/);
+  assert.match(hostSessionVerifier, /st\.textContent = receiptCheckingMessage\(\)/);
   assert.doesNotMatch(page, /Analyzing (?:your )?receipt for (?:court-)?owner review/i);
   assert.doesNotMatch(page, /Submitting for (?:court-)?owner review/i);
   assert.match(verifier, /res\?\.status === 'auto_approved' \? 'auto_approved' : 'manual_review'/);

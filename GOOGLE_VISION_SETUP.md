@@ -1,8 +1,10 @@
 # Google Vision receipt OCR setup
 
 The receipt-verification Edge Function uses the synchronous Cloud Vision
-`images:annotate` REST endpoint with one `DOCUMENT_TEXT_DETECTION` feature per
-receipt. Receipt bytes are sent as base64; no receipt image is made public.
+`images:annotate` REST endpoint with `DOCUMENT_TEXT_DETECTION`. A clear receipt
+usually needs one full-image read. Uncertain fields can trigger bounded,
+automatic rereads of the recipient region or another view of the full receipt.
+Receipt bytes are sent as base64; no receipt image is made public.
 
 ## Google Cloud requirements
 
@@ -54,29 +56,68 @@ and receipt-layout indicators. Customer-entered values and configured merchant
 values are comparisons only; they are never substituted for text that Vision
 did not read.
 
-A persisted GCash court booking is eligible for automatic approval only when
-Google Vision supplies a native confidence score of at least **90%**, the
-dedicated parser produces complete and unambiguous evidence, the exact
-configured recipient mobile number matches, the canonical amount matches to
-the centavo, and the payment falls within the booking's **15-minute** window.
-The Edge Function also requires the complete saved booking group and payment
-state to remain unchanged.
+A GCash receipt is eligible for automatic approval only when the dedicated
+parser produces complete and unambiguous evidence, the approval confidence is
+at least **90%**, the canonical amount matches to the centavo, and the payment
+falls within the booking's **15-minute** window. Approval confidence uses native
+Vision scores for the payment fields when all required field scores are
+available; it does not use an average dominated by status-bar or advertisement
+text. The original image-wide OCR confidence remains in the audit separately.
 
-Pre-save Open Play and host-session scans never auto-approve. Any uncertain
-GCash result—including a provider error, confidence below 90%, incomplete
-timestamp, masked/partial mobile number, conflicting amount, or failed atomic
-finalization—remains pending for owner review. A masked recipient name is
-supporting evidence only and does not replace the full mobile-number match.
-Only a reference proven to belong to another payment is automatically rejected.
+Recipient checking accepts either the exact configured full mobile number with
+no contradictory name, or a matching visible phone suffix together with a
+strong exact or compatible masked recipient name. Every visible character must
+remain consistent with the configured recipient. A suffix alone, unrelated
+name, or inferred replacement of unread letters is insufficient. OCR-dropped
+name masks require corroborating readings of the actual image pixels; the
+configured recipient is never supplied as replacement OCR text.
+
+The automatic recovery path rereads only when needed and keeps its observations
+in `readingRecovery`. Agreement is recorded separately from OCR confidence;
+two agreeing OCR reads do not mean a payment has a 100% probability of being
+genuine. Every accepted reading still goes through the provider, amount,
+reference, recipient, timestamp, and duplicate checks. Transient OCR-service
+failures use bounded retries, with call counts and timings in `ocrMetrics`.
+Exhausted service errors and unreadable content have distinct review reasons.
+
+Court-booking approval requires the complete saved booking group and payment
+state to remain unchanged. Open Play and host-session verification can produce
+clean receipt evidence before registration, but the registration service must
+validate that saved audit and bind it to the correct customer, session, amount,
+and private image before accepting payment. A browser result alone does not
+settle a payment. Uncertain results, incomplete timestamps, conflicting amounts,
+or failed atomic finalization remain available for owner review.
 
 The OCR percentage measures text-recognition quality, not independent proof
 that money moved. Successful saved-booking approval therefore finishes through
-the service-role-only `finalize_gcash_receipt_auto_approval` transaction, which
+the service-role-only `finalize_digital_receipt_auto_approval` transaction, which
 locks and revalidates canonical booking rows, claims the unique payment
 reference, confirms the booking scope, and writes the audit record atomically.
 A forged screenshot can still contain internally consistent OCR evidence.
 Provider-signed transaction lookup or webhook confirmation is required before
 describing this workflow as independently authenticated proof of payment.
+
+## Review and receipt guidance
+
+Ask GCash customers to use **Download** on the completed receipt and upload
+that original image with the recipient, amount, reference, date, and time
+visible. Preserve the uploaded receipt while checking; a failed OCR request
+must not tell the player to pay again.
+
+The owner modal shows saved verification evidence. Merely opening it does not
+run OCR again. Show the saved check time, any actual additional readings,
+their confidence, and the reason review remains necessary. Historical flags
+remain part of the audit after a manual payment confirmation. Owners may
+confirm funds they received even when reference or receipt details are missing;
+that decision must remain distinguishable from automatic verification.
+There is no manual receipt-recheck button: bounded rereads and transient-service
+retries happen inside the automatic verification flow.
+
+Before rollout, replay representative receipt layouts and negative examples
+without settling real bookings. Track unnecessary reviews, provider errors,
+latency, and calls per receipt, while retaining wrong-recipient, wrong-amount,
+expired-time, and replay rejections. Owner feedback is review information, not
+proof that another transaction was paid.
 
 ## Cost and abuse controls
 

@@ -161,7 +161,8 @@ const ocrStart = edge.indexOf('async function runOCR(');
 const ocrEnd = edge.indexOf('\nfunction telegramAdminUrl(', ocrStart);
 assert.ok(ocrStart > 0 && ocrEnd > ocrStart, 'load the production OCR dispatcher');
 const ocrDispatcher = edge.slice(ocrStart, ocrEnd)
-  .replace(/async function runOCR\([\s\S]*?\): Promise<OcrResult>/, 'async function runOCR(visionKey, base64, provider, typedRef)');
+  .replace(/async function runOCR\([\s\S]*?\): Promise<OcrResult>/, 'async function runOCR(visionKey, base64, provider, typedRef, ocr = googleVisionOcr)')
+  .replace(/\(e as \{ requestMetrics\?: GoogleVisionRequestMetrics \}\)/g, 'e');
 
 async function dispatchOcr(provider, visionResult, gaps = []) {
   const observed = [];

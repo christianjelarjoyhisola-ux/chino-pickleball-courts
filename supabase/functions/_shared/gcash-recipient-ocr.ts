@@ -7,6 +7,7 @@ import {
 import {
   googleVisionOcr,
   type GoogleVisionOcrResult,
+  type GoogleVisionRequestMetrics,
   receiptImageDimensions,
   type ReceiptImageRegion,
   receiptImageSafeToDecode,
@@ -19,6 +20,7 @@ type CropObservation = Pick<
   | "confidence"
   | "confidenceSource"
   | "recipientCropEvidence"
+  | "requestMetrics"
 >;
 
 export type GcashRecipientOcrObservation = CropObservation & {
@@ -36,6 +38,7 @@ export type GcashRecipientOcrResult = {
   confidence?: number;
   observations: GcashRecipientOcrObservation[];
   region: ReceiptImageRegion | null;
+  requestMetrics?: GoogleVisionRequestMetrics;
 };
 
 function normalizedName(value: string | null): string {
@@ -76,6 +79,7 @@ function auditObservation(
     ...(input?.recipientCropEvidence
       ? { recipientCropEvidence: input.recipientCropEvidence }
       : {}),
+    ...(input?.requestMetrics ? { requestMetrics: input.requestMetrics } : {}),
     receiver: parseGcashRecipientBlock(input?.layoutText || input?.text || ""),
   };
 }
@@ -231,8 +235,10 @@ export async function rereadGcashRecipient(
   region: ReceiptImageRegion | undefined,
   primary: GcashReceiptParse,
   visionKey: string,
-  options: { ocr?: typeof googleVisionOcr } = {},
+  options: { ocr?: typeof googleVisionOcr; deadlineMs?: number } = {},
 ): Promise<GcashRecipientOcrResult> {
+  const started = Date.now();
+  const deadlineMs = Math.min(12000, Math.max(1, options.deadlineMs ?? 10000));
   const unchanged = (reason: string): GcashRecipientOcrResult => ({
     attempted: false,
     accepted: false,
@@ -256,15 +262,17 @@ export async function rereadGcashRecipient(
     // A contrast-only view retains the positions of the actual round mask
     // glyphs; the separate enlarged color view independently corroborates them.
     const binary = crop.clone();
-    for (let y = 1; y <= binary.height; y++) {
-      for (let x = 1; x <= binary.width; x++) {
-        const [red, green, blue] = Image.colorToRGBA(binary.getPixelAt(x, y));
-        binary.setPixelAt(
-          x,
-          y,
-          (red + green + blue) / 3 < 150 ? 0x000000ff : 0xffffffff,
-        );
-      }
+    const bitmap = binary.bitmap;
+    for (let offset = 0; offset < bitmap.length; offset += 4) {
+      const alpha = bitmap[offset + 3] / 255;
+      const light =
+        ((bitmap[offset] + bitmap[offset + 1] + bitmap[offset + 2]) / 3) *
+          alpha + 255 * (1 - alpha);
+      const value = light < 150 ? 0 : 255;
+      bitmap[offset] = value;
+      bitmap[offset + 1] = value;
+      bitmap[offset + 2] = value;
+      bitmap[offset + 3] = 255;
     }
     const nativePng = await binary.encode(1);
     const enlargedPng = await crop.clone().resize(
@@ -277,15 +285,44 @@ export async function rereadGcashRecipient(
       return unchanged("recipient_crop_too_large");
     }
     const ocr = options.ocr || googleVisionOcr;
-    const native = await ocr(visionKey, base64(nativePng), {
-      featureType: "DOCUMENT_TEXT_DETECTION",
-      timeoutMs: 10_000,
-    });
-    const enlarged = await ocr(visionKey, base64(enlargedPng), {
-      featureType: "DOCUMENT_TEXT_DETECTION",
-      timeoutMs: 10_000,
-    });
-    return { ...refineGcashRecipient(primary, { native, enlarged }), region };
+    const remaining = deadlineMs - (Date.now() - started);
+    if (remaining <= 0) return unchanged("recipient_deadline_exceeded");
+    const results = await Promise.allSettled(
+      [nativePng, enlargedPng].map((png) =>
+        ocr(visionKey, base64(png), {
+          featureType: "DOCUMENT_TEXT_DETECTION",
+          timeoutMs: remaining,
+        })
+      ),
+    );
+    const metrics = results.map((result) =>
+      result.status === "fulfilled"
+        ? result.value.requestMetrics
+        : (result.reason as { requestMetrics?: GoogleVisionRequestMetrics })
+          ?.requestMetrics
+    );
+    const requestMetrics = {
+      calls: metrics.reduce((sum, item) => sum + (item?.calls ?? 1), 0),
+      retries: metrics.reduce((sum, item) => sum + (item?.retries ?? 0), 0),
+      durationMs: Date.now() - started,
+    };
+    if (
+      results[0].status !== "fulfilled" || results[1].status !== "fulfilled"
+    ) {
+      return {
+        ...unchanged("recipient_reread_failed"),
+        attempted: true,
+        requestMetrics,
+      };
+    }
+    return {
+      ...refineGcashRecipient(primary, {
+        native: results[0].value,
+        enlarged: results[1].value,
+      }),
+      region,
+      requestMetrics,
+    };
   } catch {
     return { ...unchanged("recipient_reread_failed"), attempted: true };
   }
