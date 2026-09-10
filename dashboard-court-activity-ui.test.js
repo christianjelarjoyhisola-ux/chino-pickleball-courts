@@ -96,7 +96,8 @@ test('premium TV display keeps four now-playing cards above separated schedule p
 
 test('TV display is today-only, privacy-safe, self-updating and closable', () => {
   const renderer = source.slice(source.indexOf('function renderCourtActivityTv()'), source.indexOf('function courtActivityCard('));
-  assert.match(renderer, /buildTvSnapshot\(_courtActivityBookings\)/);
+  assert.match(renderer, /buildTvSnapshot\(_courtActivityBookings, \{ now: courtActivityNow\(\) \}\)/);
+  assert.match(source, /const tvOpen = \$\('courtActivityTv'\)[\s\S]*?if \(tvOpen \|\| Date\.now\(\) - _courtActivitySyncedAt >= 60000\) void refreshCourtActivity\(\)/);
   assert.match(renderer, /item\.displayName/);
   assert.doesNotMatch(renderer, /item\.fullName|item\.email|item\.ref/);
   assert.match(renderer, /setInterval\(updateCourtActivityTvClock, 1000\)/);

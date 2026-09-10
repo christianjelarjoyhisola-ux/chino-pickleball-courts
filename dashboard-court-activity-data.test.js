@@ -164,3 +164,13 @@ test('local activity blocks unauthorized and inactive sessions on the same priva
     assert.deepEqual(plain(await harness({ local: true, role }).read()), []);
   }
 });
+
+test('local-only TV demo follows today and covers playing, up-next, open, and later states', () => {
+  assert.match(source, /window\.PB_COURT_ACTIVITY_DEMO_NOW = new Date\(`\$\{today\}T18:30:00\+08:00`\)\.toISOString\(\)/);
+  assert.match(source, /bookingFeeSnapshotSource: 'local_tv_demo'[\s\S]*?bookingFeeLedgerEligibleSnapshot: false/);
+  assert.match(source, /TV-DEMO-C1-NOW[\s\S]*?slots: \[18\]/);
+  assert.match(source, /TV-DEMO-C1-NEXT[\s\S]*?slots: \[19\]/);
+  assert.match(source, /TV-DEMO-C1-LATER[\s\S]*?slots: \[21\]/);
+  assert.match(source, /TV-DEMO-C4-NEXT[\s\S]*?TV-DEMO-C4-LATER-2/);
+  assert.match(source, /startsWith\('TV-DEMO-'\)[\s\S]*?bookings\[existingIndex\]\.date !== demoBooking\.date/);
+});

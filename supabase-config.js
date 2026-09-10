@@ -3646,6 +3646,41 @@ window.DB = {
         createdAt: new Date(Date.now() - createdDaysAgo * 86400000).toISOString(),
       };
     };
+    const today = _pbManilaToday();
+    window.PB_COURT_ACTIVITY_DEMO_NOW = new Date(`${today}T18:30:00+08:00`).toISOString();
+    const makeTvDemoBooking = ({ ref, fullName, courtId, courtName, slots }) => {
+      const start = Math.min(...slots);
+      const end = Math.max(...slots) + 1;
+      const duration = slots.length;
+      return {
+        ref,
+        fullName,
+        contactNumber: '09000000000',
+        email: 'tv-demo@chino.local',
+        courtId,
+        courtName,
+        date: today,
+        slots,
+        startTime: _fmtBookingHour(start),
+        endTime: _fmtBookingHour(end),
+        timeLabel: `${_fmtBookingHour(start)} - ${_fmtBookingHour(end)}`,
+        duration,
+        rate: 400,
+        total: duration * 400,
+        bookingFeeAmountSnapshot: 0,
+        bookingFeeRateSnapshot: 0,
+        bookingFeeTypeSnapshot: 'per_hour',
+        bookingFeeUnitsSnapshot: duration,
+        bookingFeeSnapshotSource: 'local_tv_demo',
+        bookingFeeLedgerEligibleSnapshot: false,
+        paymentMethod: 'cash',
+        paymentStatus: 'paid',
+        status: 'confirmed',
+        createdVia: 'local_tv_demo',
+        bookingFeeEarnedAt: null,
+        createdAt: new Date(`${today}T09:00:00+08:00`).toISOString(),
+      };
+    };
     return [
       makeHostBooking({ ref: 'HOST-DEMO-001', courtId: 'c1', courtName: 'CHINO Court 1', date: '2026-07-12', slots: [14, 15], rate: 60, gcashRef: '1234567890123', createdDaysAgo: 1 }),
       makeHostBooking({ ref: 'HOST-DEMO-002', courtId: 'c2', courtName: 'CHINO Court 2', date: '2026-07-14', slots: [18, 19, 20], rate: 90, gcashRef: '9876543210123', createdDaysAgo: 2 }),
@@ -3656,6 +3691,18 @@ window.DB = {
       makeHostBooking({ ref: 'HOST-DEMO-MULTI-001-A', groupRef: 'HOST-DEMO-MULTI-001', courtId: 'c7', courtName: 'CHINO Court 7', date: '2026-07-25', slots: [17, 18, 19, 20], rate: 90, gcashRef: '5556667778889', createdDaysAgo: 0 }),
       makeHostBooking({ ref: 'HOST-DEMO-MULTI-001-B', groupRef: 'HOST-DEMO-MULTI-001', courtId: 'c8', courtName: 'CHINO Court 8', date: '2026-07-25', slots: [17, 18, 19, 20], rate: 90, gcashRef: '5556667778889', createdDaysAgo: 0 }),
       makeHostBooking({ ref: 'HOST-DEMO-MULTI-001-C', groupRef: 'HOST-DEMO-MULTI-001', courtId: 'c9', courtName: 'CHINO Court 9', date: '2026-07-25', slots: [17, 18, 19, 20], rate: 90, gcashRef: '5556667778889', createdDaysAgo: 0 }),
+      makeTvDemoBooking({ ref: 'TV-DEMO-C1-NOW', fullName: 'Ana Reyes', courtId: 'c1', courtName: 'Court 1', slots: [18] }),
+      makeTvDemoBooking({ ref: 'TV-DEMO-C1-NEXT', fullName: 'Ben Cruz', courtId: 'c1', courtName: 'Court 1', slots: [19] }),
+      makeTvDemoBooking({ ref: 'TV-DEMO-C1-LATER', fullName: 'Cara Lim', courtId: 'c1', courtName: 'Court 1', slots: [21] }),
+      makeTvDemoBooking({ ref: 'TV-DEMO-C2-NOW', fullName: 'Diego Ramos', courtId: 'c2', courtName: 'Court 2', slots: [17, 18] }),
+      makeTvDemoBooking({ ref: 'TV-DEMO-C2-NEXT', fullName: 'Ella Tan', courtId: 'c2', courtName: 'Court 2', slots: [19, 20] }),
+      makeTvDemoBooking({ ref: 'TV-DEMO-C2-LATER', fullName: 'Finn Yu', courtId: 'c2', courtName: 'Court 2', slots: [22] }),
+      makeTvDemoBooking({ ref: 'TV-DEMO-C3-NOW', fullName: 'Gia Santos', courtId: 'c3', courtName: 'Court 3', slots: [18, 19] }),
+      makeTvDemoBooking({ ref: 'TV-DEMO-C3-NEXT', fullName: 'Hugo Diaz', courtId: 'c3', courtName: 'Court 3', slots: [20] }),
+      makeTvDemoBooking({ ref: 'TV-DEMO-C3-LATER', fullName: 'Iris Go', courtId: 'c3', courtName: 'Court 3', slots: [21, 22] }),
+      makeTvDemoBooking({ ref: 'TV-DEMO-C4-NEXT', fullName: 'Jake Ong', courtId: 'c4', courtName: 'Court 4', slots: [19] }),
+      makeTvDemoBooking({ ref: 'TV-DEMO-C4-LATER-1', fullName: 'Kaye Uy', courtId: 'c4', courtName: 'Court 4', slots: [20] }),
+      makeTvDemoBooking({ ref: 'TV-DEMO-C4-LATER-2', fullName: 'Liam Co', courtId: 'c4', courtName: 'Court 4', slots: [22] }),
     ];
   };
 
@@ -3698,8 +3745,13 @@ window.DB = {
       }
     }
     for (const demoBooking of defaultHostDemoBookings()) {
-      if (!bookings.some(b => String(b.ref) === String(demoBooking.ref))) {
+      const existingIndex = bookings.findIndex(b => String(b.ref) === String(demoBooking.ref));
+      if (existingIndex < 0) {
         bookings.push(demoBooking);
+        localSeedChanged = true;
+      } else if (String(demoBooking.ref).startsWith('TV-DEMO-')
+          && bookings[existingIndex].date !== demoBooking.date) {
+        bookings[existingIndex] = demoBooking;
         localSeedChanged = true;
       }
     }

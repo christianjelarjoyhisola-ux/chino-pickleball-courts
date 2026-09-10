@@ -9471,13 +9471,19 @@ function courtActivityTvCountdown(minutes, suffix) {
   return `${value} ${suffix}`;
 }
 
+function courtActivityNow() {
+  const demoNow = String(window.PB_COURT_ACTIVITY_DEMO_NOW || '').trim();
+  const parsed = demoNow ? new Date(demoNow) : new Date();
+  return Number.isFinite(parsed.getTime()) ? parsed : new Date();
+}
+
 function courtActivityTvNowCard(court) {
   const item = court.playing;
   if (!item) {
     const availability = court.upNext ? `Available until ${court.upNext.startLabel}` : 'Available for the rest of today';
     return `<article class="ca-tv-court is-available"><header><h2>${esc(court.name)}</h2><span class="ca-tv-state"><i></i> Available now</span></header><div class="ca-tv-current"><span class="ca-tv-eyebrow">Open court</span><strong class="ca-tv-player">Ready to play</strong><span class="ca-tv-period">${esc(availability)}</span></div></article>`;
   }
-  const progress = Math.max(0, Math.min(100, (Date.now() - item.startMs) / (item.endMs - item.startMs) * 100));
+  const progress = Math.max(0, Math.min(100, (courtActivityNow().getTime() - item.startMs) / (item.endMs - item.startMs) * 100));
   return `<article class="ca-tv-court is-playing"><header><h2>${esc(court.name)}</h2><span class="ca-tv-state"><i></i> Now playing</span></header><div class="ca-tv-current"><span class="ca-tv-eyebrow">Current session</span><strong class="ca-tv-player">${esc(item.displayName)}</strong><span class="ca-tv-period">${esc(item.startLabel)} – ${esc(item.endLabel)}</span><span class="ca-tv-remaining">${esc(courtActivityTvCountdown(item.minutesUntilEnd,'left'))}</span></div><div class="ca-tv-progress" aria-hidden="true"><span style="width:${progress}%"></span></div></article>`;
 }
 
@@ -9488,14 +9494,14 @@ function courtActivityTvNextCard(court) {
 
 function updateCourtActivityTvClock() {
   const clock = $('courtActivityTvClock');
-  if (clock) clock.textContent = new Date().toLocaleTimeString('en-PH',{timeZone:'Asia/Manila',hour:'numeric',minute:'2-digit',second:'2-digit',hour12:true});
+  if (clock) clock.textContent = courtActivityNow().toLocaleTimeString('en-PH',{timeZone:'Asia/Manila',hour:'numeric',minute:'2-digit',second:'2-digit',hour12:true});
 }
 
 function renderCourtActivityTv() {
   const overlay = $('courtActivityTv');
   const body = $('courtActivityTvBody');
   if (!overlay || overlay.hidden || !body || !_courtActivityBookings || !window.ChinoCourtActivity?.buildTvSnapshot) return;
-  const snapshot = window.ChinoCourtActivity.buildTvSnapshot(_courtActivityBookings);
+  const snapshot = window.ChinoCourtActivity.buildTvSnapshot(_courtActivityBookings, { now: courtActivityNow() });
   const pageSize = 8;
   const pageCount = Math.max(1, Math.ceil(snapshot.upcomingToday.length / pageSize));
   _courtActivityTvPage %= pageCount;
@@ -9568,7 +9574,7 @@ function renderCourtActivity() {
   const focusRef = focused?.dataset.activityRef;
   const focusStart = focused?.dataset.activityStart;
   const focusLane = focused?.closest('details')?.dataset.lane;
-  const snapshot = window.ChinoCourtActivity.buildSnapshot(_courtActivityBookings);
+  const snapshot = window.ChinoCourtActivity.buildSnapshot(_courtActivityBookings, { now: courtActivityNow() });
   const lanes = [
     { key: 'playing', title: 'Playing Now', empty: 'No games in progress' },
     { key: 'next', title: 'Up Next', empty: 'No next game scheduled' },
@@ -9599,7 +9605,8 @@ function setCourtActivityBookings(bookings) {
   renderCourtActivity();
   if (!_courtActivityTimer) _courtActivityTimer = setInterval(() => {
     if (document.hidden || _curSection !== 'dash' || $('courtActivityBody')?.contains(document.activeElement)) return;
-    if (Date.now() - _courtActivitySyncedAt >= 60000) void refreshCourtActivity();
+    const tvOpen = $('courtActivityTv') && !$('courtActivityTv').hidden;
+    if (tvOpen || Date.now() - _courtActivitySyncedAt >= 60000) void refreshCourtActivity();
     else renderCourtActivity();
   }, 30000);
 }
