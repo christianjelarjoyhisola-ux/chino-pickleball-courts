@@ -9,6 +9,41 @@ export type GoogleVisionOcrResult = {
   recipientRegion?: ReceiptImageRegion;
   confidence: number;
   confidenceSource: "native" | "heuristic" | "none";
+  gcashEvidence?: GoogleVisionGcashEvidence;
+  recipientCropEvidence?: GoogleVisionRecipientCropEvidence;
+};
+
+export type GoogleVisionRecipientCropEvidence = {
+  name: GoogleVisionGcashFieldEvidence;
+  phone: GoogleVisionGcashFieldEvidence;
+  confidence?: number;
+  confidenceSource: "native" | "none";
+  basis: "visible_character_symbols";
+};
+
+export type GoogleVisionGcashFieldEvidence = {
+  text: string;
+  /** Native value-word confidence; never inferred from parsing or expectations. */
+  confidence?: number;
+};
+
+export type GoogleVisionGcashEvidence = {
+  layoutText: string;
+  recipientRegion?: ReceiptImageRegion;
+  fields: Partial<
+    Record<
+      | "amount"
+      | "totalAmount"
+      | "reference"
+      | "dateTime"
+      | "recipientPhone"
+      | "recipientName",
+      GoogleVisionGcashFieldEvidence
+    >
+  >;
+  /** Minimum of the six complete field scores; absent if evidence is missing. */
+  confidence?: number;
+  confidenceSource: "native" | "none";
 };
 
 export type ReceiptImageDimensions = {
@@ -244,6 +279,8 @@ type LayoutWord = {
   top: number;
   bottom: number;
   order: number;
+  confidence?: number;
+  symbols: Array<{ text: string; confidence?: number }>;
 };
 
 type LayoutRow = {
@@ -265,6 +302,7 @@ function layoutWord(
   value: unknown,
   page: Record<string, unknown>,
   order: number,
+  allowUiSymbols = false,
 ): LayoutWord | null {
   const word = record(value);
   if (!word || !Array.isArray(word.symbols) || !word.symbols.length) {
@@ -308,6 +346,20 @@ function layoutWord(
       y: y * (normalized ? height as number : 1),
     });
   }
+  // Android navigation glyphs can be reported rotated despite an upright
+  // receipt. Their bounding rectangle is sufficient to preserve the glyph in
+  // GCash audit text. Never apply this exception to letters, digits, currency,
+  // mask characters, or punctuation used by a payment field.
+  if (allowUiSymbols && /^[☐□▢⇓↑↓←→✓✔]+$/.test(text)) {
+    const left = Math.min(...points.map((point) => point.x));
+    const right = Math.max(...points.map((point) => point.x));
+    const top = Math.min(...points.map((point) => point.y));
+    const bottom = Math.max(...points.map((point) => point.y));
+    points.splice(0, points.length, { x: left, y: top }, { x: right, y: top }, {
+      x: right,
+      y: bottom,
+    }, { x: left, y: bottom });
+  }
   const [a, b, c, d] = points;
   // Vision's vertex order is top-left, top-right, bottom-right, bottom-left in
   // natural reading orientation. Avoid inventing row order for rotated text.
@@ -332,6 +384,19 @@ function layoutWord(
     top,
     bottom,
     order,
+    symbols: symbols.map((symbol) => ({
+      text: symbol!.text as string,
+      confidence: typeof symbol!.confidence === "number" &&
+          Number.isFinite(symbol!.confidence) && symbol!.confidence >= 0 &&
+          symbol!.confidence <= 1
+        ? symbol!.confidence
+        : undefined,
+    })),
+    confidence: typeof word.confidence === "number" &&
+        Number.isFinite(word.confidence) && word.confidence >= 0 &&
+        word.confidence <= 1
+      ? word.confidence
+      : undefined,
   };
 }
 
@@ -344,6 +409,7 @@ function layoutWord(
 function googleVisionLayout(
   annotation: Record<string, unknown> | null,
   originalText: string,
+  allowUiSymbols = false,
 ): LayoutResult | undefined {
   if (
     !annotation || !originalText.trim() || !Array.isArray(annotation.pages) ||
@@ -367,7 +433,7 @@ function googleVisionLayout(
         const paragraph = record(rawParagraph);
         if (!paragraph || !Array.isArray(paragraph.words)) return undefined;
         for (const rawWord of paragraph.words) {
-          const word = layoutWord(rawWord, page, words.length);
+          const word = layoutWord(rawWord, page, words.length, allowUiSymbols);
           if (!word) return undefined;
           words.push(word);
           observedWords.push(word);
@@ -548,6 +614,265 @@ export function googleVisionRecipientRegion(
   );
 }
 
+function gcashField(
+  row: LayoutRow,
+  value: string,
+): GoogleVisionGcashFieldEvidence | undefined {
+  const text = row.text || "";
+  const start = text.indexOf(value);
+  if (start < 0 || !value.trim()) return undefined;
+  const end = start + value.length;
+  let cursor = 0;
+  const valueWords: LayoutWord[] = [];
+  for (const word of row.words) {
+    const wordStart = text.indexOf(word.text, cursor);
+    if (wordStart < 0) return undefined;
+    const wordEnd = wordStart + word.text.length;
+    cursor = wordEnd;
+    if (wordEnd > start && wordStart < end) valueWords.push(word);
+  }
+  if (!valueWords.length) return undefined;
+  // Average native word confidence weighted by observed characters. This does
+  // not turn a parser match, known price, or expected account into confidence.
+  const complete = valueWords.every((word) => word.confidence !== undefined);
+  const weight = (word: LayoutWord) => word.text.replace(/\s/g, "").length;
+  const totalWeight = valueWords.reduce((sum, word) => sum + weight(word), 0);
+  return {
+    text: value.trim(),
+    ...(complete && totalWeight > 0
+      ? {
+        confidence: valueWords.reduce(
+          (sum, word) => sum + word.confidence! * weight(word),
+          0,
+        ) / totalWeight,
+      }
+      : {}),
+  };
+}
+
+function gcashEvidenceFromLayout(
+  annotation: Record<string, unknown> | null,
+  layout: LayoutResult | undefined,
+): GoogleVisionGcashEvidence | undefined {
+  if (!layout || layout.pageRows.length !== 1) return undefined;
+  const rows = layout.pageRows[0];
+  const express = rows.filter((row) =>
+    /^express\s+send$/i.test(row.text || "")
+  );
+  const sent = rows.filter((row) =>
+    /^sent\s+via\s+g\s*cash$/i.test(row.text || "")
+  );
+  // This field policy is specific to the standard Express Send receipt. Other
+  // receipt types retain the existing full-image OCR confidence policy.
+  if (express.length !== 1 || sent.length !== 1) return undefined;
+  const headerIndex = rows.indexOf(express[0]);
+  const sentIndex = rows.indexOf(sent[0]);
+  if (sentIndex <= headerIndex) return undefined;
+  const fields: GoogleVisionGcashEvidence["fields"] = {};
+  const recipientRows = rows.slice(headerIndex + 1, sentIndex);
+  const phoneRows = recipientRows.filter((row) =>
+    /^(?:\+?63|0)[\d\s*•●·xX.()-]{4,}$/i.test(row.text || "")
+  );
+  let recipientRegion: ReceiptImageRegion | undefined;
+  if (phoneRows.length === 1) {
+    const phone = phoneRows[0];
+    const nameRows = recipientRows.slice(0, recipientRows.indexOf(phone))
+      .filter(
+        (row) => /^[A-Z][A-Z\s*•●·.'’-]*$/i.test(row.text || ""),
+      );
+    fields.recipientPhone = gcashField(phone, phone.text || "");
+    if (nameRows.length === 1) {
+      const name = nameRows[0];
+      fields.recipientName = gcashField(name, name.text || "");
+      const page = Array.isArray(annotation?.pages)
+        ? record(annotation.pages[0])
+        : null;
+      const width = page?.width;
+      const height = page?.height;
+      const words = [name, phone].flatMap((row) => row.words);
+      const left = Math.min(...words.map((word) => word.left));
+      const right = Math.max(...words.map((word) => word.right));
+      const top = Math.min(...words.map((word) => word.top));
+      const bottom = Math.max(...words.map((word) => word.bottom));
+      const padding = Math.ceil(
+        Math.max(...words.map((word) => word.bottom - word.top)),
+      );
+      const headerBottom = Math.max(
+        ...express[0].words.map((word) => word.bottom),
+      );
+      const sentTop = Math.min(...sent[0].words.map((word) => word.top));
+      if (
+        typeof width === "number" && Number.isInteger(width) && width > 0 &&
+        typeof height === "number" && Number.isInteger(height) && height > 0 &&
+        top > headerBottom && bottom < sentTop
+      ) {
+        const x = Math.max(0, Math.floor(left - padding));
+        const y = Math.max(
+          0,
+          Math.floor(Math.max(top - padding, (top + headerBottom) / 2)),
+        );
+        const endX = Math.min(width, Math.ceil(right + padding));
+        const endY = Math.min(
+          height,
+          Math.ceil(Math.min(bottom + padding, (bottom + sentTop) / 2)),
+        );
+        if (endX > x && endY > y) {
+          recipientRegion = { x, y, width: endX - x, height: endY - y };
+        }
+      }
+    }
+  }
+  const money = "(?:[₱P]\\s*)?-?\\d[\\d, ]*\\.\\s*\\d{2}";
+  const amountPattern = new RegExp(`^amount\\s*:?\\s*(${money})$`, "i");
+  const totalPattern = new RegExp(
+    `^total\\s+amount\\s+sent\\s*:?\\s*(${money})$`,
+    "i",
+  );
+  const amountRows = rows.slice(sentIndex + 1).filter((row) =>
+    amountPattern.test(row.text || "")
+  );
+  const totalRows = rows.slice(sentIndex + 1).filter((row) =>
+    totalPattern.test(row.text || "")
+  );
+  if (amountRows.length === 1) {
+    fields.amount = gcashField(
+      amountRows[0],
+      (amountRows[0].text || "").match(amountPattern)![1],
+    );
+  }
+  if (totalRows.length === 1) {
+    fields.totalAmount = gcashField(
+      totalRows[0],
+      (totalRows[0].text || "").match(totalPattern)![1],
+    );
+  }
+  const referenceRows = rows.slice(sentIndex + 1).filter((row) =>
+    /^ref(?:erence)?(?:\s*(?:no\.?|number))?[\s:#.-]+\d/i.test(row.text || "")
+  );
+  if (referenceRows.length === 1) {
+    const row = referenceRows[0];
+    const value = (row.text || "").replace(
+      /^ref(?:erence)?(?:\s*(?:no\.?|number))?[\s:#.-]+/i,
+      "",
+    );
+    const reference = value.match(/^(\d[\d -]{8,24}\d)(?=\s+[A-Za-z]|$)/)?.[1]
+      ?.trim();
+    if (
+      reference && reference.replace(/\D/g, "").length >= 10 &&
+      reference.replace(/\D/g, "").length <= 16
+    ) {
+      fields.reference = gcashField(row, reference);
+    }
+  }
+  const dateTimePattern =
+    /\b(?:(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2},?\s+\d{4}|\d{4}-\d{2}-\d{2})\s+(?:at\s+)?\d{1,2}:\d{2}(?::\d{2})?\s*[AP]M\b/i;
+  const dateTimeRows = rows.slice(sentIndex + 1).filter((row) =>
+    dateTimePattern.test(row.text || "")
+  );
+  if (dateTimeRows.length === 1) {
+    const row = dateTimeRows[0];
+    fields.dateTime = gcashField(
+      row,
+      (row.text || "").match(dateTimePattern)![0],
+    );
+  }
+  const required = [
+    "amount",
+    "totalAmount",
+    "reference",
+    "dateTime",
+    "recipientPhone",
+    "recipientName",
+  ] as const;
+  const complete = required.every((key) =>
+    typeof fields[key]?.confidence === "number"
+  );
+  return {
+    layoutText: layout.text,
+    recipientRegion,
+    fields,
+    ...(complete
+      ? {
+        confidence: Math.min(
+          ...required.map((key) => fields[key]!.confidence!),
+        ),
+      }
+      : {}),
+    confidenceSource: complete ? "native" : "none",
+  };
+}
+
+/** Observed GCash field evidence with page/header/footer confidence excluded. */
+export function googleVisionGcashEvidence(
+  annotation: Record<string, unknown> | null,
+  originalText: string,
+): GoogleVisionGcashEvidence | undefined {
+  return gcashEvidenceFromLayout(
+    annotation,
+    googleVisionLayout(annotation, originalText, true),
+  );
+}
+
+function recipientCropEvidenceFromLayout(
+  layout: LayoutResult | undefined,
+): GoogleVisionRecipientCropEvidence | undefined {
+  if (
+    !layout || layout.pageRows.length !== 1 || layout.pageRows[0].length !== 2
+  ) return undefined;
+  const [name, phone] = layout.pageRows[0];
+  if (
+    !/^[A-Z][A-Z\s•‣●◦∙·*#.'’-]*$/i.test((name.text || "").normalize("NFKC")) ||
+    !/^(?:\+?63|0)[\d\s•‣●◦∙·*#xX.()-]{4,}$/i.test(
+      (phone.text || "").normalize("NFKC"),
+    )
+  ) return undefined;
+  const field = (
+    row: LayoutRow,
+    allowed: RegExp,
+  ): GoogleVisionGcashFieldEvidence => {
+    const symbols = row.words.flatMap((word) => word.symbols).filter((symbol) =>
+      allowed.test(symbol.text)
+    );
+    const complete = symbols.length > 0 &&
+      symbols.every((symbol) => symbol.confidence !== undefined);
+    return {
+      text: row.text || "",
+      ...(complete
+        ? {
+          confidence:
+            symbols.reduce((sum, symbol) => sum + symbol.confidence!, 0) /
+            symbols.length,
+        }
+        : {}),
+    };
+  };
+  // Mask punctuation carries no visible identity characters. Its presence and
+  // location must agree in two optical views in the caller; do not count the
+  // intentionally hidden letters/digits as low-confidence recognized text.
+  const nameField = field(name, /^[A-Z]$/i);
+  const phoneField = field(phone, /^\d$/);
+  const complete = typeof nameField.confidence === "number" &&
+    typeof phoneField.confidence === "number";
+  return {
+    name: nameField,
+    phone: phoneField,
+    ...(complete
+      ? { confidence: Math.min(nameField.confidence!, phoneField.confidence!) }
+      : {}),
+    confidenceSource: complete ? "native" : "none",
+    basis: "visible_character_symbols",
+  };
+}
+
+export function googleVisionRecipientCropEvidence(
+  annotation: Record<string, unknown> | null,
+  originalText: string,
+): GoogleVisionRecipientCropEvidence | undefined {
+  return recipientCropEvidenceFromLayout(
+    googleVisionLayout(annotation, originalText),
+  );
+}
+
 export type GoogleVisionOcrOptions = {
   fetcher?: typeof fetch;
   timeoutMs?: number;
@@ -667,5 +992,10 @@ export async function googleVisionOcr(
     recipientRegion: recipientRegionFromLayout(fullText, layout),
     confidence: confidence.confidence,
     confidenceSource: confidence.source,
+    gcashEvidence: gcashEvidenceFromLayout(
+      fullText,
+      layout || googleVisionLayout(fullText, text, true),
+    ),
+    recipientCropEvidence: recipientCropEvidenceFromLayout(layout),
   };
 }

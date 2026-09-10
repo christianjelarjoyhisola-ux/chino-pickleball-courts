@@ -33,10 +33,14 @@ import {
   roundMoney,
   toNumber,
 } from "../_shared/booking-payment.ts";
-import type {
-  GcashReceiptParse,
-  GcashRecipientComparison,
+import {
+  compareGcashRecipient,
+  type GcashReceiptParse,
+  type GcashRecipientComparison,
+  isGcashRecipientAccepted,
 } from "../_shared/gcash-receipt.ts";
+import { gcashApprovalConfidence } from "../_shared/gcash-approval-confidence.ts";
+import { rereadGcashRecipient } from "../_shared/gcash-recipient-ocr.ts";
 import {
   isDedicatedReceiptProvider,
   parseProviderReceipt,
@@ -47,6 +51,7 @@ import {
 import {
   detectReceiptImageContentType,
   googleVisionOcr,
+  type GoogleVisionGcashEvidence,
   type ReceiptImageContentType,
   receiptImageSafeToDecode,
 } from "../_shared/google-vision.ts";
@@ -99,6 +104,7 @@ type OcrResult = {
   originalText?: string;
   layoutApplied?: boolean;
   recipientRegion?: RecipientOcrRegion;
+  gcashEvidence?: GoogleVisionGcashEvidence;
   confidence: number;
   confidenceSource: "native" | "heuristic" | "none";
   provider: OcrProvider;
@@ -1120,11 +1126,13 @@ async function runOCR(
   if (visionKey) {
     try {
       const v = await googleVisionOcr(visionKey, base64);
-      // GoTyme's two-column transfer cards can place every label before its
-      // value in plain OCR order. Use validated word geometry for that source
-      // only, and retain Google's untouched text for the immutable audit.
-      const layoutApplied = provider === "gotyme" && !!v.layoutText?.trim();
-      const text = layoutApplied && v.layoutText ? v.layoutText : v.text;
+      // Preserve the original read for audit while matching values to their
+      // labels with validated word geometry on supported receipt layouts.
+      const layoutText = provider === "gcash"
+        ? v.gcashEvidence?.layoutText
+        : provider === "gotyme" ? v.layoutText : undefined;
+      const layoutApplied = !!layoutText?.trim();
+      const text = layoutApplied && layoutText ? layoutText : v.text;
       const result = { ...v, text, originalText: v.text, layoutApplied };
       const gaps = ocrCriticalGaps(text, provider, typedRef);
       if (text && gaps.length === 0) {
@@ -2710,6 +2718,7 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
     let ocrOriginalText = "";
     let ocrLayoutApplied = false;
     let ocrRecipientRegion: RecipientOcrRegion | undefined;
+    let gcashOcrEvidence: GoogleVisionGcashEvidence | undefined;
     let ocrConfidence = 0;
     let ocrConfidenceSource: OcrResult["confidenceSource"] = "none";
     let ocrProvider: OcrResult["provider"] = "none";
@@ -2723,6 +2732,7 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
       ocrOriginalText = ocr.originalText ?? ocr.text;
       ocrLayoutApplied = ocr.layoutApplied === true;
       ocrRecipientRegion = ocr.recipientRegion;
+      gcashOcrEvidence = ocr.gcashEvidence;
       ocrConfidence = ocr.confidence;
       ocrConfidenceSource = ocr.confidenceSource;
       ocrProvider = ocr.provider;
@@ -2757,6 +2767,43 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
     let recipientRefinement:
       | Awaited<ReturnType<typeof rereadGotymeRecipient>>
       | null = null;
+    let gcashRecipientRefinement:
+      | Awaited<ReturnType<typeof rereadGcashRecipient>>
+      | null = null;
+    if (providerParse?.provider === "gcash") {
+      const comparison = compareGcashRecipient(providerParse.receipt.receiver, {
+        phone: expectedNumber,
+        name: expectedName,
+      });
+      const recipientScores = [
+        gcashOcrEvidence?.fields.recipientPhone?.confidence,
+        gcashOcrEvidence?.fields.recipientName?.confidence,
+      ];
+      if (
+        !isGcashRecipientAccepted(comparison) ||
+        recipientScores.some((score) =>
+          score === undefined || !Number.isFinite(score) || score < 0.9
+        )
+      ) {
+        // Configuration determines whether a reread is useful, but never
+        // supplies text to OCR or to the two-view optical agreement check.
+        gcashRecipientRefinement = await rereadGcashRecipient(
+          bytes,
+          gcashOcrEvidence?.recipientRegion,
+          providerParse.receipt,
+          visionKey,
+        );
+        if (gcashRecipientRefinement.accepted) {
+          providerParse = {
+            ...providerParse,
+            receipt: {
+              ...providerParse.receipt,
+              receiver: gcashRecipientRefinement.receiver,
+            },
+          };
+        }
+      }
+    }
     if (
       providerParse?.provider === "gotyme" &&
       ocrConfidenceSource === "native" && ocrConfidence >= 0.9
@@ -3022,15 +3069,25 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
     }
     if (await editedBySoftware(bytes)) flags.push("EDITED_METADATA");
 
-    // Every provider-specific auto-approval requires a high-quality native OCR
-    // read. Generic/legacy parsers remain review-only.
+    // Native confidence on all six GCash payment fields excludes irrelevant
+    // phone status/footer text. Other providers keep their existing policy.
+    const approval = provider === "gcash"
+      ? gcashApprovalConfidence(
+        ocrConfidence,
+        ocrConfidenceSource,
+        gcashOcrEvidence,
+        gcashRecipientRefinement,
+      )
+      : { confidence: ocrConfidence, source: ocrConfidenceSource };
+    const approvalConfidence = approval.confidence;
+    const approvalConfidenceSource = approval.source;
     const minimumOcrConfidence = isDedicatedReceiptProvider(provider)
       ? 0.9
       : 0.55;
     if (
       ocrText &&
       (
-        ocrConfidence < minimumOcrConfidence ||
+        approvalConfidence < minimumOcrConfidence ||
         (isDedicatedReceiptProvider(provider) &&
           ocrConfidenceSource !== "native")
       )
@@ -3127,8 +3184,7 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
         ].includes(flag)
       );
     const recipientMatch = providerVerification?.provider === "gcash"
-      ? providerVerification.recipientComparison.phone === "exact" &&
-        providerVerification.recipientComparison.name !== "mismatch"
+      ? isGcashRecipientAccepted(providerVerification.recipientComparison)
       : providerVerification?.provider === "maya"
       ? providerVerification.recipientComparison.phone === "exact" &&
         ["exact", "masked_compatible"].includes(
@@ -3184,7 +3240,7 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
         inlineRegistrationCanAutoApprove
         ? "auto_approved"
         : "manual_review";
-    let confidence = result === "auto_approved" ? ocrConfidence : 0.5;
+    let confidence = result === "auto_approved" ? approvalConfidence : 0.5;
     const route = provider === "securitybank"
       ? "gcash_to_securitybank"
       : provider === "gcash"
@@ -3256,6 +3312,9 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
       provider,
       route,
       parserVersion: providerParse?.parserVersion || "legacy",
+      ...(provider === "gcash"
+        ? { verifierRevision: "gcash_fields_20260910" }
+        : {}),
       verifierVersion: "receipt_evidence_v1",
       ...(isReverification
         ? {
@@ -3281,6 +3340,10 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
           },
           timestamp: gcashParse.timestamp,
           receiver: gcashParse.receiver,
+          ...(gcashRecipientRefinement
+            ? { recipientRefinement: gcashRecipientRefinement }
+            : {}),
+          ocrEvidence: gcashOcrEvidence || null,
           recipientComparison: gcashRecipient,
           indicators: gcashParse.indicators,
           issues: gcashParse.issues,
@@ -3336,6 +3399,8 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
       ocrFallbackReason,
       ocrConfidence,
       ocrConfidenceSource,
+      approvalConfidence,
+      approvalConfidenceSource,
       ocrTextLength: ocrText.length,
       ocrTextLayout: ocrLayoutApplied ? "google_rows" : "original",
       expectedReceiverNumber:

@@ -73,6 +73,77 @@ Total Amount Sent
 Ref No. 2043350406766 Aug 31, 2026 10:41 AM
 `;
 
+const MASKED_GCASH_OCR = `Express Send
+Amount
+KR••••E L•• C.
++63 92169
+Sent via GCash
+1,590.00
+Total Amount Sent P1,590.00
+Ref No. 9044 881 673119 Sep 10, 2026 9:06 AM`;
+
+const MASKED_GCASH_CONTEXT = {
+  ...CONTEXT,
+  expectedAmount: 1590,
+  expectedRecipientNumber: "09609422169",
+  expectedRecipientName: "Kristie Lou Cachuela",
+  bookingStartedAt: "2026-09-10T01:04:27.211Z",
+  bookingStartedDate: "2026-09-10",
+};
+
+Deno.test("GCash verifier accepts concordant detached amounts and strong masked recipient", () => {
+  const parsed = parseProviderReceipt("gcash", MASKED_GCASH_OCR);
+  const evidence = verifyProviderReceipt(parsed, MASKED_GCASH_CONTEXT);
+  assertEquals(evidence.flags, [], "masked recipient checks pass");
+  assertEquals(evidence.dedupeKeys, [{
+    key: "9044881673119",
+    providerKey: "gcash",
+    duplicateFlag: "DUPLICATE_REF",
+  }], "retains duplicate protection");
+});
+
+Deno.test("GCash masked recipient acceptance preserves payment and identity checks", () => {
+  for (
+    const [text, flag] of [
+      [
+        MASKED_GCASH_OCR.replace("KR••••E L•• C.", "KRE L. C."),
+        "RECEIVER_NAME_MISMATCH",
+      ],
+      [
+        MASKED_GCASH_OCR.replace("KR••••E L•• C.", "K•• L•• C."),
+        "RECEIVER_NAME_UNREADABLE",
+      ],
+      [
+        MASKED_GCASH_OCR.replace("KR••••E L•• C.\n", ""),
+        "RECEIVER_NAME_UNREADABLE",
+      ],
+      [
+        MASKED_GCASH_OCR.replace("+63 92169", "+63 99999"),
+        "WRONG_GCASH_NUMBER",
+      ],
+      [
+        MASKED_GCASH_OCR.replace("+63 92169", "+63 945***2169"),
+        "WRONG_GCASH_NUMBER",
+      ],
+      [MASKED_GCASH_OCR.replace(/1,590\.00/g, "1,490.00"), "AMOUNT_MISMATCH"],
+      [
+        MASKED_GCASH_OCR.replace("\n1,590.00\n", "\n1,490.00\n"),
+        "AMOUNT_REVIEW",
+      ],
+      [MASKED_GCASH_OCR.replace("9:06 AM", "8:00 AM"), "TIME_FUTURE"],
+      [MASKED_GCASH_OCR.replace("Sep 10", "Sep 09"), "DATE_NOT_TODAY"],
+      [MASKED_GCASH_OCR.replace("Ref No. ", ""), "REF_LABEL_UNREADABLE"],
+    ]
+  ) {
+    const parsed = parseProviderReceipt("gcash", text);
+    const evidence = verifyProviderReceipt(parsed, MASKED_GCASH_CONTEXT);
+    assert(
+      evidence.flags.includes(flag),
+      `${flag} must remain review: ${evidence.flags}`,
+    );
+  }
+});
+
 const REORDERED_GCASH_OCR = `
 1:36 1
 Amount
@@ -636,10 +707,26 @@ Deno.test("unknown provider dispatch fails closed", () => {
 
 Deno.test("receipt-only GCash checkout retains labelled-reference and amount checks", () => {
   const parsed = parseProviderReceipt("gcash", GCASH_OCR);
-  const result = verifyProviderReceipt(parsed, { ...CONTEXT, typedReference: "" });
-  assert(!result.flags.includes("REF_FORMAT_INVALID"), "A typed reference is optional");
-  assert(parsed.receipt.reference.typedMatch === "not_provided", "Do not invent a typed match");
+  const result = verifyProviderReceipt(parsed, {
+    ...CONTEXT,
+    typedReference: "",
+  });
+  assert(
+    !result.flags.includes("REF_FORMAT_INVALID"),
+    "A typed reference is optional",
+  );
+  assert(
+    parsed.receipt.reference.typedMatch === "not_provided",
+    "Do not invent a typed match",
+  );
   assert(!!parsed.receipt.reference.value, "Reference must come from OCR");
-  const missing = parseProviderReceipt("gcash", "Sent via GCash\nAmount\n1080.00");
-  assert(verifyProviderReceipt(missing, { ...CONTEXT, typedReference: "" }).flags.includes("REF_UNREADABLE"), "Missing reference must stay pending");
+  const missing = parseProviderReceipt(
+    "gcash",
+    "Sent via GCash\nAmount\n1080.00",
+  );
+  assert(
+    verifyProviderReceipt(missing, { ...CONTEXT, typedReference: "" }).flags
+      .includes("REF_UNREADABLE"),
+    "Missing reference must stay pending",
+  );
 });

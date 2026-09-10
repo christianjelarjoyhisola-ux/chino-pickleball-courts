@@ -14,6 +14,7 @@ import {
   compareGcashRecipient,
   type GcashReceiptParse,
   type GcashRecipientComparison,
+  isGcashRecipientAccepted,
   parseGcashReceipt,
 } from "../gcash-receipt.ts";
 import type {
@@ -212,7 +213,9 @@ function verifyGcashReceipt(
     /\D/g,
     "",
   );
-  if (typedReference && typedReference.length !== 13) addUnique(flags, "REF_FORMAT_INVALID");
+  if (typedReference && typedReference.length !== 13) {
+    addUnique(flags, "REF_FORMAT_INVALID");
+  }
   if (!receipt.reference.value) addUnique(flags, "REF_UNREADABLE");
   if (receipt.reference.typedMatch === "mismatch") {
     addUnique(flags, "REF_MISMATCH");
@@ -282,7 +285,7 @@ function verifyGcashReceipt(
   }
   if (recipientComparison.phone === "mismatch") {
     addUnique(flags, "WRONG_GCASH_NUMBER");
-  } else if (recipientComparison.phone !== "exact") {
+  } else if (!isGcashRecipientAccepted(recipientComparison)) {
     addUnique(flags, "NUMBER_UNREADABLE");
   }
   if (recipientComparison.name === "mismatch") {

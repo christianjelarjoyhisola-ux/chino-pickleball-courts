@@ -3,19 +3,28 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
+const { stripTypeScriptTypes } = require('node:module');
 
 const edge = fs.readFileSync(path.join(__dirname, 'supabase/functions/verify-gcash-receipt/index.ts'), 'utf8');
 const start = edge.indexOf('    const sourceProviderMatch =');
 const end = edge.indexOf('    const bookingCanAutoApprove =', start);
 assert.ok(start > 0 && end > start, 'load the production evidence gate');
 const evidenceGate = edge.slice(start, end) + '\ncleanEvidence;';
+const gcashParser = fs.readFileSync(path.join(__dirname, 'supabase/functions/_shared/gcash-receipt.ts'), 'utf8');
+const recipientPolicyStart = gcashParser.indexOf('export function isGcashRecipientAccepted(');
+const recipientPolicyEnd = gcashParser.indexOf('export function parseGcashReceipt(', recipientPolicyStart);
+assert.ok(recipientPolicyStart > 0 && recipientPolicyEnd > recipientPolicyStart, 'load the production GCash recipient policy');
+const isGcashRecipientAccepted = vm.runInNewContext(stripTypeScriptTypes(
+  gcashParser.slice(recipientPolicyStart, recipientPolicyEnd).replace('export function', 'function'),
+) + '\nisGcashRecipientAccepted;');
 
 function verifyGate(provider = 'gotyme', comparison = {}, overrides = {}) {
   return vm.runInNewContext(evidenceGate, {
+    isGcashRecipientAccepted,
     providerParse: {
       provider,
       receipt: {
-        indicators: { providerBrand: true, competingProviderBrand: null },
+        indicators: { providerBrand: true, competingProviderBrand: null, classification: provider === 'gcash' ? 'gcash' : undefined },
         reference: { typedMatch: 'not_provided', confidence: 'high' },
         timestamp: { completeness: 'date_time' },
       },
@@ -67,6 +76,29 @@ test('GoTyme automatic approval retains amount, timestamp, reference, confidence
 test('GoTyme QR account support does not relax GCash or other bank checks', () => {
   for (const provider of ['gcash', 'maya', 'bdopay', 'bpi']) {
     assert.equal(verifyGate(provider), false, provider);
+  }
+});
+
+test('GCash workflow accepts masked recipient identity only with a matching visible name', () => {
+  for (const name of ['exact', 'masked_compatible']) {
+    assert.equal(verifyGate('gcash', { phone: 'last4_only', name }), true, name);
+  }
+  for (const name of ['mismatch', 'missing', 'not_configured', 'inconclusive']) {
+    assert.equal(verifyGate('gcash', { phone: 'last4_only', name }), false, name);
+  }
+  assert.equal(verifyGate('gcash', { phone: 'exact', name: 'exact' }), true);
+  assert.equal(verifyGate('gcash', { phone: 'exact', name: 'mismatch' }), false);
+  assert.equal(verifyGate('gcash', { phone: 'mismatch', name: 'exact' }), false);
+  assert.equal(verifyGate('gcash', { phone: 'missing', name: 'exact' }), false);
+});
+
+test('GCash masked-recipient approval retains every other evidence gate', () => {
+  const matched = { phone: 'last4_only', name: 'masked_compatible' };
+  assert.equal(verifyGate('gcash', matched, { extractedAmount: 260 }), false);
+  assert.equal(verifyGate('gcash', matched, { duplicateClear: false }), false);
+  assert.equal(verifyGate('gcash', matched, { extractedRef: null }), false);
+  for (const flag of ['LOW_OCR_CONFIDENCE', 'REF_MISMATCH', 'AMOUNT_CONFIRMATION_UNREADABLE', 'TIME_EXPIRED', 'METHOD_MISMATCH', 'DUPLICATE_REF']) {
+    assert.equal(verifyGate('gcash', matched, { flags: [flag] }), false, flag);
   }
 });
 
@@ -169,7 +201,22 @@ test('GoTyme falls back to original OCR when validated layout is unavailable', a
   }
 });
 
-test('all other receipt providers keep their original OCR ordering', async () => {
+test('GCash uses its validated payment layout and keeps the original page score for audit', async () => {
+  const original = 'Amount\nTotal Amount Sent\n1,590.00\n₱1,590.00';
+  const layout = 'Amount 1,590.00\nTotal Amount Sent ₱1,590.00';
+  const gcashEvidence = { layoutText: layout, fields: {}, confidenceSource: 'none' };
+  const { result, observed } = await dispatchOcr('gcash', {
+    text: original, gcashEvidence, confidence: 0.8829, confidenceSource: 'native',
+  });
+  assert.equal(result.text, layout);
+  assert.equal(result.originalText, original);
+  assert.equal(result.layoutApplied, true);
+  assert.equal(result.confidence, 0.8829);
+  assert.equal(result.gcashEvidence, gcashEvidence);
+  assert.deepEqual(observed, [layout]);
+});
+
+test('providers without an applicable validated layout keep their original OCR ordering', async () => {
   for (const provider of ['gcash', 'bdopay', 'maya', 'bpi', 'maribank', 'pnb', 'securitybank']) {
     const { result, observed } = await dispatchOcr(provider, {
       text: 'Original receipt', layoutText: 'Reordered receipt', confidence: 0.95, confidenceSource: 'native',

@@ -1081,14 +1081,13 @@ test('row and verify-modal confirmation reuse one atomic transaction with delibe
   );
 });
 
-test('quick confirmation visibility and transaction guards reject unsafe payment states', () => {
+test('quick confirmation permits missing receipt details but retains payment guards and owner attestation', () => {
   const admin = read('admin.html');
   const buttonClosure = functionClosure(admin, 'bookingQuickConfirmButton');
   const transactionClosure = functionClosure(admin, 'confirmBookingTransaction');
 
   for (const [label, pattern] of [
     ['duplicate payment references', /duplicatePaymentRef/],
-    ['missing durable receipts', /receiptImageUrl/],
     ['rejected receipts or payments', /rejected/],
     ['mixed grouped state', /mixed/],
     ['digital payment requirement', /isDigitalPayment/],
@@ -1098,6 +1097,7 @@ test('quick confirmation visibility and transaction guards reject unsafe payment
   }
 
   for (const guardedSource of [buttonClosure, transactionClosure]) {
+    assert.match(guardedSource, /\['pending','verifying'\]\.includes\(bookingState\)/);
     assert.match(guardedSource, /receiptStatus[\s\S]{0,180}rejected|rejected[\s\S]{0,180}receiptStatus/);
     assert.match(guardedSource, /paymentStatus[\s\S]{0,180}mixed|mixed[\s\S]{0,180}paymentStatus/);
     assert.match(guardedSource, /status[\s\S]{0,180}mixed|mixed[\s\S]{0,180}status/);
@@ -1107,6 +1107,28 @@ test('quick confirmation visibility and transaction guards reject unsafe payment
       'regular underpayment must never expose or pass one-tap confirmation',
     );
   }
+
+  const issueSource = functionSource(admin, 'bookingQuickConfirmIssue');
+  const quickConfirmIssue = new Function('isPlaceholderHold', 'isDigitalPayment', `${issueSource}; return bookingQuickConfirmIssue;`)(
+    () => false,
+    method => ['gcash', 'maya'].includes(method),
+  );
+  const missingDetails = {
+    status: 'pending', paymentStatus: 'for_verification', receiptStatus: 'manual_review',
+    paymentMethod: 'gcash', total: 1325, downpayment: 1325,
+  };
+  assert.equal(quickConfirmIssue(missingDetails), '', 'an owner can confirm receipt of funds without a receipt image or reference');
+  assert.notEqual(quickConfirmIssue({...missingDetails, status: 'cancelled'}), '', 'cancelled bookings remain guarded');
+  assert.notEqual(quickConfirmIssue({...missingDetails, downpayment: 1000}), '', 'regular underpayment remains guarded');
+  assert.notEqual(quickConfirmIssue({...missingDetails, duplicatePaymentRef: true}), '', 'duplicate references still require deliberate review');
+
+  const transaction = functionSource(admin, 'confirmBookingTransaction');
+  assert.match(transaction, /verifiedPaymentNow && !confirm\(`/);
+  assert.match(transaction, /Confirm that CHINO received/);
+  assert.match(transaction, /reference or receipt details are missing/);
+  assert.match(transaction, /records your manual confirmation and does not mark the receipt as automatically verified/);
+  assert.match(transaction, /!confirm\([\s\S]*?\)\) return false;[\s\S]*?await DB\.confirmBookingTransaction\(/,
+    'the owner must attest that funds were received before the atomic confirmation runs');
 });
 
 test('receipt review copy identifies each dedicated parser without mislabeling bank transfers', () => {

@@ -2,8 +2,10 @@ import {
   detectReceiptImageContentType,
   googleVisionConfidence,
   googleVisionConfidenceDetails,
+  googleVisionGcashEvidence,
   googleVisionLayoutText,
   googleVisionOcr,
+  googleVisionRecipientCropEvidence,
   googleVisionRecipientRegion,
   receiptImageDimensions,
   receiptImageSafeToDecode,
@@ -684,5 +686,280 @@ Deno.test("recipient crop rejects ambiguous anchors, missing evidence, and incom
     googleVisionRecipientRegion(malformed, valid.text),
     undefined,
     "invalid account geometry cannot be cropped",
+  );
+});
+
+function gcashGeometry() {
+  const word = (text: string, x: number, y: number, confidence = 0.98) => ({
+    ...visionWord(text, x, y),
+    confidence,
+  });
+  // Native Vision may emit the two left-hand labels before the right values.
+  // A low-confidence status bar and environmental footer are not payment fields.
+  const words = [
+    word("9:06", 15, 15, 0.42),
+    word("Express Send", 380, 100),
+    word("KRE L. C.", 380, 260, 0.96),
+    word("+63 92169", 380, 320, 0.97),
+    word("Sent via GCash", 360, 380),
+    word("Amount", 70, 500, 0.71),
+    word("Total Amount Sent", 70, 620, 0.75),
+    word("1,590.00", 750, 500, 0.99),
+    word("₱1,590.00", 720, 620, 0.98),
+    word("Ref No.", 70, 780, 0.87),
+    word("9044", 150, 780, 0.97),
+    word("881673119", 200, 780, 0.96),
+    word("Sep 10, 2026", 400, 780, 0.98),
+    word("9:06 AM", 530, 780, 0.99),
+    word("279g CO2e carbon footprint", 100, 950, 0.3),
+  ];
+  const text = words.map((entry) => entry.symbols.map((s) => s.text).join(""))
+    .join("\n");
+  return {
+    words,
+    text,
+    annotation: { text, pages: [{ ...visionPage(words), confidence: 0.8829 }] },
+  };
+}
+
+Deno.test("GCash field confidence uses observed payment words while preserving native page score", async () => {
+  const { annotation, text } = gcashGeometry();
+  const evidence = googleVisionGcashEvidence(annotation, text);
+  assert(evidence, "recognized Express Send geometry");
+  assertEquals(
+    evidence.fields.amount?.text,
+    "1,590.00",
+    "amount follows its own label",
+  );
+  assertEquals(
+    evidence.fields.totalAmount?.text,
+    "₱1,590.00",
+    "total follows its own label",
+  );
+  assertEquals(
+    evidence.fields.reference?.text,
+    "9044 881673119",
+    "split native reference retained",
+  );
+  assertEquals(
+    evidence.fields.dateTime?.text,
+    "Sep 10, 2026 9:06 AM",
+    "reference-adjacent timestamp",
+  );
+  assertEquals(
+    evidence.fields.recipientName?.text,
+    "KRE L. C.",
+    "no masked characters are invented",
+  );
+  assertEquals(
+    evidence.fields.recipientPhone?.text,
+    "+63 92169",
+    "no missing digits are inferred",
+  );
+  assert(
+    evidence.confidence! >= 0.95,
+    "only independently scored receipt values form field confidence",
+  );
+  assertEquals(
+    evidence.confidenceSource,
+    "native",
+    "native confidence provenance",
+  );
+  assert(
+    evidence.layoutText.includes(
+      "Amount 1,590.00\nTotal Amount Sent ₱1,590.00",
+    ),
+    "geometric labels match values",
+  );
+  assert(
+    evidence.layoutText.includes("279g CO2e"),
+    "footer text remains for audit",
+  );
+  const region = evidence.recipientRegion;
+  assert(region, "recipient pixels available for independent OCR reread");
+  assert(
+    region.y <= 260 && region.y + region.height >= 340,
+    "name and phone enclosed",
+  );
+  assert(
+    region.y > 120 && region.y + region.height < 380,
+    "crop excludes header and GCash source label",
+  );
+  const result = await googleVisionOcr("test-key", "QUJD", {
+    fetcher: (async () =>
+      Response.json({
+        responses: [{ fullTextAnnotation: annotation }],
+      })) as typeof fetch,
+  });
+  assertEquals(
+    result.confidence,
+    0.8829,
+    "native page confidence remains unchanged",
+  );
+  assertEquals(result.text, text, "native OCR remains unchanged");
+  assertEquals(
+    result.gcashEvidence?.confidence,
+    evidence.confidence,
+    "optional GCash evidence included",
+  );
+});
+
+Deno.test("GCash unreadable or missing critical words cannot gain confidence from other fields", () => {
+  const fixture = gcashGeometry();
+  fixture.words.find((word) =>
+    word.symbols.map((s) => s.text).join("") === "881673119"
+  )!.confidence = 0.2;
+  const evidence = googleVisionGcashEvidence(fixture.annotation, fixture.text);
+  assert(
+    evidence && evidence.confidence! < 0.5,
+    "low reference confidence remains low despite all other matches",
+  );
+  assertEquals(
+    evidence.confidence,
+    evidence.fields.reference?.confidence,
+    "weakest critical field determines score",
+  );
+  const missing = gcashGeometry();
+  delete (missing.words[7] as { confidence?: number }).confidence;
+  const missingEvidence = googleVisionGcashEvidence(
+    missing.annotation,
+    missing.text,
+  );
+  assert(missingEvidence, "geometry still available without native confidence");
+  assertEquals(
+    missingEvidence.fields.amount?.confidence,
+    undefined,
+    "native word score is required",
+  );
+  assertEquals(
+    missingEvidence.confidence,
+    undefined,
+    "missing critical native score prevents complete confidence",
+  );
+  assertEquals(
+    missingEvidence.confidenceSource,
+    "none",
+    "no heuristic substitution",
+  );
+});
+
+Deno.test("GCash field evidence fails closed on incomplete geometry and ambiguous receipt anchors", () => {
+  const fixture = gcashGeometry();
+  assertEquals(
+    googleVisionGcashEvidence(
+      fixture.annotation,
+      fixture.text + "\nTransfer failed",
+    ),
+    undefined,
+    "geometry cannot hide extra native evidence",
+  );
+  const duplicate = {
+    ...visionWord("Sent via GCash", 350, 1100),
+    confidence: 0.99,
+  };
+  fixture.words.push(duplicate);
+  assertEquals(
+    googleVisionGcashEvidence(
+      fixture.annotation,
+      fixture.text + "\nSent via GCash",
+    ),
+    undefined,
+    "ambiguous recipient boundaries do not yield field policy",
+  );
+  const wrongChars = gcashGeometry();
+  assertEquals(
+    googleVisionGcashEvidence(
+      wrongChars.annotation,
+      wrongChars.text.replace("1,590.00", "1,580.00"),
+    ),
+    undefined,
+    "geometry never rewrites native values",
+  );
+  const zero = gcashGeometry();
+  zero.words[7].confidence = 0;
+  assertEquals(
+    googleVisionGcashEvidence(zero.annotation, zero.text)?.confidence,
+    0,
+    "zero confidence is evidence, not a missing score",
+  );
+});
+
+Deno.test("GCash layout preserves rotated Android navigation glyphs without accepting rotated receipt text", () => {
+  const fixture = gcashGeometry();
+  const nav = { ...visionWord("☐", 350, 1500), confidence: 0.6 };
+  nav.boundingBox.vertices = [{ x: 377, y: 1500 }, { x: 377, y: 1525 }, {
+    x: 354,
+    y: 1525,
+  }, { x: 354, y: 1500 }];
+  fixture.words.push(nav);
+  const text = fixture.text + "\n☐";
+  assertEquals(
+    googleVisionLayoutText(fixture.annotation, text),
+    undefined,
+    "generic layout behavior unchanged",
+  );
+  const evidence = googleVisionGcashEvidence(fixture.annotation, text);
+  assert(
+    evidence,
+    "nonpayment Android symbol does not invalidate GCash fields",
+  );
+  assert(evidence.layoutText.endsWith("☐"), "symbol remains in audit text");
+  nav.symbols = [{ text: "Failed" }];
+  assertEquals(
+    googleVisionGcashEvidence(fixture.annotation, fixture.text + "\nFailed"),
+    undefined,
+    "rotated status text is never ignored",
+  );
+});
+
+Deno.test("recipient crop confidence measures native visible characters and never fabricates missing symbol scores", () => {
+  const word = (text: string, x: number, y: number) => ({
+    ...visionWord(text, x, y),
+    symbols: [...text].map((text) => ({
+      text,
+      confidence: /[A-Z0-9]/i.test(text) ? 0.96 : 0.2,
+    })),
+    confidence: 0.65,
+  });
+  const words = [
+    word("KR....E", 200, 200),
+    word("L..", 300, 200),
+    word("C.", 350, 200),
+    word("+63", 200, 300),
+    word("9.....2169", 260, 300),
+  ];
+  const text = "KR....E L.. C.\n+63 9.....2169";
+  const annotation = { text, pages: [visionPage(words)] };
+  const evidence = googleVisionRecipientCropEvidence(annotation, text);
+  assert(evidence, "two upright recipient rows recognized");
+  assertEquals(
+    evidence.basis,
+    "visible_character_symbols",
+    "score provenance explicit",
+  );
+  assert(
+    Math.abs(evidence.confidence! - 0.96) < 1e-10,
+    "low mask punctuation confidence does not become identity uncertainty",
+  );
+  delete (words[0].symbols[0] as { confidence?: number }).confidence;
+  assertEquals(
+    googleVisionRecipientCropEvidence(annotation, text)?.confidence,
+    undefined,
+    "missing symbol score cannot be inferred from word or page score",
+  );
+  assertEquals(
+    googleVisionRecipientCropEvidence(annotation, text)?.confidenceSource,
+    "none",
+    "incomplete native source",
+  );
+  words[0].symbols[0].confidence = 0;
+  assert(
+    googleVisionRecipientCropEvidence(annotation, text)!.confidence! < 0.9,
+    "known low visible letter confidence remains low",
+  );
+  assertEquals(
+    googleVisionRecipientCropEvidence(annotation, text + "\nOTHER PERSON"),
+    undefined,
+    "partial hierarchy cannot conceal another recipient",
   );
 });

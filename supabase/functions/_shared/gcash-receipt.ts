@@ -1,5 +1,6 @@
 import {
   extractReceiptAmount,
+  type ReceiptAmountCandidate,
   type ReceiptAmountExtraction,
 } from "./receipt-amount.ts";
 
@@ -463,11 +464,27 @@ function parsePhoneLine(
   const masked = line.match(MASKED_MOBILE_RE);
   if (masked && NAME_MASK_RE.test(masked[0])) {
     const raw = masked[0].trim();
-    const visibleDigits = digitsOnly(raw);
+    const visibleSuffix = raw.match(/(?:\d[\s-]*){4}$/)?.[0];
     return {
       raw,
       normalized: null,
-      last4: visibleDigits.length >= 4 ? visibleDigits.slice(-4) : null,
+      last4: visibleSuffix ? digitsOnly(visibleSuffix) : null,
+      visibility: "masked",
+      source: "recipient_block",
+      lineIndex,
+      confidence: "medium",
+    };
+  }
+  // Vision sometimes drops every mask dot from the recipient phone pill.
+  // This grammar is intentionally limited to +63/63, the mobile prefix 9,
+  // and exactly four visible suffix digits. parseReceiver only calls it in
+  // the block immediately above "Sent via GCash"; never search globally.
+  const collapsed = line.match(/^\+?\s*63\s*9(?:[\s-]*\d){4}\s*$/);
+  if (collapsed) {
+    return {
+      raw: collapsed[0].trim(),
+      normalized: null,
+      last4: digitsOnly(collapsed[0]).slice(-4),
       visibility: "masked",
       source: "recipient_block",
       lineIndex,
@@ -497,7 +514,9 @@ function plausibleRecipientName(line: string): boolean {
     TOTAL_AMOUNT_SENT_RE.test(line) || /\bamount\b/i.test(line) ||
     /\b(?:jul|jan|feb|mar|apr|may|jun|aug|sep|oct|nov|dec)\b/i
       .test(line) ||
-    /(?:PHP|₱|\d{2,})/i.test(line)
+    /(?:PHP|₱|\d{2,})/i.test(line) ||
+    /\b(?:express\s+send|download|share|recipient|receiver|source|destination|wallet|transaction|payment|successful|processing|completed)\b/i
+      .test(line)
   ) return false;
   return true;
 }
@@ -525,39 +544,57 @@ function missingName(): GcashNameField {
   };
 }
 
-function parseReceiver(lines: string[]): GcashReceiver {
-  const anchorIndexes = lines.map((line, index) =>
-    SENT_VIA_GCASH_RE.test(line) ? index : -1
-  ).filter((index) => index >= 0);
-
-  for (const anchorIndex of anchorIndexes) {
-    const preceding = previousNonEmptyIndexes(lines, anchorIndex, 6);
-    let phone: GcashPhoneField | null = null;
-    for (const lineIndex of preceding) {
-      phone = parsePhoneLine(lines[lineIndex], lineIndex);
-      if (phone) break;
-    }
-    if (!phone || phone.lineIndex == null) continue;
-
-    let name = missingName();
-    const nameIndexes = previousNonEmptyIndexes(lines, phone.lineIndex, 3);
-    for (const lineIndex of nameIndexes) {
-      const line = lines[lineIndex];
-      if (!plausibleRecipientName(line)) continue;
-      name = {
-        raw: line,
-        tokens: nameTokens(line),
-        visibility: nameVisibility(line),
-        source: "recipient_block",
-        lineIndex,
-        confidence: "high",
-      };
-      break;
-    }
-    return { phone, name };
+function parseRecipientBeforeAnchor(
+  lines: string[],
+  anchorIndex: number,
+): GcashReceiver {
+  const preceding = previousNonEmptyIndexes(lines, anchorIndex, 6);
+  let phone: GcashPhoneField | null = null;
+  for (const lineIndex of preceding) {
+    phone = parsePhoneLine(lines[lineIndex], lineIndex);
+    if (phone) break;
   }
+  let name = missingName();
+  // Read the recipient name even when the phone is absent or unreadable.
+  const nameIndexes = previousNonEmptyIndexes(
+    lines,
+    phone?.lineIndex ?? anchorIndex,
+    3,
+  );
+  for (const lineIndex of nameIndexes) {
+    const line = lines[lineIndex];
+    if (!plausibleRecipientName(line)) continue;
+    name = {
+      raw: line,
+      tokens: nameTokens(line),
+      visibility: nameVisibility(line),
+      source: "recipient_block",
+      lineIndex,
+      confidence: "high",
+    };
+    break;
+  }
+  return { phone: phone || missingPhone(), name };
+}
 
-  return { phone: missingPhone(), name: missingName() };
+function parseReceiver(lines: string[]): GcashReceiver {
+  const anchorIndex = lines.findIndex((line) => SENT_VIA_GCASH_RE.test(line));
+  return anchorIndex >= 0
+    ? parseRecipientBeforeAnchor(lines, anchorIndex)
+    : { phone: missingPhone(), name: missingName() };
+}
+
+/**
+ * Parse a targeted recipient ROI already located above the original receipt's
+ * "Sent via GCash" anchor. This is not a standalone receipt classifier.
+ */
+export function parseGcashRecipientBlock(rawText: string): GcashReceiver {
+  const lines = receiptLines(rawText);
+  const anchorIndex = lines.findIndex((line) => SENT_VIA_GCASH_RE.test(line));
+  return parseRecipientBeforeAnchor(
+    lines,
+    anchorIndex >= 0 ? anchorIndex : lines.length,
+  );
 }
 
 function hasBdoPayIndicator(text: string): boolean {
@@ -606,6 +643,78 @@ function parseIndicators(text: string): GcashReceiptIndicators {
     competingProviders,
     classification,
   };
+}
+
+function recoverDetachedAmountDisplay(
+  amount: ReceiptAmountExtraction,
+  lines: string[],
+): ReceiptAmountExtraction {
+  // A native Vision column order observed on Express Send receipts is:
+  // Amount -> recipient name -> phone -> Sent via GCash -> 1,590.00 ->
+  // Total Amount Sent P1,590.00 -> Ref No. ... . Keep the original line
+  // coordinates for audit; add the otherwise unlabeled principal display
+  // only inside this bounded layout, without consulting the booking amount.
+  const sentIndexes = lines.map((line, index) =>
+    SENT_VIA_GCASH_RE.test(line) ? index : -1
+  ).filter((index) => index >= 0);
+  const totalIndexes = lines.map((line, index) =>
+    TOTAL_AMOUNT_SENT_RE.test(line) ? index : -1
+  ).filter((index) => index >= 0);
+  if (sentIndexes.length !== 1 || totalIndexes.length !== 1) return amount;
+  const sentIndex = sentIndexes[0];
+  const totalIndex = totalIndexes[0];
+  const amountLabels = previousNonEmptyIndexes(lines, sentIndex, 6).filter(
+    (index) => /^Amount\s*[:=]?$/i.test(lines[index]),
+  );
+  if (amountLabels.length !== 1) return amount;
+  const displayIndex = nextNonEmptyLineIndex(lines, sentIndex);
+  if (
+    displayIndex == null ||
+    nextNonEmptyLineIndex(lines, displayIndex) !== totalIndex
+  ) return amount;
+  const referenceIndex = nextNonEmptyLineIndex(lines, totalIndex);
+  if (
+    referenceIndex == null || !REFERENCE_LABEL_RE.test(lines[referenceIndex])
+  ) {
+    return amount;
+  }
+  const bare = lines[displayIndex].match(
+    /^(\d{1,3}(?:,\d{3})+|\d+)\.\d{2}$/,
+  );
+  const total = lines[totalIndex].match(
+    /^Total\s+Amount\s+Sent\s*[:=]?\s*(?:PHP|₱|P)\s*((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})$/i,
+  );
+  if (!bare || !total) return amount;
+  const bareAmount = Number(bare[0].replace(/,/g, ""));
+  const totalAmount = Number(total[1].replace(/,/g, ""));
+  if (!Number.isFinite(bareAmount) || !Number.isFinite(totalAmount)) {
+    return amount;
+  }
+
+  const concordant = bareAmount === totalAmount;
+  const candidate: ReceiptAmountCandidate = {
+    amount: bareAmount,
+    raw: bare[0],
+    marker: null,
+    line: lines[displayIndex],
+    lineIndex: displayIndex,
+    start: 0,
+    score: concordant ? 120 : 0,
+    evidence: concordant
+      ? ["gcash_amount_block_observation", "gcash_concordant_amount_block"]
+      : ["gcash_amount_block_observation"],
+    excluded: false,
+    exclusionReasons: [],
+  };
+  const candidates = [...amount.candidates];
+  if (
+    !candidates.some((item) =>
+      item.lineIndex === displayIndex && item.start === 0
+    )
+  ) {
+    candidates.push(candidate);
+  }
+  return { ...amount, candidates };
 }
 
 function conflictingPrimaryAmounts(
@@ -754,7 +863,11 @@ export function compareGcashMaskedName(
   if (!compatible) {
     return visibleLetters >= 3 ? "mismatch" : "inconclusive";
   }
-  return visibleLetters >= 3 && observed.length >= 2
+  // A masked phone is accepted only when this independent name evidence is
+  // strong: every configured name token is represented and at least four
+  // letters remain visible. Initials alone are not enough.
+  return visibleLetters >= 4 && observed.length >= 2 &&
+      observed.length === expected.length
     ? "masked_compatible"
     : "inconclusive";
 }
@@ -772,7 +885,19 @@ function comparePhone(
     return observed.normalized === expected ? "exact" : "mismatch";
   }
   if (observed.last4) {
-    return observed.last4 === expected.slice(-4) ? "last4_only" : "mismatch";
+    if (observed.last4 !== expected.slice(-4)) return "mismatch";
+    if (observed.raw && NAME_MASK_RE.test(observed.raw)) {
+      // Every visible digit matters, including prefixes other than 9.
+      // GCash/OCR may collapse mask widths, so masks have variable length.
+      let pattern = observed.raw.replace(/[\s+-]/g, "");
+      if (pattern.startsWith("63")) pattern = pattern.slice(2);
+      if (pattern.startsWith("0")) pattern = pattern.slice(1);
+      const pieces = pattern.split(/[^\d]+/);
+      if (!new RegExp(`^${pieces.join("\\d*")}$`).test(expected)) {
+        return "mismatch";
+      }
+    }
+    return "last4_only";
   }
   return "missing";
 }
@@ -790,6 +915,15 @@ export function compareGcashRecipient(
   };
 }
 
+/** Shared acceptance policy for provider, workflow, and OCR retry decisions. */
+export function isGcashRecipientAccepted(
+  comparison: GcashRecipientComparison,
+): boolean {
+  return (comparison.phone === "exact" && comparison.name !== "mismatch") ||
+    (comparison.phone === "last4_only" &&
+      (comparison.name === "exact" || comparison.name === "masked_compatible"));
+}
+
 export function parseGcashReceipt(
   rawText: string,
   options: ParseGcashReceiptOptions = {},
@@ -797,7 +931,10 @@ export function parseGcashReceipt(
   const text = normalizeText(rawText);
   const lines = receiptLines(text);
   const referenceResult = parseReference(lines, options.typedReference);
-  const baseAmount = extractReceiptAmount(text, { provider: "gcash" });
+  const baseAmount = recoverDetachedAmountDisplay(
+    extractReceiptAmount(text, { provider: "gcash" }),
+    lines,
+  );
   const amount = {
     ...baseAmount,
     conflictingPrimaryAmounts: conflictingPrimaryAmounts(baseAmount),

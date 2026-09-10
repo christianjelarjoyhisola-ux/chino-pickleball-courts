@@ -1,6 +1,7 @@
 import {
   compareGcashMaskedName,
   compareGcashRecipient,
+  isGcashRecipientAccepted,
   normalizeGcashMobile,
   parseGcashReceipt,
 } from "./gcash-receipt.ts";
@@ -477,5 +478,150 @@ Deno.test("a total amount fragment alone is not a GCash receipt", () => {
   assert(
     parsed.issues.includes("INSUFFICIENT_GCASH_INDICATORS"),
     "insufficient indicator issue",
+  );
+});
+
+// Anonymized reported layout: Google emits the Amount label above the
+// recipient and strips the masking dots from both name and phone.
+const DETACHED_AMOUNT_OCR = `9:06 0000.
+Express Send
+5G
+X1566
+Amount
+KRE L. C.
++63 92169
+Sent via GCash
+1,590.00
+Total Amount Sent P1,590.00
+Ref No. 9044 881 673119 Sep 10, 2026 9:06 AM
+2799 (CO2e)
+By going digital, you reduce your carbon footprint from
+transportation, paper, and plastic.`;
+
+Deno.test("reported detached amount layout preserves both amount observations", () => {
+  const parsed = parseGcashReceipt(DETACHED_AMOUNT_OCR);
+  assertEquals(parsed.amount.amount, 1590, "principal amount");
+  assertEquals(
+    parsed.amount.matchingPrimaryAmountDisplays,
+    true,
+    "both displays",
+  );
+  assertEquals(
+    parsed.amount.conflictingPrimaryAmounts,
+    false,
+    "consistent values",
+  );
+  assertEquals(parsed.receiver.phone.last4, "2169", "collapsed phone suffix");
+  assertEquals(
+    parsed.receiver.phone.visibility,
+    "masked",
+    "never invent full phone",
+  );
+  assertEquals(parsed.receiver.name.raw, "KRE L. C.", "independent name read");
+  const comparison = compareGcashRecipient(parsed.receiver, {
+    phone: "09609422169",
+    name: "Kristie Lou Cachuela",
+  });
+  assertEquals(comparison.phone, "last4_only", "partial evidence only");
+  assertEquals(comparison.name, "mismatch", "do not invent missing name masks");
+  assertEquals(
+    isGcashRecipientAccepted(comparison),
+    false,
+    "second OCR read required",
+  );
+});
+
+Deno.test("detached amount recovery retains contradictions and rejects unbounded lookalikes", () => {
+  const conflicting = parseGcashReceipt(
+    DETACHED_AMOUNT_OCR.replace("\n1,590.00\n", "\n1,490.00\n"),
+  );
+  assertEquals(
+    conflicting.amount.conflictingPrimaryAmounts,
+    true,
+    "wrong primary amount",
+  );
+  assertEquals(
+    conflicting.amount.matchingPrimaryAmountDisplays,
+    false,
+    "values must agree",
+  );
+  for (
+    const text of [
+      DETACHED_AMOUNT_OCR.replace("Amount\n", ""),
+      DETACHED_AMOUNT_OCR.replace("\n1,590.00\n", "\nFee\n1,590.00\n"),
+      DETACHED_AMOUNT_OCR.replace(
+        "\n1,590.00\n",
+        "\n1,590.00\nAdvertisement\n",
+      ),
+      DETACHED_AMOUNT_OCR.replace("\n1,590.00\n", "\n1,590.00\n1,590.00\n"),
+      DETACHED_AMOUNT_OCR.replace("\nRef No.", "\nAdvertisement\nRef No."),
+      DETACHED_AMOUNT_OCR.replace("\n1,590.00\n", "\n-1,590.00\n"),
+    ]
+  ) {
+    assertEquals(
+      parseGcashReceipt(text).amount.matchingPrimaryAmountDisplays,
+      false,
+      text,
+    );
+  }
+});
+
+Deno.test("masked recipient requires matching phone suffix and strong independent name", () => {
+  const expected = { phone: "09609422169", name: "Kristie Lou Cachuela" };
+  for (const phone of ["+63 9•••••2169", "+63 92169", "+63 960***2169"]) {
+    const parsed = parseGcashReceipt(
+      DETACHED_AMOUNT_OCR.replace("KRE L. C.", "KR••••E L•• C.").replace(
+        "+63 92169",
+        phone,
+      ),
+    );
+    const comparison = compareGcashRecipient(parsed.receiver, expected);
+    assertEquals(comparison.phone, "last4_only", phone);
+    assertEquals(comparison.name, "masked_compatible", phone);
+    assertEquals(isGcashRecipientAccepted(comparison), true, phone);
+  }
+  for (
+    const [phone, name] of [
+      ["+63 9•••••2169", ""],
+      ["+63 9•••••2169", "K•• L•• C."],
+      ["+63 9•••••2169", "KR••••E L•• R."],
+      ["+63 9•••••2169", "KRE L. C."],
+      ["+63 9•••••9999", "KR••••E L•• C."],
+      ["+63 945***2169", "KR••••E L•• C."],
+      ["+63 945 999 2169", "KR••••E L•• C."],
+      ["+63 9•••••21•69", "KR••••E L•• C."],
+      ["2169", "KR••••E L•• C."],
+    ]
+  ) {
+    const parsed = parseGcashReceipt(
+      DETACHED_AMOUNT_OCR.replace("KRE L. C.", name).replace(
+        "+63 92169",
+        phone,
+      ),
+    );
+    assertEquals(
+      isGcashRecipientAccepted(
+        compareGcashRecipient(parsed.receiver, expected),
+      ),
+      false,
+      `${phone} / ${name}`,
+    );
+  }
+});
+
+Deno.test("recipient name can be read without a phone but UI headings are excluded", () => {
+  const parsed = parseGcashReceipt(
+    USER_GCASH_OCR.replace("+63 998 123 4567\n", ""),
+  );
+  assertEquals(
+    parsed.receiver.name.raw,
+    "J•• KE••••H M.",
+    "name independent from phone",
+  );
+  const noName = parseGcashReceipt("Express Send\nAmount\nSent via GCash");
+  assertEquals(
+    noName.receiver.name.visibility,
+    "missing",
+    "not a receipt heading",
   );
 });
