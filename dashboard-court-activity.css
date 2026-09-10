@@ -103,8 +103,11 @@ body.ca-tv-opened { overflow: hidden; }
 }
 .ca-tv::before { content:""; position:absolute; inset:0; pointer-events:none; opacity:.17; background-image:linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px); background-size:40px 40px; mask-image:linear-gradient(to bottom,black,transparent 78%); }
 .ca-tv-header { position:relative; display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:24px; padding:14px clamp(24px,3vw,54px); border-bottom:1px solid var(--tv-line); background:rgba(5,14,26,.72); backdrop-filter:blur(18px); }
-.ca-tv-brand { display:flex; align-items:center; min-width:0; }
+.ca-tv-brand { display:flex; align-items:center; gap:clamp(12px,1vw,18px); min-width:0; }
 .ca-tv-brand img { display:block; width:auto; height:clamp(64px,7vh,88px); object-fit:contain; filter:drop-shadow(0 10px 24px rgba(0,0,0,.24)); }
+.ca-tv-brand-copy { min-width:0; display:grid; gap:4px; }
+.ca-tv-brand-copy strong { overflow:hidden; color:var(--tv-ink); font-size:clamp(16px,1.15vw,22px); font-weight:800; line-height:1.1; text-overflow:ellipsis; white-space:nowrap; }
+.ca-tv-brand-copy span { overflow:hidden; color:var(--tv-muted); font-size:clamp(10px,.72vw,13px); line-height:1.2; text-overflow:ellipsis; white-space:nowrap; }
 .ca-tv-time { text-align:center; }
 .ca-tv-time strong,.ca-tv-time span,.ca-tv-time h1 { display:block; }
 .ca-tv-time strong { font-size:clamp(22px,2vw,38px); line-height:1; letter-spacing:-.04em; font-variant-numeric:tabular-nums; }
@@ -136,12 +139,18 @@ body.ca-tv-opened { overflow: hidden; }
 .ca-tv-next h2,.ca-tv-upcoming h2 { margin:4px 0 0; font-family:'DM Sans',sans-serif; font-size:clamp(20px,1.45vw,28px); font-stretch:normal; font-weight:800; line-height:1.15; letter-spacing:-.01em; text-transform:none; }
 .ca-tv-section-count,.ca-tv-pages { color:var(--tv-muted); font-size:clamp(11px,.72vw,13px); }
 .ca-tv-next-grid,.ca-tv-upcoming-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-content:start; gap:clamp(6px,.5vw,10px); }
+.ca-tv-next-grid { grid-template-rows:repeat(2,minmax(0,1fr)); align-content:stretch; }
 .ca-tv-next-card,.ca-tv-upcoming-list article { min-width:0; display:grid; grid-template-columns:minmax(82px,.65fr) minmax(80px,.6fr) minmax(0,1.75fr); align-items:center; gap:10px; min-height:clamp(42px,4.3vh,56px); padding:6px 12px; border:1px solid rgba(148,171,204,.1); border-radius:10px; background:rgba(255,255,255,.025); }
+.ca-tv-next-card { min-height:0; padding:clamp(10px,.8vw,16px); border-radius:12px; background:rgba(255,255,255,.035); }
 .ca-tv-next-card time,.ca-tv-upcoming-list time { color:#f0bf69; font-size:clamp(12px,.8vw,15px); font-weight:800; font-variant-numeric:tabular-nums; }
 .ca-tv-next-card > span,.ca-tv-upcoming-list article > span { color:var(--tv-muted); font-size:clamp(11px,.74vw,14px); }
 .ca-tv-next-card div,.ca-tv-next-card strong,.ca-tv-next-card small { display:block; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .ca-tv-next-card strong { color:var(--tv-ink); font-size:clamp(12px,.82vw,15px); }
 .ca-tv-next-card small { margin-top:2px; color:var(--tv-muted); font-size:clamp(10px,.68vw,12px); }
+.ca-tv-next-card time { font-size:clamp(14px,.92vw,17px); }
+.ca-tv-next-card > span { font-size:clamp(12px,.8vw,15px); }
+.ca-tv-next-card strong { font-size:clamp(14px,.92vw,17px); }
+.ca-tv-next-card small { margin-top:4px; font-size:clamp(11px,.75vw,14px); }
 .ca-tv-upcoming-list article strong { overflow:hidden; color:var(--tv-ink); font-size:clamp(12px,.82vw,15px); text-overflow:ellipsis; white-space:nowrap; }
 .ca-tv-finished { grid-column:1/-1; min-height:clamp(86px,10vh,130px); display:grid; align-content:center; justify-items:center; text-align:center; border:1px dashed rgba(148,171,204,.14); border-radius:12px; }
 .ca-tv-finished strong { font-size:clamp(15px,1vw,18px); }
@@ -194,10 +203,12 @@ body.ca-tv-opened { overflow: hidden; }
   .ca-tv-header { grid-template-columns:1fr auto; padding:12px 16px; }
   .ca-tv-time { display:none; }
   .ca-tv-brand img { height:58px; }
+  .ca-tv-brand-copy { display:none; }
   .ca-tv-stage { padding:10px; gap:10px; }
   .ca-tv-court { min-height:230px; }
   .ca-tv-lower { gap:10px; }
   .ca-tv-upcoming-list article { grid-template-columns:74px 70px minmax(0,1fr); }
   .ca-tv-next-card { grid-template-columns:74px 70px minmax(0,1fr); }
   .ca-tv-next-grid,.ca-tv-upcoming-list { grid-template-columns:1fr; }
+  .ca-tv-next-grid { grid-template-rows:none; }
 }

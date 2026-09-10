@@ -82,9 +82,14 @@ test('premium TV display keeps four now-playing cards above separated schedule p
   assert.match(css, /\.ca-tv-court > header\s*\{[^}]*grid-template-columns:minmax\(0,1fr\) auto/);
   assert.match(css, /\.ca-tv-court h2\s*\{[^}]*font-family:'DM Sans',sans-serif[^}]*text-transform:none/);
   assert.match(css, /\.ca-tv-next h2,\.ca-tv-upcoming h2\s*\{[^}]*font-family:'DM Sans',sans-serif[^}]*text-transform:none/);
-  assert.match(source, /ca-tv-brand[^>]*><img src="assets\/chino-logo-transparent\.png"/);
+  assert.match(source, /ca-tv-brand[^>]*>\s*<img src="assets\/chino-logo-transparent\.png"/);
+  assert.match(source, /courtActivityTvVenueName">CHINO Pickleball Courts<[\s\S]*?courtActivityTvVenueAddress">Prk\. Bautista, Mankilam, Tagum City</);
+  assert.match(source, /DB\.getSettings\(\)\.then\(settings =>[\s\S]*?settings\?\.venue_name[\s\S]*?settings\?\.venue_address/);
+  assert.match(css, /\.ca-tv-brand-copy strong\s*\{[^}]*font-size:clamp\(16px,1\.15vw,22px\)/);
   assert.match(source, /ca-tv-time[\s\S]*?courtActivityTvClock[\s\S]*?courtActivityTvDate[\s\S]*?courtActivityTvTitle">Today’s Court Activity/);
   assert.match(css, /\.ca-tv-next-grid,\.ca-tv-upcoming-list\s*\{[^}]*grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
+  assert.match(css, /\.ca-tv-next-grid\s*\{[^}]*grid-template-rows:repeat\(2,minmax\(0,1fr\)\)[^}]*align-content:stretch/);
+  assert.match(css, /\.ca-tv-next-card\s*\{[^}]*min-height:0[^}]*padding:clamp\(10px,\.8vw,16px\)/);
   assert.match(source, /const pageSize = 8/);
   assert.match(css, /\.ca-tv-next-card,\.ca-tv-upcoming-list article\s*\{[^}]*min-height:clamp\(42px,4\.3vh,56px\)/);
 });
