@@ -330,6 +330,33 @@ Deno.test("Maya verifier rejects incomplete, pending, failed, or competing scree
   );
 });
 
+Deno.test("Maya processing bank-transfer photo cannot auto-approve a booking", () => {
+  const receipt = `8:33
+Bank transfer to
+KR****E L** C.
+DWQM4TK3JDNZU9WO7
+- ₱1,335.00
+Processing
+Source
+My Wallet
+Destination
+G-Xchange Inc. / GCash
+KR****E L** C.
+DWQM4TK3JDNZU9WO7
+Purpose
+Payment
+Transaction details
+maya`;
+  const parsed = parseMayaToGcashReceipt(receipt);
+  assert(parsed.indicators.pendingStatus, "Processing must be identified");
+  assert(!parsed.indicators.completionScreen, "Processing is not completion");
+  const flags = flagsFor(receipt, { expectedAmount: 1325, typedReference: "" });
+  for (const flag of ["TRANSFER_PENDING", "REF_UNREADABLE", "DATE_UNREADABLE"]) {
+    assert(flags.includes(flag), `${flag} must block automatic approval`);
+  }
+  assertFlag(RECEIPT + "\nProcessing\n", "TRANSFER_PENDING");
+});
+
 Deno.test("Maya verifier rejects stale, premature, conflicting, and wrong-date time", () => {
   assertFlag(
     RECEIPT.replace("12:02 pm", "12:30 pm"),
