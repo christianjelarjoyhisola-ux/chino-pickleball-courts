@@ -47,7 +47,7 @@ export type GoogleVisionRecipientCropEvidence = {
 
 export type GoogleVisionGcashFieldEvidence = {
   text: string;
-  /** Native value-word confidence; never inferred from parsing or expectations. */
+  /** Native observed-character/word confidence; never inferred from parsing or expectations. */
   confidence?: number;
 };
 
@@ -717,6 +717,27 @@ function gcashField(
   };
 }
 
+function gcashVisibleCharacterField(
+  row: LayoutRow,
+  allowed: RegExp,
+): GoogleVisionGcashFieldEvidence {
+  const symbols = row.words.flatMap((word) => word.symbols).filter((symbol) =>
+    allowed.test(symbol.text)
+  );
+  const complete = symbols.length > 0 &&
+    symbols.every((symbol) => symbol.confidence !== undefined);
+  return {
+    text: row.text || "",
+    ...(complete
+      ? {
+        confidence:
+          symbols.reduce((sum, symbol) => sum + symbol.confidence!, 0) /
+          symbols.length,
+      }
+      : {}),
+  };
+}
+
 function gcashEvidenceFromLayout(
   annotation: Record<string, unknown> | null,
   layout: LayoutResult | undefined,
@@ -747,10 +768,15 @@ function gcashEvidenceFromLayout(
       .filter(
         (row) => /^[A-Z][A-Z\s*•●·.'’-]*$/i.test(row.text || ""),
       );
-    fields.recipientPhone = gcashField(phone, phone.text || "");
+    // GCash deliberately masks identity characters with dots/bullets. Those
+    // decorative mask symbols are often assigned weak OCR scores even when
+    // every security-relevant visible digit is sharp. Score only the native
+    // visible digits; the parser still requires the mask shape and the verifier
+    // separately requires the visible number ending to match configuration.
+    fields.recipientPhone = gcashVisibleCharacterField(phone, /^\d$/);
     if (nameRows.length === 1) {
       const name = nameRows[0];
-      fields.recipientName = gcashField(name, name.text || "");
+      fields.recipientName = gcashVisibleCharacterField(name, /^[A-Z]$/i);
       const page = Array.isArray(annotation?.pages)
         ? record(annotation.pages[0])
         : null;
@@ -893,31 +919,11 @@ function recipientCropEvidenceFromLayout(
       (phone.text || "").normalize("NFKC"),
     )
   ) return undefined;
-  const field = (
-    row: LayoutRow,
-    allowed: RegExp,
-  ): GoogleVisionGcashFieldEvidence => {
-    const symbols = row.words.flatMap((word) => word.symbols).filter((symbol) =>
-      allowed.test(symbol.text)
-    );
-    const complete = symbols.length > 0 &&
-      symbols.every((symbol) => symbol.confidence !== undefined);
-    return {
-      text: row.text || "",
-      ...(complete
-        ? {
-          confidence:
-            symbols.reduce((sum, symbol) => sum + symbol.confidence!, 0) /
-            symbols.length,
-        }
-        : {}),
-    };
-  };
   // Mask punctuation carries no visible identity characters. Its presence and
   // location must agree in two optical views in the caller; do not count the
   // intentionally hidden letters/digits as low-confidence recognized text.
-  const nameField = field(name, /^[A-Z]$/i);
-  const phoneField = field(phone, /^\d$/);
+  const nameField = gcashVisibleCharacterField(name, /^[A-Z]$/i);
+  const phoneField = gcashVisibleCharacterField(phone, /^\d$/);
   const complete = typeof nameField.confidence === "number" &&
     typeof phoneField.confidence === "number";
   return {

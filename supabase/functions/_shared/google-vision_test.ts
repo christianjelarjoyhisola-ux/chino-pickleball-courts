@@ -737,9 +737,18 @@ Deno.test("recipient crop rejects ambiguous anchors, missing evidence, and incom
 });
 
 function gcashGeometry() {
-  const word = (text: string, x: number, y: number, confidence = 0.98) => ({
+  const word = (
+    text: string,
+    x: number,
+    y: number,
+    confidence = 0.98,
+  ): ReturnType<typeof visionWord> & {
+    confidence: number;
+    symbols: Array<{ text: string; confidence?: number }>;
+  } => ({
     ...visionWord(text, x, y),
     confidence,
+    symbols: [...text].map((text) => ({ text, confidence })),
   });
   // Native Vision may emit the two left-hand labels before the right values.
   // A low-confidence status bar and environmental footer are not payment fields.
@@ -768,6 +777,49 @@ function gcashGeometry() {
     annotation: { text, pages: [{ ...visionPage(words), confidence: 0.8829 }] },
   };
 }
+
+Deno.test("GCash masked recipient confidence excludes mask punctuation but never weak visible digits", () => {
+  const fixture = gcashGeometry();
+  const phone = fixture.words.find((word) =>
+    word.symbols.map((symbol) => symbol.text).join("") === "+63 92169"
+  )!;
+  phone.symbols = [..."+63 9.. ... 2169"].map((text) => ({
+    text,
+    confidence: /\d/.test(text) ? 0.97 : 0.42,
+  }));
+  phone.confidence = 0.8506989723076923;
+  fixture.text = fixture.words.map((entry) =>
+    entry.symbols.map((symbol) => symbol.text).join("")
+  ).join("\n");
+  const evidence = googleVisionGcashEvidence(fixture.annotation, fixture.text);
+  assert(evidence, "masked Express Send receipt recognized");
+  assertEquals(
+    evidence.fields.recipientPhone?.text,
+    "+63 9.. ... 2169",
+    "exact masked phone remains in audit evidence",
+  );
+  assert(
+    Math.abs(evidence.fields.recipientPhone!.confidence! - 0.97) < 1e-12,
+    "mask punctuation does not lower visible-digit confidence",
+  );
+  assert(
+    evidence.confidence! >= 0.95,
+    "a sharp visible recipient ending can pass the unchanged safety threshold",
+  );
+
+  phone.symbols = phone.symbols.map((symbol) => ({
+    ...symbol,
+    confidence: symbol.text === "2" ? 0.4 : 0.97,
+  }));
+  const weakVisibleDigit = googleVisionGcashEvidence(
+    fixture.annotation,
+    fixture.text,
+  );
+  assert(
+    weakVisibleDigit!.fields.recipientPhone!.confidence! < 0.9,
+    "an uncertain visible recipient digit still forces review",
+  );
+});
 
 Deno.test("GCash field confidence uses observed payment words while preserving native page score", async () => {
   const { annotation, text } = gcashGeometry();
