@@ -5525,6 +5525,10 @@ window.DB = {
           status: 'confirmed',
           paymentStatus: targetPaymentStatus,
         };
+        if (digitalPayment && session.role === 'owner') {
+          next.receiptStatus = 'auto_approved';
+          next.receiptVerifiedAt = confirmedAt;
+        }
         if (['paid', 'downpayment_paid'].includes(targetPaymentStatus)) {
           next.paidAt = booking.paidAt || booking.paid_at || confirmedAt;
           next.bookingFeeEarnedAt = booking.bookingFeeEarnedAt

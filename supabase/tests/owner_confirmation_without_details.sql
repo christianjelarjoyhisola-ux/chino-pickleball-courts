@@ -41,6 +41,12 @@ begin
       continue;
     end if;
     if denied or not result.transitioned then raise exception 'Owner confirmation failed'; end if;
+    if actor = 'owner' and (select count(*) from owner_test_bookings where receipt_status='auto_approved' and receipt_verified_at is not null) <> 2 then
+      raise exception 'System-owner confirmation must verify every group row';
+    end if;
+    if actor = 'court_owner' and exists(select 1 from owner_test_bookings where receipt_status='auto_approved' or receipt_verified_at is not null) then
+      raise exception 'Court-owner confirmation must preserve receipt verification';
+    end if;
     if (select count(*) from owner_test_bookings where status='confirmed' and payment_status='paid' and paid_at is not null and gcash_ref is null) <> 2 then
       raise exception 'Group confirmation or reference preservation failed';
     end if;
