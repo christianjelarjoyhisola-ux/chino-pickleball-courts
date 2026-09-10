@@ -123,7 +123,7 @@ function nativeWordConfidence(
   word: GoogleVisionNativeWord,
   ignoreMasks: boolean,
 ): number | undefined {
-  if (ignoreMasks && /[•‣●◦∙·*#]|\.{2,}|X{2,}/.test(word.text)) {
+  if (ignoreMasks) {
     const maskPositions = new Set<number>();
     for (const match of word.text.matchAll(/[•‣●◦∙·*#]+|\.{2,}|X{2,}/g)) {
       for (
@@ -141,6 +141,10 @@ function nativeWordConfidence(
     });
     if (visible.length && visible.every((symbol) => score(symbol.confidence))) {
       return Math.min(...visible.map((symbol) => symbol.confidence!));
+    }
+    const observed = visible.map((symbol) => symbol.confidence).filter(score);
+    if (observed.length && score(word.confidence)) {
+      return Math.min(word.confidence, ...observed);
     }
   }
   return score(word.confidence) ? word.confidence : undefined;
@@ -194,7 +198,10 @@ function fieldEvidence(
         )
         : matched;
       const scores = valueWords.map((span) =>
-        nativeWordConfidence(span.word, masked)
+        nativeWordConfidence(
+          span.word,
+          masked && /[•‣●◦∙·*#]|\.{2,}|X{2,}/.test(text),
+        )
       );
       occurrences.push(
         scores.length && scores.every(score)

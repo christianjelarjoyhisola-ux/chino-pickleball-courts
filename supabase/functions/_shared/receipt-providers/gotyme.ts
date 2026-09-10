@@ -16,10 +16,35 @@ const GOTYME_CONFIG = {
   unreadableFlag: "GOTYME_RECEIPT_UNREADABLE",
 };
 
+/** Join only observed mask fragments inside the destination block. Vision can
+ * split the same masked account into `**` and `*9W07` on adjacent native rows.
+ * This preserves every character; O/0 correction still requires optical proof. */
+export function normalizeGotymeMaskFragments(rawText: string): string {
+  const lines = String(rawText || "").split(/\r?\n/);
+  let inRecipient = false;
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index].trim();
+    if (/^(?:to|recipient)\b/i.test(line)) inRecipient = true;
+    if (
+      /^(?:from|sender|source|amount|fee|total|reference|trace|date)\b/i.test(
+        line,
+      )
+    ) inRecipient = false;
+    if (!inRecipient || !/^[*•xX]{1,}$/.test(line)) continue;
+    const next = (lines[index + 1] || "").replace(/\s/g, "");
+    if (!/^[*•xX]{1,}[A-Z0-9]{4,8}$/i.test(next)) continue;
+    const joined = line + next;
+    if (!/^[*•xX]{3,}[A-Z0-9]{4,8}$/i.test(joined)) continue;
+    lines.splice(index, 2, joined);
+  }
+  return lines.join("\n");
+}
+
 export function parseGotymeToGcashReceipt(
   rawText: string,
   options: { typedReference?: string } = {},
 ): BankToGcashReceiptParse & { provider: "gotyme" } {
+  rawText = normalizeGotymeMaskFragments(rawText);
   const parsed = parseBankToGcashReceipt(rawText, options, GOTYME_CONFIG) as
     & BankToGcashReceiptParse
     & { provider: "gotyme" };

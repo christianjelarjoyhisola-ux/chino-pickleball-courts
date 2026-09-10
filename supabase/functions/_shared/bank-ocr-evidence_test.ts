@@ -265,10 +265,33 @@ Deno.test("mask-only native words are excluded while every visible suffix word r
     .97,
   );
   words.find((word) => word.text === "9WO7")!.confidence = undefined;
+  words.find((word) => word.text === "9WO7")!.symbols.find((symbol) =>
+    symbol.text === "O"
+  )!.confidence = undefined;
   eq(
     bankApprovalConfidence(original.read, original.parsed, fixture.context)
       .source,
     "none",
+  );
+});
+
+Deno.test("a separate masked-account suffix word cannot hide a low native O behind its high word average", () => {
+  const fixture = BANK_FIXTURES[3];
+  const original = bankFixtureOriginal(
+    fixture,
+    bankFixtureRead(
+      fixture.text.replace("****************9WO7", "**************** 9WO7"),
+    ),
+  );
+  const word = original.read.nativeLines!.flatMap((line) => line.words).find((
+    word,
+  ) => word.text === "9WO7")!;
+  word.confidence = .95;
+  word.symbols.find((symbol) => symbol.text === "O")!.confidence = .798;
+  eq(
+    bankApprovalConfidence(original.read, original.parsed, fixture.context)
+      .fields.recipientAccount.confidence,
+    .798,
   );
 });
 

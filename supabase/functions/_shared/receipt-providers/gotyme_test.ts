@@ -1,4 +1,5 @@
 import {
+  normalizeGotymeMaskFragments,
   parseGotymeToGcashReceipt,
   verifyGotymeToGcashReceipt,
 } from "./gotyme.ts";
@@ -59,19 +60,29 @@ function verify(text = OCR, context = CONTEXT) {
 
 Deno.test("GoTyme transferred heading cannot override an adverse transaction status", () => {
   equal(verify().flags, [], "baseline receipt must be clean");
-  for (const [status, flag] of [
-    ["Processing", "TRANSFER_PENDING"],
-    ["Pending", "TRANSFER_PENDING"],
-    ["Failed", "TRANSFER_STATUS_INVALID"],
-    ["Reversed", "TRANSFER_STATUS_INVALID"],
-    ["Cancelled", "TRANSFER_STATUS_INVALID"],
-    ["Refunded", "TRANSFER_STATUS_INVALID"],
-  ]) {
+  for (
+    const [status, flag] of [
+      ["Processing", "TRANSFER_PENDING"],
+      ["Pending", "TRANSFER_PENDING"],
+      ["Failed", "TRANSFER_STATUS_INVALID"],
+      ["Reversed", "TRANSFER_STATUS_INVALID"],
+      ["Cancelled", "TRANSFER_STATUS_INVALID"],
+      ["Refunded", "TRANSFER_STATUS_INVALID"],
+    ]
+  ) {
     const text = `${OCR}\nTransaction status: ${status}`;
     includes(verify(text).flags, flag, status);
-    equal(parseGotymeToGcashReceipt(text).indicators.transferSuccess, false, status);
+    equal(
+      parseGotymeToGcashReceipt(text).indicators.transferSuccess,
+      false,
+      status,
+    );
   }
-  equal(verify(`${OCR}\nProcessing time: Instant`).flags, [], "metadata label remains valid");
+  equal(
+    verify(`${OCR}\nProcessing time: Instant`).flags,
+    [],
+    "metadata label remains valid",
+  );
 });
 
 Deno.test("GoTyme QR transfer extracts amount, destination, full reference, trace, and Manila date", () => {
@@ -366,4 +377,34 @@ Deno.test("GoTyme shuffled raw OCR without geometric rows must not guess recipie
     "unassociated reference requires spatial OCR",
   );
   includes(verify(raw).flags, "REF_UNREADABLE", "shuffled OCR remains review");
+});
+
+Deno.test("GoTyme joins observed destination mask fragments without correcting their suffix", () => {
+  const fragmented = OCR.replace("****************9WO7", "**\n*9W07");
+  const parsed = parseGotymeToGcashReceipt(fragmented);
+  equal(
+    parsed.recipient.accountRaw,
+    "***9W07",
+    "observed fragments joined only",
+  );
+  equal(
+    parsed.recipient.accountSuffix,
+    "9W07",
+    "zero is not changed into merchant's letter O",
+  );
+  includes(
+    verifyGotymeToGcashReceipt(parsed, CONTEXT).flags,
+    "RECEIVER_ACCOUNT_MISMATCH",
+    "still requires actual optical correction",
+  );
+  equal(
+    normalizeGotymeMaskFragments("From SENDER\n**\n*9W07"),
+    "From SENDER\n**\n*9W07",
+    "sender fields remain untouched",
+  );
+  equal(
+    normalizeGotymeMaskFragments("To NAME\n**\nAccount\n*9W07"),
+    "To NAME\n**\nAccount\n*9W07",
+    "no joins across intervening labels",
+  );
 });

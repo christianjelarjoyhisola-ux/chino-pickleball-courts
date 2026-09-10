@@ -43,6 +43,7 @@ import { gcashApprovalConfidence } from "../_shared/gcash-approval-confidence.ts
 import { rereadGcashRecipient } from "../_shared/gcash-recipient-ocr.ts";
 import { recoverGcashReceipt, gcashReceiptHasIncompleteStatus } from "../_shared/gcash-adaptive-ocr.ts";
 import { recoverBankReceipt } from "../_shared/bank-adaptive-ocr.ts";
+import { recoverGotymeFields } from "../_shared/gotyme-field-recovery.ts";
 import { bankApprovalConfidence, bankLayoutFamily, bankOcrText, isBankAdaptiveProvider } from "../_shared/bank-ocr-evidence.ts";
 import { readReceiptTransferStatus } from "../_shared/receipt-providers/transfer-status.ts";
 import { createReceiptReadingSession, gcashLayoutFamily } from "../_shared/receipt-reading-session.ts";
@@ -92,7 +93,7 @@ const PAYMENT_WINDOW_MINUTES = 15;
 // same minute as the hold can look a few seconds "before" the booking.
 const PAYMENT_EARLY_TOLERANCE_MINUTES = 2;
 const GCASH_VERIFIER_REVISION = "gcash_adaptive_20260910";
-const BANK_VERIFIER_REVISION = "bank_adaptive_20260910";
+const BANK_VERIFIER_REVISION = "bank_fields_20260910";
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const MAX_REQUEST_BYTES = 8 * 1024 * 1024;
@@ -2766,6 +2767,7 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
     let originalOcr: OcrResult | null = null;
     let readingRecovery: Awaited<ReturnType<typeof recoverGcashReceipt>> | null = null;
     let bankReadingRecovery: Awaited<ReturnType<typeof recoverBankReceipt>> | null = null;
+    let gotymeFieldRecovery: Awaited<ReturnType<typeof recoverGotymeFields>> | null = null;
     let originalBankCheck: { clean: boolean; confidence: number } | null = null;
     let bankRead: GoogleVisionOcrResult | null = null;
     let originalGcashCheck: { clean: boolean; confidence: number } | null = null;
@@ -2956,7 +2958,32 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
         confidence: firstApproval.confidence,
       };
       readingLayout = bankLayoutFamily(providerParse.provider, bankOcrText(bankRead));
+      if (providerParse.provider === "gotyme" && !originalBankCheck.clean &&
+        originalOcr.provider === "google_vision" && !ocrError && visionKey &&
+        !pricingError && flags.length === 0 && readingSession.remainingMs() > 500) {
+        gotymeFieldRecovery = await recoverGotymeFields(bytes, {
+          read: bankRead, parsed: providerParse,
+        }, providerContext, visionKey, {
+          ocr: readingSession.ocr,
+          deadlineMs: Math.min(12_000, readingSession.remainingMs()),
+        });
+        if (["recovery_conflict", "recovery_readings_disagree"].includes(gotymeFieldRecovery.reason) ||
+          gotymeFieldRecovery.reason.startsWith("original_conflict:")) {
+          flags.push("OCR_READINGS_DISAGREE");
+        }
+        if (gotymeFieldRecovery.accepted && gotymeFieldRecovery.selected) {
+          const selected = gotymeFieldRecovery.selected;
+          providerParse = selected.parsed;
+          bankRead = selected.read;
+          ocrText = bankOcrText(selected.read);
+          ocrLayoutApplied = true;
+          ocrConfidence = selected.read.confidence;
+          ocrConfidenceSource = selected.read.confidenceSource;
+          ocrFallbackReason = null;
+        }
+      }
       if (!originalBankCheck.clean && originalOcr.provider === "google_vision" &&
+        !gotymeFieldRecovery?.accepted &&
         !ocrError && visionKey && !pricingError && flags.length === 0 &&
         readingSession.remainingMs() > 500) {
         if (readingLayout !== "unknown") {
@@ -3000,7 +3027,7 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
     }
     if (
       providerParse?.provider === "gotyme" &&
-      !bankReadingRecovery?.accepted && flags.length === 0 &&
+      !bankReadingRecovery?.accepted && !gotymeFieldRecovery?.accepted && flags.length === 0 &&
       ocrConfidenceSource === "native" && ocrConfidence >= 0.9
     ) {
       const primaryRecipient = providerParse.receipt.recipient;
@@ -3034,6 +3061,13 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
           };
         }
       }
+    }
+    // A failed optional panel read must not prevent another bounded strategy
+    // from resolving the same receipt. Keep the failure in the reading audit.
+    if (gotymeFieldRecovery?.audit.readings.some((read) => read.outcome === "error") &&
+      !gotymeFieldRecovery.accepted && !bankReadingRecovery?.accepted &&
+      !recipientRefinement?.accepted) {
+      flags.push("OCR_REREAD_UNAVAILABLE");
     }
     const gcashParse: GcashReceiptParse | null =
       providerParse?.provider === "gcash" ? providerParse.receipt : null;
@@ -3247,6 +3281,8 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
         gcashOcrEvidence,
         gcashRecipientRefinement,
       )
+      : gotymeFieldRecovery?.accepted && gotymeFieldRecovery.selected
+      ? gotymeFieldRecovery.selected.approval
       : bankReadingRecovery?.accepted && bankReadingRecovery.selected
       ? bankReadingRecovery.selected.approval
       : bankRead && providerParse && providerParse.provider !== "gcash"
@@ -3554,7 +3590,15 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
           verifierRevision: provider === "gcash" ? GCASH_VERIFIER_REVISION : BANK_VERIFIER_REVISION,
           originalOcrConfidence: originalOcr?.confidence ?? 0,
           originalOcrConfidenceSource: originalOcr?.confidenceSource ?? "none",
-          readingRecovery: readingRecovery?.audit || bankReadingRecovery?.audit || null,
+          readingRecovery: readingRecovery?.audit || (gotymeFieldRecovery?.audit.attempted
+            ? { ...gotymeFieldRecovery.audit,
+              accepted: gotymeFieldRecovery.accepted || bankReadingRecovery?.accepted === true,
+              reason: bankReadingRecovery?.accepted ? bankReadingRecovery.reason : gotymeFieldRecovery.reason,
+              strategy: bankReadingRecovery?.accepted ? bankReadingRecovery.audit.strategy : gotymeFieldRecovery.audit.strategy,
+              readings: [...gotymeFieldRecovery.audit.readings, ...(bankReadingRecovery?.audit.readings || [])],
+              elapsedMs: gotymeFieldRecovery.audit.elapsedMs + (bankReadingRecovery?.audit.elapsedMs || 0),
+            } : bankReadingRecovery?.audit || null),
+          ...(gotymeFieldRecovery ? { gotymeFieldRecovery: gotymeFieldRecovery.audit } : {}),
           ...(provider !== "gcash" && "fields" in approval ? { paymentFieldEvidence: approval.fields } : {}),
           feedback: {
             version: "receipt_feedback_v1",

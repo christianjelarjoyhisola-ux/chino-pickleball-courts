@@ -10,6 +10,79 @@ function readingHistoryRows(booking) {
   return new Function('receiptDetailValue', `${source}; return receiptReadingHistoryRows;`)(String)(booking);
 }
 
+function receiptReviewUi() {
+  const vm = require('node:vm');
+  const admin = read('admin.html');
+  const source = admin.slice(admin.indexOf('const RECEIPT_FLAG_LABELS ='), admin.indexOf('function bookingSourceLabel('));
+  return vm.runInNewContext(source + '\n({bankReceiptAccountDisplay,receiptFlagLabel,receiptReasonText,receiptFlagChips,receiptDetailsHtml});', {
+    esc: value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])),
+    fmt: value => `₱${value}`,
+  });
+}
+
+function uncertainAccountBooking() {
+  return {paymentMethod:'gotyme',receiptStatus:'manual_review',paymentStatus:'for_verification',status:'pending',
+    receiptFlags:['NUMBER_UNREADABLE','RECEIVER_ACCOUNT_MISMATCH','LOW_OCR_CONFIDENCE'],
+    receiptExtracted:{provider:'gotyme',parserVersion:'gotyme_to_gcash_v1',ocrConfidenceSource:'native',
+      expectedReceiverAccount:'DWQM4TK3JDNZU9WO7',
+      paymentFieldEvidence:{recipientAccount:{text:'***9W07',confidence:.85291046}},
+      bankTransfer:{provider:'gotyme',recipient:{accountRaw:'***9W07',accountSuffix:'9W07',accountVisibility:'missing',phoneNormalized:null},
+        recipientComparison:{account:'mismatch',phone:'missing',name:'masked_compatible'}},
+    }};
+}
+
+test('GoTyme review explains actual low-confidence O/0 account evidence without changing the saved decision', () => {
+  const ui=receiptReviewUi();
+  const booking=uncertainAccountBooking();
+  const before=JSON.stringify(booking);
+  const html=ui.receiptDetailsHtml(booking);
+  assert.match(html,/Recipient account character unclear \(O\/0\)/);
+  assert.match(html,/Recipient Account OCR Confidence/);
+  assert.match(html,/85\.29%/);
+  assert.match(html,/\*\*\*9W07/);
+  assert.doesNotMatch(html,/Number not read|Receiver number unreadable|Account not read|Auto-verified/);
+  assert.match(ui.receiptFlagChips(booking.receiptFlags,false,booking),/Account needs review/);
+  assert.match(ui.receiptReasonText(booking.receiptFlags,booking),/OCR confidence below threshold/);
+  assert.equal(JSON.stringify(booking),before,'display never changes stored flags, OCR values, or payment state');
+});
+
+test('account ambiguity requires matching native field evidence and exactly one O/0 difference', () => {
+  const ui=receiptReviewUi();
+  for(const change of [
+    ex=>{ex.paymentFieldEvidence.recipientAccount.confidence=.95;},
+    ex=>{ex.paymentFieldEvidence.recipientAccount.confidence=null;},
+    ex=>{ex.paymentFieldEvidence.recipientAccount.confidence='0.85';},
+    ex=>{delete ex.paymentFieldEvidence;},
+    ex=>{ex.ocrConfidenceSource='derived';},
+    ex=>{ex.paymentFieldEvidence.recipientAccount.text='***9WO7';},
+    ex=>{ex.expectedReceiverAccount='DWQM4TK3JDNZU8WO7';},
+    ex=>{ex.expectedReceiverAccount='DWQM4TK3JDNZU9WA7';},
+  ]) {
+    const booking=uncertainAccountBooking();change(booking.receiptExtracted);
+    assert.equal(ui.bankReceiptAccountDisplay(booking.receiptExtracted).characterUnclear,false);
+    assert.equal(ui.receiptFlagLabel('RECEIVER_ACCOUNT_MISMATCH',booking),'Recipient account does not match');
+    assert.doesNotMatch(ui.receiptDetailsHtml(booking),/character unclear \(O\/0\)/);
+  }
+});
+
+test('observed bank accounts use account status while genuinely missing destinations remain visible', () => {
+  const ui=receiptReviewUi();
+  for(const provider of ['gotyme','maribank','maya','bdopay','bpi']) {
+    const booking=uncertainAccountBooking();
+    Object.assign(booking.receiptExtracted,{provider,parserVersion:`${provider}_to_gcash_v1`});
+    booking.receiptExtracted.bankTransfer.provider=provider;
+    booking.receiptExtracted.bankTransfer.recipientComparison.account='suffix_only';
+    assert.match(ui.bankReceiptAccountDisplay(booking.receiptExtracted).label,/Visible account ending matches/);
+    assert.doesNotMatch(ui.receiptDetailsHtml(booking),/Number not read/);
+  }
+  const missing=uncertainAccountBooking();
+  Object.assign(missing.receiptExtracted.bankTransfer.recipient,{accountRaw:null,accountSuffix:null,accountNormalized:null});
+  assert.equal(ui.bankReceiptAccountDisplay(missing.receiptExtracted),null);
+  assert.equal(ui.receiptFlagLabel('NUMBER_UNREADABLE',missing),'Receiver number unreadable');
+  assert.match(ui.receiptDetailsHtml(missing),/Number not read/);
+  assert.doesNotMatch(ui.receiptDetailsHtml(missing),/Recipient Account OCR Confidence|character unclear \(O\/0\)/);
+});
+
 test('receipt reading history shows only saved attempts and keeps agreement separate from confidence', () => {
   assert.deepEqual(readingHistoryRows({}), [], 'legacy records do not invent a check time or readings');
   const rows = readingHistoryRows({receiptExtracted: {

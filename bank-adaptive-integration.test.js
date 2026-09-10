@@ -16,7 +16,7 @@ async function runRecovery(options = {}) {
     providerParse: {provider, destinationProvider: provider === 'securitybank' ? 'securitybank' : 'gcash', receipt:{}},
     originalOcr: {provider:'google_vision', text:'original', originalText:'original', confidence:.88, confidenceSource:'native'},
     providerContext: {expectedAmount:265},
-    bankRead:null, originalBankCheck:null, bankReadingRecovery:null,
+    bankRead:null, originalBankCheck:null, bankReadingRecovery:null, gotymeFieldRecovery:null,
     flags:[], ocrError:null, visionKey:'test-key', pricingError:false,
     preferredReadingStrategy:undefined, readingLayout:'unknown',
     ocrText:'original', ocrLayoutApplied:false, ocrConfidence:.88,
@@ -37,6 +37,7 @@ async function runRecovery(options = {}) {
       calls.push({type:'recovery',original,expected,config});
       return options.recovery || {accepted:false,reason:'uncertain',audit:{readings:[]}};
     },
+    recoverGotymeFields:async()=>options.fields || {accepted:false,reason:'recovery_incomplete',audit:{readings:[]}},
     AbortSignal,
     ...options.context,
   };
@@ -106,10 +107,26 @@ test('unknown layouts never use another layout\'s learned preference',async()=>{
 test('bank approval keeps selected payment-field confidence distinct from original image score',()=>{
   const from=edge.indexOf('    const approval = provider === "gcash"');
   const to=edge.indexOf('    const minimumOcrConfidence',from);
-  const context={provider:'maya',readingRecovery:null,bankReadingRecovery:{accepted:true,selected:{approval:{confidence:.93,source:'bank_payment_fields'}}},ocrConfidence:.88,ocrConfidenceSource:'native'};
+  const context={provider:'maya',readingRecovery:null,gotymeFieldRecovery:null,bankReadingRecovery:{accepted:true,selected:{approval:{confidence:.93,source:'bank_payment_fields'}}},ocrConfidence:.88,ocrConfidenceSource:'native'};
   vm.runInNewContext(edge.slice(from,to)+'\nthis.observed = {approvalConfidence,approvalConfidenceSource};',context);
   assert.equal(context.observed.approvalConfidence,.93);
   assert.equal(context.observed.approvalConfidenceSource,'bank_payment_fields');
+});
+
+test('GoTyme targeted recovery selects observed fields and stops further full-image reads',async()=>{
+  const selected={parsed:{provider:'gotyme',receipt:{reference:{value:'OBSERVED'}}},read:{text:'original',layoutText:'observed panels',confidence:.88,confidenceSource:'native'},approval:{confidence:.93,source:'bank_payment_fields'}};
+  const {context,calls}=await runRecovery({provider:'gotyme',fields:{accepted:true,selected,reason:'targeted_readings_agree',audit:{readings:[{outcome:'clean'}]}}});
+  assert.equal(calls.length,0);
+  assert.equal(context.providerParse.receipt.reference.value,'OBSERVED');
+  assert.equal(context.ocrText,'observed panels');
+  assert.equal(context.originalOcr.text,'original');
+});
+
+test('GoTyme targeted conflicts cannot be bypassed by the full-image fallback',async()=>{
+  const {context,calls}=await runRecovery({provider:'gotyme',fields:{accepted:false,reason:'recovery_conflict',audit:{readings:[{outcome:'conflict'}]}}});
+  assert.equal(calls.length,0);
+  assert.ok(context.flags.includes('OCR_READINGS_DISAGREE'));
+  assert.equal(context.ocrText,'original');
 });
 
 test('raw original adverse status remains a veto even when reconstructed rows omit it',()=>{
