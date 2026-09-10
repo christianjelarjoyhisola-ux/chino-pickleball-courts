@@ -14,6 +14,9 @@
   const timeFormatter = new Intl.DateTimeFormat('en-PH', {
     timeZone: 'Asia/Manila', hour: 'numeric', minute: '2-digit', hour12: true,
   });
+  const tvDateFormatter = new Intl.DateTimeFormat('en-PH', {
+    timeZone: 'Asia/Manila', weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+  });
 
   function text(value) { return String(value ?? '').trim(); }
 
@@ -167,5 +170,63 @@
     };
   }
 
-  return { buildSnapshot };
+  function publicDisplayName(value) {
+    const parts = text(value).replace(/\s+/g, ' ').split(' ').filter(Boolean);
+    if (!parts.length) return 'Guest';
+    if (parts.length === 1) return parts[0];
+    return `${parts[0]} ${parts[parts.length - 1][0].toUpperCase()}.`;
+  }
+
+  function courtNumber(item) {
+    const nameMatch = text(item?.courtName).match(/(?:^|\s)([1-4])(?:\s|$)/);
+    if (nameMatch) return Number(nameMatch[1]);
+    const idMatch = text(item?.courtId).match(/([1-4])$/);
+    return idMatch ? Number(idMatch[1]) : null;
+  }
+
+  function tvSession(item) {
+    return {
+      courtName: item.courtName,
+      displayName: publicDisplayName(item.fullName),
+      startMs: item.startMs,
+      endMs: item.endMs,
+      startLabel: item.startLabel,
+      endLabel: item.endLabel,
+      minutesUntilStart: item.minutesUntilStart,
+      minutesUntilEnd: item.minutesUntilEnd,
+    };
+  }
+
+  function buildTvSnapshot(bookings, { now = new Date() } = {}) {
+    const nowMs = new Date(now).getTime();
+    if (!Number.isFinite(nowMs)) throw new TypeError('A valid current time is required.');
+    const snapshot = buildSnapshot(bookings, { now });
+    const todayStart = dateStart(snapshot.today);
+    const tomorrowStart = todayStart + DAY_MS;
+    const todaySessions = [...snapshot.playing, ...snapshot.next, ...snapshot.upcoming]
+      .filter(item => item.endMs > todayStart && item.startMs < tomorrowStart);
+    const courts = [1, 2, 3, 4].map(number => {
+      const sessions = todaySessions.filter(item => courtNumber(item) === number).sort(compare);
+      const playing = sessions.find(item => item.startMs <= nowMs && item.endMs > nowMs) || null;
+      const future = sessions.filter(item => item.startMs > nowMs);
+      return {
+        number,
+        name: `Court ${number}`,
+        playing: playing ? tvSession(playing) : null,
+        upNext: future.length ? tvSession(future[0]) : null,
+        upcoming: future.slice(1).map(tvSession),
+      };
+    });
+    return {
+      today: snapshot.today,
+      dateLabel: tvDateFormatter.format(nowMs),
+      nowIso: new Date(nowMs).toISOString(),
+      courts,
+      upcomingToday: courts.flatMap(court => court.upcoming).sort((a, b) =>
+        a.startMs - b.startMs || a.courtName.localeCompare(b.courtName, undefined, { numeric: true })
+      ),
+    };
+  }
+
+  return { buildSnapshot, buildTvSnapshot, publicDisplayName };
 });

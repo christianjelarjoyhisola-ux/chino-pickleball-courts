@@ -7,8 +7,8 @@
 <link rel="icon" type="image/jpeg" href="logochino.jpg">
 <link rel="stylesheet" href="payment-method-brand.css?v=20260901-payment-icons-v2" />
 <link rel="stylesheet" href="availability-graphic.css?v=20260909-official-logo-v1" />
-<link rel="stylesheet" href="dashboard-court-activity.css?v=20260909-compact-activity-v2" />
-<script src="dashboard-court-activity.js?v=20260909-activity-v1"></script>
+<link rel="stylesheet" href="dashboard-court-activity.css?v=20260910-tv-display-v1" />
+<script src="dashboard-court-activity.js?v=20260910-tv-display-v1"></script>
 <script src="payment-method-brand.js?v=20260909-security-bank"></script>
 <script src="chart.min.js"></script>
 <script src="booking-balance.js?v=20260831-payment-state-v7"></script>
@@ -5054,10 +5054,19 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(45, 62, 79, .1
       <section class="court-activity" id="courtActivity" aria-labelledby="courtActivityTitle" aria-busy="true">
         <header class="ca-header">
           <div class="ca-heading"><h3 id="courtActivityTitle">Court Activity</h3><p>Next 7 days · Philippine time</p></div>
-          <div class="ca-tools"><span id="courtActivityUpdated" class="ca-updated" role="status">Loading schedule…</span><button type="button" class="ca-refresh" id="courtActivityRefresh" aria-label="Refresh court activity" onclick="refreshCourtActivity()">↻</button><button type="button" class="ca-all" data-perm="bookings" onclick="goto('bookings')">View bookings <span aria-hidden="true">↗</span></button></div>
+          <div class="ca-tools"><span id="courtActivityUpdated" class="ca-updated" role="status">Loading schedule…</span><button type="button" class="ca-refresh" id="courtActivityRefresh" aria-label="Refresh court activity" onclick="refreshCourtActivity()">↻</button><button type="button" class="ca-tv-open" data-perm="bookings" onclick="openCourtActivityTv()"><span aria-hidden="true">▣</span> TV display</button><button type="button" class="ca-all" data-perm="bookings" onclick="goto('bookings')">View bookings <span aria-hidden="true">↗</span></button></div>
         </header>
         <div id="courtActivityBody" class="ca-grid"><p class="ca-loading">Loading your court schedule…</p></div>
-        <footer class="ca-footer"><span>Based on confirmed booking times; arrival is not tracked.</span><span id="courtActivityPending"></span></footer>
+        <footer class="ca-footer"><span>Schedule follows confirmed booking times.</span><span id="courtActivityPending"></span></footer>
+      </section>
+
+      <section class="ca-tv" id="courtActivityTv" role="dialog" aria-modal="true" aria-labelledby="courtActivityTvTitle" hidden>
+        <header class="ca-tv-header">
+          <div class="ca-tv-brand"><span class="ca-tv-mark" aria-hidden="true">C</span><div><strong id="courtActivityTvTitle">CHINO Pickleball Courts</strong><span>Today’s court activity</span></div></div>
+          <div class="ca-tv-time"><strong id="courtActivityTvClock">--:--</strong><span id="courtActivityTvDate">Today</span></div>
+          <button class="ca-tv-close" type="button" aria-label="Close TV display" onclick="closeCourtActivityTv()">×</button>
+        </header>
+        <div class="ca-tv-stage" id="courtActivityTvBody"><p class="ca-tv-loading">Preparing today’s court schedule…</p></div>
       </section>
 
       <div class="dash-mobile-actions">
@@ -9448,6 +9457,80 @@ let _courtActivitySyncedAt = 0;
 let _courtActivityRefreshPromise = null;
 let _courtActivityTimer = null;
 let _courtActivityError = false;
+let _courtActivityTvClockTimer = null;
+let _courtActivityTvPageTimer = null;
+let _courtActivityTvPage = 0;
+let _courtActivityTvTrigger = null;
+
+function courtActivityTvCountdown(minutes, suffix) {
+  const safe = Math.max(1, Math.ceil(minutes));
+  const value = safe < 60 ? `${safe} min` : `${Math.floor(safe / 60)}h${safe % 60 ? ` ${safe % 60}m` : ''}`;
+  return `${value} ${suffix}`;
+}
+
+function courtActivityTvNowCard(court) {
+  const item = court.playing;
+  if (!item) {
+    const availability = court.upNext ? `Available until ${court.upNext.startLabel}` : 'Available for the rest of today';
+    return `<article class="ca-tv-court is-available"><header><span class="ca-tv-court-number">${court.number.toString().padStart(2,'0')}</span><h2>${esc(court.name)}</h2><span class="ca-tv-state"><i></i> Available now</span></header><div class="ca-tv-current"><span class="ca-tv-eyebrow">Open court</span><strong class="ca-tv-player">Ready to play</strong><span class="ca-tv-period">${esc(availability)}</span></div></article>`;
+  }
+  const progress = Math.max(0, Math.min(100, (Date.now() - item.startMs) / (item.endMs - item.startMs) * 100));
+  return `<article class="ca-tv-court is-playing"><header><span class="ca-tv-court-number">${court.number.toString().padStart(2,'0')}</span><h2>${esc(court.name)}</h2><span class="ca-tv-state"><i></i> Now playing</span></header><div class="ca-tv-current"><span class="ca-tv-eyebrow">Current session</span><strong class="ca-tv-player">${esc(item.displayName)}</strong><span class="ca-tv-period">${esc(item.startLabel)} – ${esc(item.endLabel)}</span><span class="ca-tv-remaining">${esc(courtActivityTvCountdown(item.minutesUntilEnd,'left'))}</span></div><div class="ca-tv-progress" aria-hidden="true"><span style="width:${progress}%"></span></div></article>`;
+}
+
+function courtActivityTvNextCard(court) {
+  const item = court.upNext;
+  return `<article class="ca-tv-next-card"><div><span>Court ${court.number}</span><strong>${item ? esc(item.startLabel) : 'Open'}</strong></div><div>${item ? `<strong>${esc(item.displayName)}</strong><span>${esc(item.startLabel)} – ${esc(item.endLabel)}</span>` : '<strong>No more bookings</strong><span>Available for the rest of today</span>'}</div></article>`;
+}
+
+function updateCourtActivityTvClock() {
+  const clock = $('courtActivityTvClock');
+  if (clock) clock.textContent = new Date().toLocaleTimeString('en-PH',{timeZone:'Asia/Manila',hour:'numeric',minute:'2-digit',second:'2-digit',hour12:true});
+}
+
+function renderCourtActivityTv() {
+  const overlay = $('courtActivityTv');
+  const body = $('courtActivityTvBody');
+  if (!overlay || overlay.hidden || !body || !_courtActivityBookings || !window.ChinoCourtActivity?.buildTvSnapshot) return;
+  const snapshot = window.ChinoCourtActivity.buildTvSnapshot(_courtActivityBookings);
+  const pageSize = 4;
+  const pageCount = Math.max(1, Math.ceil(snapshot.upcomingToday.length / pageSize));
+  _courtActivityTvPage %= pageCount;
+  const upcoming = snapshot.upcomingToday.slice(_courtActivityTvPage * pageSize, (_courtActivityTvPage + 1) * pageSize);
+  $('courtActivityTvDate').textContent = snapshot.dateLabel;
+  updateCourtActivityTvClock();
+  body.innerHTML = `<div class="ca-tv-now-grid">${snapshot.courts.map(courtActivityTvNowCard).join('')}</div><div class="ca-tv-lower"><section class="ca-tv-next" aria-labelledby="caTvNextTitle"><header><div><span class="ca-tv-kicker">Next on court</span><h2 id="caTvNextTitle">Up next</h2></div><span class="ca-tv-section-count">${snapshot.courts.filter(court => court.upNext).length} scheduled</span></header><div class="ca-tv-next-grid">${snapshot.courts.map(courtActivityTvNextCard).join('')}</div></section><section class="ca-tv-upcoming" aria-labelledby="caTvUpcomingTitle"><header><div><span class="ca-tv-kicker">Later on the schedule</span><h2 id="caTvUpcomingTitle">Upcoming today</h2></div>${pageCount > 1 ? `<span class="ca-tv-pages">${_courtActivityTvPage + 1} / ${pageCount}</span>` : ''}</header><div class="ca-tv-upcoming-list">${upcoming.length ? upcoming.map(item => `<article><time>${esc(item.startLabel)}</time><span>${esc(item.courtName)}</span><strong>${esc(item.displayName)}</strong></article>`).join('') : '<div class="ca-tv-finished"><strong>Schedule clear</strong><span>No additional bookings after the up-next sessions.</span></div>'}</div></section></div>`;
+}
+
+function openCourtActivityTv() {
+  const overlay = $('courtActivityTv');
+  if (!overlay) return;
+  _courtActivityTvTrigger = document.activeElement;
+  overlay.hidden = false;
+  document.body.classList.add('ca-tv-opened');
+  _courtActivityTvPage = 0;
+  renderCourtActivityTv();
+  clearInterval(_courtActivityTvClockTimer);
+  clearInterval(_courtActivityTvPageTimer);
+  _courtActivityTvClockTimer = setInterval(updateCourtActivityTvClock, 1000);
+  _courtActivityTvPageTimer = setInterval(() => { _courtActivityTvPage += 1; renderCourtActivityTv(); }, 12000);
+  void refreshCourtActivity();
+  if (overlay.requestFullscreen) void overlay.requestFullscreen().catch(() => {});
+}
+
+function closeCourtActivityTv() {
+  const overlay = $('courtActivityTv');
+  if (!overlay) return;
+  overlay.hidden = true;
+  document.body.classList.remove('ca-tv-opened');
+  clearInterval(_courtActivityTvClockTimer);
+  clearInterval(_courtActivityTvPageTimer);
+  _courtActivityTvClockTimer = null;
+  _courtActivityTvPageTimer = null;
+  if (document.fullscreenElement === overlay) void document.exitFullscreen().catch(() => {});
+  if (_courtActivityTvTrigger?.isConnected) _courtActivityTvTrigger.focus({preventScroll:true});
+  _courtActivityTvTrigger = null;
+}
 
 function courtActivityCard(item, kind) {
   const minutes = kind === 'playing' ? item.minutesUntilEnd : item.minutesUntilStart;
@@ -9497,6 +9580,7 @@ function renderCourtActivity() {
   $('courtActivityUpdated').textContent = _courtActivityError ? 'Update delayed · showing last schedule' : `Updated ${new Date(_courtActivitySyncedAt).toLocaleTimeString('en-PH',{timeZone:'Asia/Manila',hour:'numeric',minute:'2-digit'})} PH`;
   $('courtActivityPending').textContent = snapshot.pending.length ? `${snapshot.pending.length} awaiting confirmation` : 'Confirmed reservations only';
   $('courtActivity').setAttribute('aria-busy','false');
+  renderCourtActivityTv();
 }
 
 function setCourtActivityBookings(bookings) {
@@ -9538,6 +9622,13 @@ document.getElementById('courtActivityBody')?.addEventListener('click', event =>
 });
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden && _curSection === 'dash' && _courtActivityBookings) void refreshCourtActivity();
+});
+document.addEventListener('fullscreenchange', () => {
+  const overlay = $('courtActivityTv');
+  if (overlay && !overlay.hidden && !document.fullscreenElement) closeCourtActivityTv();
+});
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && !$('courtActivityTv')?.hidden) closeCourtActivityTv();
 });
 
 function dashboardDailyCounts(transactions, now = new Date()) {

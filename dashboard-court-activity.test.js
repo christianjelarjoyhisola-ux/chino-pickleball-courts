@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { buildSnapshot } = require('./dashboard-court-activity');
+const { buildSnapshot, buildTvSnapshot, publicDisplayName } = require('./dashboard-court-activity');
 
 const now = new Date('2026-09-09T09:00:00+08:00');
 function booking(overrides = {}) {
@@ -176,4 +176,50 @@ test('input is unchanged and output exposes operational fields without payment d
   }
   assert.equal(original.endTime, '10:00 AM');
   assert.deepEqual(buildSnapshot(null, { now }).counts, { playing: 0, next: 0, upcoming: 0, pending: 0 });
+});
+
+test('TV activity assigns now, next and later-today sessions to all four court cards', () => {
+  const rows = [
+    booking({ ref: 'c1-now' }),
+    booking({ ref: 'c1-next', startTime: '10:00 AM', endTime: '11:00 AM' }),
+    booking({ ref: 'c1-later', startTime: '12:00 PM', endTime: '1:00 PM' }),
+    booking({ ref: 'c2-next', courtId: 'c2', courtName: 'Court 2', startTime: '9:30 AM', endTime: '10:30 AM' }),
+    booking({ ref: 'c4-now', courtId: 'court-4', courtName: 'Court 4', fullName: 'Ben Santos', email: 'ben@example.com' }),
+    booking({ ref: 'tomorrow', courtId: 'c3', courtName: 'Court 3', date: '2026-09-10' }),
+  ];
+  const tv = buildTvSnapshot(rows, { now });
+  assert.equal(tv.courts.length, 4);
+  assert.equal(tv.courts[0].playing.displayName, 'Anna M.');
+  assert.equal(tv.courts[0].upNext.startLabel, '10:00 AM');
+  assert.deepEqual(tv.courts[0].upcoming.map(item => item.startLabel), ['12:00 PM']);
+  assert.equal(tv.courts[1].playing, null);
+  assert.equal(tv.courts[1].upNext.startLabel, '9:30 AM');
+  assert.equal(tv.courts[2].upNext, null, 'tomorrow never appears on the TV');
+  assert.equal(tv.courts[3].playing.displayName, 'Ben S.');
+  assert.deepEqual(tv.upcomingToday.map(item => item.startLabel), ['12:00 PM']);
+});
+
+test('TV names are privacy-safe and expose no booking or contact details', () => {
+  assert.equal(publicDisplayName('  Kristie   Lou Cachuela  '), 'Kristie C.');
+  assert.equal(publicDisplayName('Madonna'), 'Madonna');
+  const tv = buildTvSnapshot([
+    booking({ fullName: 'Kristie Lou Cachuela', contactNumber: '09609422169', receiptImageUrl: 'private' }),
+  ], { now });
+  const current = tv.courts[0].playing;
+  assert.equal(current.displayName, 'Kristie C.');
+  for (const key of ['fullName', 'email', 'ref', 'contactNumber', 'receiptImageUrl']) {
+    assert.equal(Object.hasOwn(current, key), false, `${key} stays off the public TV model`);
+  }
+});
+
+test('TV keeps an overnight active session but excludes future days and invalid courts', () => {
+  const tv = buildTvSnapshot([
+    booking({ ref: 'overnight', date: '2026-09-08', startTime: '11:00 PM', endTime: '1:00 AM' }),
+    booking({ ref: 'later-today', startTime: '11:00 PM', endTime: '12:00 AM' }),
+    booking({ ref: 'tomorrow', date: '2026-09-10' }),
+    booking({ ref: 'unknown-court', courtId: 'c9', courtName: 'Court 9' }),
+  ], { now: '2026-09-09T00:30:00+08:00' });
+  assert.equal(tv.courts[0].playing.startLabel, '11:00 PM');
+  assert.equal(tv.courts[0].upNext.startLabel, '11:00 PM');
+  assert.equal(tv.courts.flatMap(court => court.upcoming).length, 0);
 });

@@ -69,3 +69,24 @@ test('activity cards escape customer names and booking references', () => {
   assert.ok(html.includes('Court &amp; 1'));
   assert.ok(html.includes('data-activity-ref="&quot; onclick=&quot;alert(1)"'));
 });
+
+test('premium TV display keeps four now-playing cards above separated schedule panels', () => {
+  const css = fs.readFileSync('dashboard-court-activity.css', 'utf8');
+  assert.match(source, /id="courtActivityTv"[\s\S]*?id="courtActivityTvBody"/);
+  assert.match(source, /class="ca-tv-open"[\s\S]*?>[^<]*<span[^>]*>▣<\/span> TV display/);
+  assert.match(source, /ca-tv-now-grid[\s\S]*?snapshot\.courts\.map\(courtActivityTvNowCard\)[\s\S]*?ca-tv-lower[\s\S]*?ca-tv-next[\s\S]*?ca-tv-upcoming/);
+  assert.match(css, /\.ca-tv-now-grid\s*\{[^}]*grid-template-columns:repeat\(2/);
+  assert.match(css, /\.ca-tv-lower\s*\{[^}]*grid-template-columns:minmax\(0,45fr\) minmax\(0,55fr\)/);
+  assert.match(css, /\.ca-tv-stage\s*\{[^}]*grid-template-rows:minmax\(0,7fr\) minmax\(240px,3fr\)/);
+});
+
+test('TV display is today-only, privacy-safe, self-updating and closable', () => {
+  const renderer = source.slice(source.indexOf('function renderCourtActivityTv()'), source.indexOf('function courtActivityCard('));
+  assert.match(renderer, /buildTvSnapshot\(_courtActivityBookings\)/);
+  assert.match(renderer, /item\.displayName/);
+  assert.doesNotMatch(renderer, /item\.fullName|item\.email|item\.ref/);
+  assert.match(renderer, /setInterval\(updateCourtActivityTvClock, 1000\)/);
+  assert.match(renderer, /setInterval\(\(\) => \{ _courtActivityTvPage \+= 1; renderCourtActivityTv\(\); \}, 12000\)/);
+  assert.match(source, /event\.key === 'Escape'[\s\S]*?closeCourtActivityTv\(\)/);
+  assert.match(source, /fullscreenchange[\s\S]*?closeCourtActivityTv\(\)/);
+});
