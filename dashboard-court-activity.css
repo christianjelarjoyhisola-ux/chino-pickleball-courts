@@ -118,9 +118,8 @@ body.ca-tv-opened { overflow: hidden; }
 .ca-tv-now-grid { min-height:0; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); grid-template-rows:repeat(2,minmax(0,1fr)); gap:clamp(12px,1.2vw,22px); }
 .ca-tv-court { position:relative; min-height:0; overflow:hidden; border:1px solid var(--tv-line); border-radius:clamp(18px,1.45vw,28px); background:linear-gradient(135deg,rgba(18,37,61,.94),rgba(11,26,45,.9)); box-shadow:0 18px 60px rgba(0,0,0,.2); }
 .ca-tv-court::after { content:""; position:absolute; width:210px; height:210px; right:-85px; bottom:-105px; border:1px solid rgba(255,255,255,.06); border-radius:50%; box-shadow:0 0 0 34px rgba(255,255,255,.018),0 0 0 68px rgba(255,255,255,.012); }
-.ca-tv-court > header { position:relative; z-index:1; display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:12px; padding:clamp(14px,1.2vw,22px) clamp(18px,1.5vw,28px); border-bottom:1px solid var(--tv-line); }
-.ca-tv-court-number { color:var(--tv-cyan); font-size:clamp(12px,.85vw,15px); font-weight:800; letter-spacing:.12em; }
-.ca-tv-court h2 { margin:0; font-size:clamp(17px,1.3vw,24px); letter-spacing:-.025em; }
+.ca-tv-court > header { position:relative; z-index:1; display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:clamp(18px,1.5vw,28px); padding:clamp(16px,1.3vw,24px) clamp(22px,1.7vw,32px); border-bottom:1px solid var(--tv-line); }
+.ca-tv-court h2 { margin:0; font-family:'DM Sans',sans-serif; font-size:clamp(20px,1.45vw,28px); font-stretch:normal; font-weight:800; line-height:1.15; letter-spacing:-.01em; text-transform:none; }
 .ca-tv-state { display:flex; align-items:center; gap:8px; color:#92eadf; font-size:clamp(11px,.78vw,14px); font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
 .ca-tv-state i { width:8px; height:8px; border-radius:50%; background:var(--tv-cyan); box-shadow:0 0 0 5px rgba(65,215,199,.11),0 0 18px rgba(65,215,199,.65); }
 .ca-tv-current { position:relative; z-index:1; height:calc(100% - clamp(57px,4.25vw,82px)); box-sizing:border-box; display:grid; align-content:center; justify-items:start; padding:clamp(14px,1.4vw,26px) clamp(22px,2vw,38px); }
@@ -136,7 +135,7 @@ body.ca-tv-opened { overflow: hidden; }
 .ca-tv-next,.ca-tv-upcoming { min-height:0; padding:clamp(14px,1.2vw,22px); border:1px solid var(--tv-line); border-radius:clamp(18px,1.45vw,28px); background:rgba(10,24,41,.86); box-shadow:0 18px 60px rgba(0,0,0,.16); }
 .ca-tv-next > header,.ca-tv-upcoming > header { display:flex; align-items:end; justify-content:space-between; gap:16px; margin-bottom:clamp(10px,.8vw,15px); }
 .ca-tv-kicker { display:block; color:#d7a956; font-size:clamp(10px,.66vw,12px); font-weight:800; letter-spacing:.14em; text-transform:uppercase; }
-.ca-tv-next h2,.ca-tv-upcoming h2 { margin:2px 0 0; font-size:clamp(20px,1.45vw,28px); letter-spacing:-.035em; }
+.ca-tv-next h2,.ca-tv-upcoming h2 { margin:4px 0 0; font-family:'DM Sans',sans-serif; font-size:clamp(20px,1.45vw,28px); font-stretch:normal; font-weight:800; line-height:1.15; letter-spacing:-.01em; text-transform:none; }
 .ca-tv-section-count,.ca-tv-pages { color:var(--tv-muted); font-size:clamp(11px,.72vw,13px); }
 .ca-tv-next-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
 .ca-tv-next-card { min-width:0; display:grid; grid-template-columns:minmax(82px,.65fr) minmax(0,1.35fr); align-items:center; gap:10px; min-height:clamp(54px,5.3vh,72px); padding:8px 12px; border:1px solid rgba(148,171,204,.12); border-radius:12px; background:rgba(255,255,255,.025); }

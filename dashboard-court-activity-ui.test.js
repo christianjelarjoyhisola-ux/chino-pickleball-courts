@@ -78,6 +78,10 @@ test('premium TV display keeps four now-playing cards above separated schedule p
   assert.match(css, /\.ca-tv-now-grid\s*\{[^}]*grid-template-columns:repeat\(2/);
   assert.match(css, /\.ca-tv-lower\s*\{[^}]*grid-template-columns:minmax\(0,45fr\) minmax\(0,55fr\)/);
   assert.match(css, /\.ca-tv-stage\s*\{[^}]*grid-template-rows:minmax\(0,7fr\) minmax\(240px,3fr\)/);
+  assert.doesNotMatch(source, /class="ca-tv-court-number"/);
+  assert.match(css, /\.ca-tv-court > header\s*\{[^}]*grid-template-columns:minmax\(0,1fr\) auto/);
+  assert.match(css, /\.ca-tv-court h2\s*\{[^}]*font-family:'DM Sans',sans-serif[^}]*text-transform:none/);
+  assert.match(css, /\.ca-tv-next h2,\.ca-tv-upcoming h2\s*\{[^}]*font-family:'DM Sans',sans-serif[^}]*text-transform:none/);
 });
 
 test('TV display is today-only, privacy-safe, self-updating and closable', () => {

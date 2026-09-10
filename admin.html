@@ -7,8 +7,8 @@
 <link rel="icon" type="image/jpeg" href="logochino.jpg">
 <link rel="stylesheet" href="payment-method-brand.css?v=20260901-payment-icons-v2" />
 <link rel="stylesheet" href="availability-graphic.css?v=20260909-official-logo-v1" />
-<link rel="stylesheet" href="dashboard-court-activity.css?v=20260910-tv-display-v1" />
-<script src="dashboard-court-activity.js?v=20260910-tv-display-v1"></script>
+<link rel="stylesheet" href="dashboard-court-activity.css?v=20260910-tv-type-v2" />
+<script src="dashboard-court-activity.js?v=20260910-tv-type-v2"></script>
 <script src="payment-method-brand.js?v=20260909-security-bank"></script>
 <script src="chart.min.js"></script>
 <script src="booking-balance.js?v=20260831-payment-state-v7"></script>
@@ -9472,10 +9472,10 @@ function courtActivityTvNowCard(court) {
   const item = court.playing;
   if (!item) {
     const availability = court.upNext ? `Available until ${court.upNext.startLabel}` : 'Available for the rest of today';
-    return `<article class="ca-tv-court is-available"><header><span class="ca-tv-court-number">${court.number.toString().padStart(2,'0')}</span><h2>${esc(court.name)}</h2><span class="ca-tv-state"><i></i> Available now</span></header><div class="ca-tv-current"><span class="ca-tv-eyebrow">Open court</span><strong class="ca-tv-player">Ready to play</strong><span class="ca-tv-period">${esc(availability)}</span></div></article>`;
+    return `<article class="ca-tv-court is-available"><header><h2>${esc(court.name)}</h2><span class="ca-tv-state"><i></i> Available now</span></header><div class="ca-tv-current"><span class="ca-tv-eyebrow">Open court</span><strong class="ca-tv-player">Ready to play</strong><span class="ca-tv-period">${esc(availability)}</span></div></article>`;
   }
   const progress = Math.max(0, Math.min(100, (Date.now() - item.startMs) / (item.endMs - item.startMs) * 100));
-  return `<article class="ca-tv-court is-playing"><header><span class="ca-tv-court-number">${court.number.toString().padStart(2,'0')}</span><h2>${esc(court.name)}</h2><span class="ca-tv-state"><i></i> Now playing</span></header><div class="ca-tv-current"><span class="ca-tv-eyebrow">Current session</span><strong class="ca-tv-player">${esc(item.displayName)}</strong><span class="ca-tv-period">${esc(item.startLabel)} – ${esc(item.endLabel)}</span><span class="ca-tv-remaining">${esc(courtActivityTvCountdown(item.minutesUntilEnd,'left'))}</span></div><div class="ca-tv-progress" aria-hidden="true"><span style="width:${progress}%"></span></div></article>`;
+  return `<article class="ca-tv-court is-playing"><header><h2>${esc(court.name)}</h2><span class="ca-tv-state"><i></i> Now playing</span></header><div class="ca-tv-current"><span class="ca-tv-eyebrow">Current session</span><strong class="ca-tv-player">${esc(item.displayName)}</strong><span class="ca-tv-period">${esc(item.startLabel)} – ${esc(item.endLabel)}</span><span class="ca-tv-remaining">${esc(courtActivityTvCountdown(item.minutesUntilEnd,'left'))}</span></div><div class="ca-tv-progress" aria-hidden="true"><span style="width:${progress}%"></span></div></article>`;
 }
 
 function courtActivityTvNextCard(court) {
