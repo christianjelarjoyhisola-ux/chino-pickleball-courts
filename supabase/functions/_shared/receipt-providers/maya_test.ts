@@ -53,6 +53,22 @@ const CONTEXT = {
   earlyToleranceMinutes: 2,
 };
 
+Deno.test("Maya completed receipt cannot override an adverse transaction status", () => {
+  assert(flagsFor(RECEIPT).length === 0, "baseline receipt must be clean");
+  for (const [status, flag] of [
+    ["Processing", "TRANSFER_PENDING"],
+    ["Pending", "TRANSFER_PENDING"],
+    ["Failed", "TRANSFER_STATUS_INVALID"],
+    ["Reversed", "TRANSFER_STATUS_INVALID"],
+    ["Cancelled", "TRANSFER_STATUS_INVALID"],
+    ["Refunded", "TRANSFER_STATUS_INVALID"],
+  ]) {
+    const text = `${RECEIPT}\nTransaction status: ${status}`;
+    assertFlag(text, flag);
+    assert(!parseMayaToGcashReceipt(text).indicators.completionScreen, status);
+  }
+});
+
 function flagsFor(
   receipt: string,
   context: Partial<typeof CONTEXT> = {},

@@ -7,6 +7,7 @@ import {
   extractReceiptAmount,
   type ReceiptAmountExtraction,
 } from "../receipt-amount.ts";
+import { readReceiptTransferStatus } from "./transfer-status.ts";
 import type {
   BankReceiptTimestamp,
   ReceiptDedupeKey,
@@ -705,11 +706,7 @@ export function parseMayaToGcashReceipt(
   const transferFee = parseTransferFee(lines);
   const timestamp = parseTimestamp(lines);
   const parsedRecipient = parseRecipient(lines);
-  const failureStatus =
-    /\b(?:failed|failure|declined|cancelled|canceled|unsuccessful|reversed|refunded)\b/i
-      .test(text);
-  const pendingStatus = /\b(?:pending|processing|in\s+progress|scheduled)\b/i
-    .test(text);
+  const { failureStatus, pendingStatus } = readReceiptTransferStatus(text);
   const sentMoneyVia = /\bsent\s+money\s+via\b/i.test(text);
   const issues: string[] = [];
   if (reference.ambiguous) issues.push("AMBIGUOUS_REFERENCE");
@@ -792,7 +789,8 @@ export function verifyMayaToGcashReceipt(
     addUnique(flags, "TRANSFER_STATUS_INVALID");
   }
   if (parsed.indicators.pendingStatus) addUnique(flags, "TRANSFER_PENDING");
-  if (!parsed.indicators.sentMoneyVia || !parsed.indicators.completionScreen) {
+  if ((!parsed.indicators.sentMoneyVia || !parsed.indicators.completionScreen) &&
+    !parsed.indicators.failureStatus && !parsed.indicators.pendingStatus) {
     addUnique(flags, "TRANSFER_STATUS_UNREADABLE");
   }
   if (!parsed.indicators.instaPay) {

@@ -1,4 +1,5 @@
 import { extractReceiptAmount } from "../receipt-amount.ts";
+import { readReceiptTransferStatus } from "./transfer-status.ts";
 import type {
   BankReceiptTimestamp,
   ReceiptDedupeKey,
@@ -124,6 +125,7 @@ export function parseSecurityBankReceipt(
     (x) => x.replace(/\s+/g, " ").trim(),
   ).filter(Boolean));
   const text = lines.join("\n");
+  const status = readReceiptTransferStatus(text);
   const bank = field(lines, /^bank(?!\s+transfer\b)\s*:?\s*(.*)$/i);
   const account = field(lines, /^account\s*(?:no\.?|number)\s*:?\s*(.*)$/i);
   const name = field(lines, /^account\s*name\s*:?\s*(.*)$/i);
@@ -211,14 +213,13 @@ export function parseSecurityBankReceipt(
     indicators: {
       providerBrand: /^Sent via GCash$/im.test(text),
       competingProviderBrand: /^Sent via (?!GCash$).+/im.test(text),
-      transferSuccess: /^Bank Transfer Complete$/im.test(text),
+      transferSuccess: /^Bank Transfer Complete$/im.test(text) &&
+        !status.failureStatus && !status.pendingStatus,
       destinationSecurityBank: /^Security\s+Bank(?:\s+Corporation)?$/i.test(
         bank.value || "",
       ),
       instaPay: /^Insta\s*Pay$/i.test(method.value || ""),
-      failureStatus:
-        /\b(?:failed|pending|unsuccessful|reversed|cancelled|canceled|scheduled)\b/i
-          .test(text),
+      ...status,
     },
     issues,
   };
@@ -237,7 +238,10 @@ export function verifySecurityBankReceipt(
   if (
     !parsed.indicators.providerBrand || parsed.indicators.competingProviderBrand
   ) add("SECURITYBANK_SOURCE_UNREADABLE");
-  if (!parsed.indicators.transferSuccess || parsed.indicators.failureStatus) {
+  if (parsed.indicators.failureStatus) add("TRANSFER_STATUS_INVALID");
+  if (parsed.indicators.pendingStatus) add("TRANSFER_PENDING");
+  if (!parsed.indicators.transferSuccess && !parsed.indicators.failureStatus &&
+    !parsed.indicators.pendingStatus) {
     add("TRANSFER_STATUS_UNREADABLE");
   }
   if (!parsed.indicators.destinationSecurityBank) {

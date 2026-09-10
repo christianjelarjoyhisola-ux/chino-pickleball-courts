@@ -42,6 +42,9 @@ import {
 import { gcashApprovalConfidence } from "../_shared/gcash-approval-confidence.ts";
 import { rereadGcashRecipient } from "../_shared/gcash-recipient-ocr.ts";
 import { recoverGcashReceipt, gcashReceiptHasIncompleteStatus } from "../_shared/gcash-adaptive-ocr.ts";
+import { recoverBankReceipt } from "../_shared/bank-adaptive-ocr.ts";
+import { bankApprovalConfidence, bankLayoutFamily, bankOcrText, isBankAdaptiveProvider } from "../_shared/bank-ocr-evidence.ts";
+import { readReceiptTransferStatus } from "../_shared/receipt-providers/transfer-status.ts";
 import { createReceiptReadingSession, gcashLayoutFamily } from "../_shared/receipt-reading-session.ts";
 import type { ReceiptVerificationContext } from "../_shared/receipt-providers/bank-to-gcash.ts";
 import {
@@ -89,6 +92,7 @@ const PAYMENT_WINDOW_MINUTES = 15;
 // same minute as the hold can look a few seconds "before" the booking.
 const PAYMENT_EARLY_TOLERANCE_MINUTES = 2;
 const GCASH_VERIFIER_REVISION = "gcash_adaptive_20260910";
+const BANK_VERIFIER_REVISION = "bank_adaptive_20260910";
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const MAX_REQUEST_BYTES = 8 * 1024 * 1024;
@@ -107,6 +111,8 @@ type OcrProvider = "google_vision" | "none";
 
 type OcrResult = {
   text: string;
+  layoutText?: string;
+  nativeLines?: GoogleVisionOcrResult["nativeLines"];
   originalText?: string;
   layoutApplied?: boolean;
   recipientRegion?: RecipientOcrRegion;
@@ -1141,7 +1147,9 @@ async function runOCR(
       // labels with validated word geometry on supported receipt layouts.
       const layoutText = provider === "gcash"
         ? v.gcashEvidence?.layoutText
-        : provider === "gotyme" ? v.layoutText : undefined;
+        : isBankAdaptiveProvider(provider) && (v.layoutText?.trim() || v.nativeLines?.length)
+        ? bankOcrText(v)
+        : undefined;
       const layoutApplied = !!layoutText?.trim();
       const text = layoutApplied && layoutText ? layoutText : v.text;
       const result = { ...v, text, originalText: v.text, layoutApplied };
@@ -2757,12 +2765,15 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
     const readingSession = createReceiptReadingSession();
     let originalOcr: OcrResult | null = null;
     let readingRecovery: Awaited<ReturnType<typeof recoverGcashReceipt>> | null = null;
+    let bankReadingRecovery: Awaited<ReturnType<typeof recoverBankReceipt>> | null = null;
+    let originalBankCheck: { clean: boolean; confidence: number } | null = null;
+    let bankRead: GoogleVisionOcrResult | null = null;
     let originalGcashCheck: { clean: boolean; confidence: number } | null = null;
     let recipientGcashCheck: { clean: boolean; confidence: number } | null = null;
     let recipientReadingAttempted = false;
     let recipientReadingMetrics: GoogleVisionRequestMetrics | undefined;
     let preferredReadingStrategy: string | undefined;
-    let readingLayout = "gcash_unknown";
+    let readingLayout = provider === "gcash" ? "gcash_unknown" : "unknown";
     let ocrText = "";
     let ocrOriginalText = "";
     let ocrLayoutApplied = false;
@@ -2808,6 +2819,13 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
     }
     if (provider === "gcash" && gcashReceiptHasIncompleteStatus(ocrOriginalText)) {
       flags.push("PAYMENT_STATUS_NOT_COMPLETED");
+    }
+    if (isBankAdaptiveProvider(provider)) {
+      // Preserve adverse status from the original text even when layout
+      // reconstruction or a later crop omits that part of the receipt.
+      const status = readReceiptTransferStatus(ocrOriginalText);
+      if (status.failureStatus) flags.push("TRANSFER_STATUS_INVALID");
+      else if (status.pendingStatus) flags.push("TRANSFER_PENDING");
     }
 
     // ── field extraction ────────────────────────────────────────────────────
@@ -2925,8 +2943,64 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
         }
       }
     }
+    if (providerParse && providerParse.provider !== "gcash" && originalOcr &&
+      isBankAdaptiveProvider(providerParse.provider)) {
+      bankRead = {
+        ...originalOcr,
+        text: originalOcr.originalText ?? originalOcr.text,
+      };
+      const firstApproval = bankApprovalConfidence(bankRead, providerParse, providerContext);
+      originalBankCheck = {
+        clean: verifyProviderReceipt(providerParse, providerContext).flags.length === 0 &&
+          firstApproval.confidence >= 0.9 && originalOcr.confidenceSource === "native",
+        confidence: firstApproval.confidence,
+      };
+      readingLayout = bankLayoutFamily(providerParse.provider, bankOcrText(bankRead));
+      if (!originalBankCheck.clean && originalOcr.provider === "google_vision" &&
+        !ocrError && visionKey && !pricingError && flags.length === 0 &&
+        readingSession.remainingMs() > 500) {
+        if (readingLayout !== "unknown") {
+          try {
+            const preference = await db.rpc("receipt_preferred_provider_reading_strategy", {
+              p_provider: providerParse.provider,
+              p_destination_provider: providerParse.destinationProvider,
+              p_layout: readingLayout,
+              p_parser_revision: BANK_VERIFIER_REVISION,
+            }).abortSignal(AbortSignal.timeout(1_000));
+            if (!preference.error && typeof preference.data?.strategy === "string") {
+              preferredReadingStrategy = preference.data.strategy;
+            }
+          } catch { /* Reading history never blocks a receipt check. */ }
+        }
+        bankReadingRecovery = await recoverBankReceipt(bytes, {
+          read: bankRead, parsed: providerParse,
+        }, providerContext, visionKey, {
+          preferredStrategy: preferredReadingStrategy,
+          ocr: readingSession.ocr,
+          deadlineMs: Math.min(12_000, readingSession.remainingMs()),
+        });
+        if (["recovery_conflict", "recovery_readings_disagree"].includes(bankReadingRecovery.reason) ||
+          bankReadingRecovery.reason.startsWith("original_conflict:")) {
+          flags.push("OCR_READINGS_DISAGREE");
+        }
+        if (bankReadingRecovery.audit.readings.some((read) => read.outcome === "error")) {
+          flags.push("OCR_REREAD_UNAVAILABLE");
+        }
+        if (bankReadingRecovery.accepted && bankReadingRecovery.selected) {
+          const selected = bankReadingRecovery.selected;
+          providerParse = selected.parsed;
+          bankRead = selected.read;
+          ocrText = selected.read.layoutText || selected.read.text;
+          ocrLayoutApplied = !!selected.read.layoutText;
+          ocrConfidence = selected.read.confidence;
+          ocrConfidenceSource = selected.read.confidenceSource;
+          ocrFallbackReason = null;
+        }
+      }
+    }
     if (
       providerParse?.provider === "gotyme" &&
+      !bankReadingRecovery?.accepted && flags.length === 0 &&
       ocrConfidenceSource === "native" && ocrConfidence >= 0.9
     ) {
       const primaryRecipient = providerParse.receipt.recipient;
@@ -3162,8 +3236,8 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
     }
     if (await editedBySoftware(bytes)) flags.push("EDITED_METADATA");
 
-    // Native confidence on all six GCash payment fields excludes irrelevant
-    // phone status/footer text. Other providers keep their existing policy.
+    // Approval uses the provider's observed payment fields. Header/footer text
+    // is not a substitute for confidence in a transaction ID or recipient.
     const approval = provider === "gcash"
       ? readingRecovery?.accepted && readingRecovery.selected
         ? readingRecovery.selected.approval
@@ -3173,6 +3247,10 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
         gcashOcrEvidence,
         gcashRecipientRefinement,
       )
+      : bankReadingRecovery?.accepted && bankReadingRecovery.selected
+      ? bankReadingRecovery.selected.approval
+      : bankRead && providerParse && providerParse.provider !== "gcash"
+      ? bankApprovalConfidence(bankRead, providerParse, providerContext, recipientRefinement)
       : { confidence: ocrConfidence, source: ocrConfidenceSource };
     const approvalConfidence = approval.confidence;
     const approvalConfidenceSource = approval.source;
@@ -3386,6 +3464,36 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
         durationMs: read.elapsedMs,
         ocrCalls: read.requestMetrics?.calls ?? 0,
       })),
+    ] : isBankAdaptiveProvider(provider) ? [
+      {
+        id: "bank_original_v1",
+        attempted: (originalOcr?.requestMetrics?.calls || ocrMetrics.calls) > 0,
+        hardChecksClean: cleanEvidence && originalBankCheck?.clean === true,
+        outcome: originalBankCheck?.clean ? "clean" : ocrError ? "error" : "uncertain",
+        confidence: originalBankCheck?.confidence ?? 0,
+        durationMs: originalOcr?.requestMetrics?.durationMs ?? 0,
+        ocrCalls: originalOcr?.requestMetrics?.calls ?? 0,
+      },
+      ...(recipientRefinement?.attempted ? [{
+        id: "bank_gotyme_recipient_pair_v1",
+        attempted: true,
+        hardChecksClean: cleanEvidence && recipientRefinement.accepted && approval.source === "bank_payment_fields",
+        outcome: recipientRefinement.accepted ? "clean" : "uncertain",
+        confidence: recipientRefinement.accepted ? approvalConfidence : 0,
+        durationMs: Math.max(recipientRefinement.nativeRead?.requestMetrics?.durationMs ?? 0,
+          recipientRefinement.enlargedRead?.requestMetrics?.durationMs ?? 0),
+        ocrCalls: (recipientRefinement.nativeRead?.requestMetrics?.calls ?? 0) +
+          (recipientRefinement.enlargedRead?.requestMetrics?.calls ?? 0),
+      }] : []),
+      ...(bankReadingRecovery?.audit.readings || []).map((read) => ({
+        id: read.strategy,
+        attempted: true,
+        hardChecksClean: cleanEvidence && bankReadingRecovery?.accepted === true && read.outcome === "clean",
+        outcome: read.outcome,
+        confidence: read.confidence ?? 0,
+        durationMs: read.elapsedMs,
+        ocrCalls: read.requestMetrics?.calls ?? 0,
+      })),
     ] : [];
 
     const extracted = {
@@ -3439,17 +3547,19 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
       autoPaymentStatus,
       provider,
       route,
+      destinationProvider: providerParse?.destinationProvider || null,
       parserVersion: providerParse?.parserVersion || "legacy",
-      ...(provider === "gcash"
+      ...(isDedicatedReceiptProvider(provider)
         ? {
-          verifierRevision: GCASH_VERIFIER_REVISION,
+          verifierRevision: provider === "gcash" ? GCASH_VERIFIER_REVISION : BANK_VERIFIER_REVISION,
           originalOcrConfidence: originalOcr?.confidence ?? 0,
           originalOcrConfidenceSource: originalOcr?.confidenceSource ?? "none",
-          readingRecovery: readingRecovery?.audit || null,
+          readingRecovery: readingRecovery?.audit || bankReadingRecovery?.audit || null,
+          ...(provider !== "gcash" && "fields" in approval ? { paymentFieldEvidence: approval.fields } : {}),
           feedback: {
             version: "receipt_feedback_v1",
             layout: readingLayout,
-            parserRevision: GCASH_VERIFIER_REVISION,
+            parserRevision: provider === "gcash" ? GCASH_VERIFIER_REVISION : BANK_VERIFIER_REVISION,
             durationMs: ocrMetrics.durationMs,
             ocrCalls: ocrMetrics.calls,
             strategies: feedbackStrategies,

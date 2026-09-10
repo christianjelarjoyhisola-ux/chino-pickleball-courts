@@ -7,6 +7,7 @@ import {
   extractReceiptAmount,
   type ReceiptAmountExtraction,
 } from "../receipt-amount.ts";
+import { readReceiptTransferStatus } from "./transfer-status.ts";
 
 export type BankToGcashProvider = "gotyme" | "maribank";
 
@@ -65,6 +66,8 @@ export type BankReceiptIndicators = {
   providerBrand: boolean;
   competingProviderBrand: BankToGcashProvider | null;
   transferSuccess: boolean;
+  failureStatus: boolean;
+  pendingStatus: boolean;
   destinationGcash: boolean;
   instaPay: boolean;
 };
@@ -623,6 +626,7 @@ export function parseBankToGcashReceipt(
 ): BankToGcashReceiptParse {
   const lines = linesOf(rawText);
   const text = lines.join("\n");
+  const status = readReceiptTransferStatus(text);
   const primary = parsePrimaryReference(lines, options.typedReference || "");
   const rail = parseRailReference(lines);
   let amount = extractReceiptAmount(text, { provider: config.provider });
@@ -675,12 +679,11 @@ export function parseBankToGcashReceipt(
       competingProviderBrand: config.competingBrandPattern.test(text)
         ? config.competingProvider
         : null,
-      transferSuccess:
-        /\b(?:transfer|transaction)\s+(?:successful|completed?)\b|\bsuccessfully\s+(?:sent|transferred)\b|\bmoney\s+sent\b/i
+      transferSuccess: !status.failureStatus && !status.pendingStatus &&
+        (/\b(?:transfer|transaction)\s+(?:successful|completed?)\b|\bsuccessfully\s+(?:sent|transferred)\b|\bmoney\s+sent\b/i
           .test(text) || (config.provider === "gotyme" &&
-            lines.some((line) => /^transferred[!.]?$/i.test(line)) &&
-            !/\b(?:failed|pending|unsuccessful|cancelled|canceled|reversed|declined)\b/i
-              .test(text)),
+            lines.some((line) => /^transferred[!.]?$/i.test(line)))),
+      ...status,
       destinationGcash: recipientSection(lines).block.some((line) =>
         /\bgcash\b|\bg-?xchange\b|\bgxi\b/i.test(line)
       ),
@@ -708,7 +711,10 @@ export function verifyBankToGcashReceipt(
   if (parsed.indicators.competingProviderBrand) {
     addUnique(flags, "METHOD_MISMATCH");
   }
-  if (!parsed.indicators.transferSuccess) {
+  if (parsed.indicators.failureStatus) addUnique(flags, "TRANSFER_STATUS_INVALID");
+  if (parsed.indicators.pendingStatus) addUnique(flags, "TRANSFER_PENDING");
+  if (!parsed.indicators.transferSuccess && !parsed.indicators.failureStatus &&
+    !parsed.indicators.pendingStatus) {
     addUnique(flags, "TRANSFER_STATUS_UNREADABLE");
   }
   if (!parsed.indicators.destinationGcash) {

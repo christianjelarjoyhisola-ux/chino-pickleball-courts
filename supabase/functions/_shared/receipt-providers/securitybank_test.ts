@@ -60,6 +60,22 @@ const check = (text = RECEIPT, override: Partial<typeof context> = {}) => {
     c,
   );
 };
+
+Deno.test("Security Bank complete heading cannot override adverse transaction status", () => {
+  assert(check().flags.length === 0, "baseline receipt must be clean");
+  for (const [status, flag] of [
+    ["Processing", "TRANSFER_PENDING"],
+    ["Pending", "TRANSFER_PENDING"],
+    ["Failed", "TRANSFER_STATUS_INVALID"],
+    ["Reversed", "TRANSFER_STATUS_INVALID"],
+    ["Cancelled", "TRANSFER_STATUS_INVALID"],
+    ["Refunded", "TRANSFER_STATUS_INVALID"],
+  ]) {
+    const text = `${RECEIPT}\nTransaction status: ${status}`;
+    assert(check(text).flags.includes(flag), status);
+    assert(!parseSecurityBankReceipt(text).indicators.transferSuccess, status);
+  }
+});
 Deno.test("extracts destination, masked suffix, reference, invoice and transfer amount separately from fees", () => {
   const p = parseSecurityBankReceipt(RECEIPT, {
     typedReference: context.typedReference,
@@ -175,7 +191,7 @@ for (
     [
       "unsuccessful",
       RECEIPT.replace("Bank Transfer Complete", "Bank Transfer Pending"),
-      "TRANSFER_STATUS_UNREADABLE",
+      "TRANSFER_PENDING",
     ],
     [
       "wrong source",

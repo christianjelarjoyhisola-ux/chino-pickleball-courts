@@ -6221,6 +6221,10 @@ function receiptReasonFromFlags(flags) {
     OCR_REREAD_UNAVAILABLE: 'Additional receipt reading unavailable',
     OCR_READINGS_DISAGREE: 'Receipt readings conflict',
     PAYMENT_STATUS_NOT_COMPLETED: 'Transfer is not completed',
+    TRANSFER_PENDING: 'Transfer is still processing or pending',
+    TRANSFER_STATUS_INVALID: 'Transfer failed, was cancelled, or was reversed',
+    TRANSFER_STATUS_UNREADABLE: 'Transfer completion could not be read',
+    PROVIDER_REVIEW_REQUIRED: 'This payment method needs owner review',
     AMOUNT_UNREADABLE: 'Amount unreadable',
     AMOUNT_REVIEW: 'Amount needs owner review',
   };
@@ -8324,7 +8328,7 @@ function syncGcashSharedPanel(method) {
       header: 'BPI → GCash',
       title: 'Send to this GCash / G-Xchange account',
       guide: ['Open the QR in BPI.', 'Pay the exact amount.', 'Use Confirmation No.', 'Upload the BPI receipt.'],
-      help: 'BPI → GCash/G-Xchange. Enter the Confirmation No., not the Transaction Ref. No. Your receipt stays pending for court-owner review.',
+      help: 'BPI → GCash/G-Xchange. Use the Confirmation No. and upload the completed receipt with both references visible. Matching receipts can confirm automatically; unclear details go to the owner for review.',
     },
     gotyme: {
       header: 'GoTyme → GCash',
@@ -8437,10 +8441,10 @@ function syncBookingRefUi(method = $('bPay')?.value || 'gcash') {
   const requiresReference = method === 'maya';
   if ($('mayaReferenceField')) $('mayaReferenceField').hidden = !requiresReference;
   if ($('receiptReferenceHelp')) $('receiptReferenceHelp').textContent = requiresReference
-    ? 'Upload the complete Maya receipt. We’ll check that its Reference ID matches your entry.'
+    ? 'Upload the completed Maya receipt with Transaction details expanded. We’ll check that its Reference ID matches your entry. A processing transfer needs owner review.'
     : method === 'gcash'
       ? 'In GCash, tap Download on the completed receipt and upload that original image. We’ll read the payment reference automatically.'
-      : 'Upload the complete receipt. We’ll read the payment reference automatically.';
+      : 'Upload the original completed receipt with recipient, amount, reference, date, and time visible. We’ll read the payment reference automatically.';
   if (input) {
     input.disabled = !requiresReference;
     input.required = requiresReference;
@@ -10528,7 +10532,7 @@ function renderHostBalancePaymentForm() {
         <input class="fi" id="hostBalancePaymentReference" type="text" value="${esc(state.reference)}" placeholder="${esc(hostBalancePaymentReferencePlaceholder(method))}" maxlength="${paymentRefMaxLength(method)}" autocomplete="off" ${lockedAttempt ? 'disabled' : ''} oninput="syncHostBalancePaymentReference(this)" />
         <div class="host-balance-field-help">${esc(paymentRefHelpText(method))} Do not reuse the deposit reference.</div></div>
       <div class="host-balance-section"><div class="host-balance-section-label">New payment receipt</div>${receiptHtml}
-        ${method === 'gcash' ? '<div class="host-balance-field-help">Use Download on the completed GCash receipt and upload the original image.</div>' : ''}</div>
+        <div class="host-balance-field-help">${method === 'gcash' ? 'Use Download on the completed GCash receipt and upload the original image.' : 'Upload the original completed receipt with recipient, payment amount, references, date, and time visible. Expand transaction details when available.'}</div></div>
       <label class="booking-policy-check host-balance-policy"><input type="checkbox" id="hostBalancePaymentAgree" />
         <span><strong>I agree</strong> this is a new payment for the exact balance shown, its reference and receipt are correct, and all payments are final and non-refundable.</span></label>
       <div class="host-balance-payment-status" id="hostBalancePaymentStatus" role="status" aria-live="polite"></div>
@@ -11468,7 +11472,7 @@ function opPickPay(method) {
                 <button type="button" onclick="clearOpReceipt()" style="background:transparent;border:0;color:var(--red);font-size:.72rem;font-weight:800;cursor:pointer;padding:2px 0">Remove</button>
               </div>
             </div>
-            ${method === 'gcash' ? '<p class="bpay-help">Use Download on the completed GCash receipt and upload the original image with all payment details visible.</p>' : ''}
+            <p class="bpay-help">${method === 'gcash' ? 'Use Download on the completed GCash receipt and upload the original image with all payment details visible.' : 'Upload the original completed receipt with recipient, payment amount, references, date, and time visible. Expand transaction details when available.'}</p>
             <div id="opReceiptStatus" style="display:none;margin-top:7px;padding:7px 8px;border-radius:7px;font-size:.75rem;font-weight:700"></div>
           </div>
         </div>

@@ -42,6 +42,22 @@ const CONTEXT = {
   earlyToleranceMinutes: 2,
 };
 
+Deno.test("BDO Pay completed heading cannot override an adverse transaction status", () => {
+  assert(flagsFor(RECEIPT).length === 0, "baseline receipt must be clean");
+  for (const [status, flag] of [
+    ["Processing", "TRANSFER_PENDING"],
+    ["Pending", "TRANSFER_PENDING"],
+    ["Failed", "TRANSFER_STATUS_INVALID"],
+    ["Reversed", "TRANSFER_STATUS_INVALID"],
+    ["Cancelled", "TRANSFER_STATUS_INVALID"],
+    ["Refunded", "TRANSFER_STATUS_INVALID"],
+  ]) {
+    const text = `${RECEIPT}\nTransaction status: ${status}`;
+    assertFlag(text, flag);
+    assert(!parseBdoPayToGcashReceipt(text).indicators.transferSuccess, status);
+  }
+});
+
 function flagsFor(
   receipt: string,
   context: Partial<typeof CONTEXT> = {},
@@ -168,7 +184,7 @@ Deno.test("BDO Pay requires the exact receipt identity and GCash destination", (
 Deno.test("BDO Pay requires success, Send Money, InstaPay, and invoice evidence", () => {
   assertFlag(
     RECEIPT.replace("Sent!", "Processing"),
-    "TRANSFER_STATUS_UNREADABLE",
+    "TRANSFER_PENDING",
   );
   assertFlag(
     RECEIPT.replace("Send Money via InstaPay", "Transfer via PESONet"),

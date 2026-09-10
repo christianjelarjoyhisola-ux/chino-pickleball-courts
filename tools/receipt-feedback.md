@@ -19,9 +19,45 @@ reads and all payment safeguards still run. Unknown layouts and owner approvals
 cannot teach successful OCR. Both metrics RPCs fail closed on unauthorized calls;
 telemetry capture fails open so an outage cannot block payment processing.
 
+Bank-provider example:
+
+`node tools/receipt-feedback-report.cjs --days=30 --provider=maya --destination=gcash --layout=maya_sent_money_v1 --revision=bank_adaptive_20260910`
+
+The server-only `receipt_preferred_provider_reading_strategy(p_provider,p_destination_provider,p_layout,p_parser_revision)`
+uses the same response and five-distinct-image minimum. It isolates observations
+by sending provider, receiving route, recognized layout, and verifier revision.
+It accepts only the compiled `bank_full_contrast_v1` and `bank_full_enlarged_v1`
+recovery strategies. `bank_original_v1` is measured but is never a recovery
+preference. A clean sample must have a clean server receipt audit, native OCR,
+at least 90% actual payment-field confidence, and all verification checks passed.
+Page-average confidence is retained separately; it is not replaced with a learned
+score. Preferences do not learn identities, expected amounts, references, or
+payment tolerances. All required recovery reads and verification checks still run.
+`bank_gotyme_recipient_pair_v1` is also recorded for GoTyme only; a recipient crop
+cannot become the preferred full-receipt strategy.
+
+Supported provider/route/layout combinations:
+
+| Provider | Destination | Recognized layout |
+| --- | --- | --- |
+| Maya | GCash | `maya_sent_money_v1` |
+| BDO Pay | GCash | `bdopay_sent_instapay_v1` |
+| BPI | GCash | `bpi_transfer_success_v1` |
+| GoTyme | GCash | `gotyme_transferred_v1`, `gotyme_transfer_success_v1` |
+| MariBank | GCash | `maribank_money_sent_v1` |
+| Security Bank method | Security Bank | `securitybank_gcash_transfer_v1` (sent through GCash) |
+
+Unknown layouts and PNB do not produce eligible learning samples. Existing GCash
+preferences remain compatible without historical backfills. The report preserves
+its existing fields and adds `byProvider`, `byRoute`, `byLayout`,
+`byProviderRouteRevision`, and `byProviderStrategy`. Those breakdowns keep
+provider/route/layout boundaries; their totals need not sum to the global
+distinct-image total when the same image was submitted in different scopes.
+
 The optional `--labels-file=.private/receipt-reconciliation-labels.json` evaluates
 the latest OCR analysis matching each independent label. Add layout and revision
-options to scope that evaluation to one release. The file stays private and no
+options to scope that evaluation to one release, and provider/destination options
+for one route. The file stays private and no
 labels are written to the database. Example schema (replace the illustrative hash
 and reference with independently reviewed evidence):
 
@@ -57,8 +93,9 @@ evidence independently. Zero applicable labels produces null rates.
 Validation commands:
 
 * `node --test tools/receipt-feedback-evaluate.test.cjs`
+* `node --test tools/receipt-feedback-report.test.cjs`
 * `node tools/receipt-feedback-test.cjs --rollback-live`
 
-The database test applies the candidate migration inside a transaction, uses
+The database test applies both feedback migrations inside one transaction, uses
 synthetic negative-ID audit rows, and always rolls back. It never updates bookings
 or financial records. Do not replace its rollback with a commit.

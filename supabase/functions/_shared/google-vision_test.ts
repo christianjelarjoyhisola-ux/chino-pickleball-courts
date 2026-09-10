@@ -4,6 +4,7 @@ import {
   googleVisionConfidenceDetails,
   googleVisionGcashEvidence,
   googleVisionLayoutText,
+  googleVisionNativeLines,
   googleVisionOcr,
   googleVisionRecipientCropEvidence,
   googleVisionRecipientRegion,
@@ -285,6 +286,37 @@ function visionPage(words: ReturnType<typeof visionWord>[]) {
   return { width: 1000, height: 2000, blocks: [{ paragraphs: [{ words }] }] };
 }
 
+Deno.test("native line export retains exact word and symbol confidences and rejects incomplete geometry", () => {
+  const word = {
+    ...visionWord("B7942F55EC99", 20, 40),
+    confidence: .95,
+    symbols: [..."B7942F55EC99"].map((text) => ({
+      text,
+      confidence: text === "B" ? .91 : .97,
+    })),
+  };
+  const annotation = {
+    text: word.symbols.map((symbol) => symbol.text).join(""),
+    pages: [visionPage([word])],
+  };
+  const lines = googleVisionNativeLines(annotation, annotation.text)!;
+  assertEquals(lines[0].words[0].confidence, .95, "real word confidence");
+  assertEquals(
+    lines[0].words[0].symbols[0].confidence,
+    .91,
+    "real symbol confidence",
+  );
+  assertEquals(lines[0].words[0].left, 20, "native geometry");
+  assertEquals(
+    googleVisionNativeLines(
+      annotation,
+      annotation.text + "\nUnrepresented status",
+    ),
+    undefined,
+    "incomplete native geometry cannot erase adverse status",
+  );
+});
+
 Deno.test("reconstructs receipt label and value columns without changing native OCR", async () => {
   const text = "Amount\nFee\nTotal\nTrace ID\nReference No.\nDate\n" +
     "P265.00\nP0.00\nP265.00\n941016\nITO260909055941016\n09 Sep 2026 at 1:59 PM";
@@ -315,6 +347,21 @@ Deno.test("reconstructs receipt label and value columns without changing native 
       })) as typeof fetch;
   const result = await googleVisionOcr("test-key", "QUJD", { fetcher });
   assertEquals(result.text, text, "native OCR retained for audit");
+  assertEquals(
+    result.nativeLines?.length,
+    6,
+    "native rows exposed for dedicated-bank evidence",
+  );
+  assertEquals(
+    result.nativeLines?.[0].words[1].text,
+    "P265.00",
+    "native value never inferred",
+  );
+  assertEquals(
+    result.nativeLines?.[0].words[1].confidence,
+    undefined,
+    "no fabricated confidence from page or shape",
+  );
   assertEquals(
     result.layoutText,
     "Amount P265.00\nFee P0.00\nTotal P265.00\nTrace ID 941016\n" +

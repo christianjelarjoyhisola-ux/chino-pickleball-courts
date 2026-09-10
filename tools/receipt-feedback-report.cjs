@@ -21,21 +21,38 @@ function localEnvironment() {
   return env;
 }
 
-async function main() {
-  const args = process.argv.slice(2);
-  if (args.some(arg => !/^--(?:days|layout|revision|labels-file)=/.test(arg))) throw new Error('Usage: node tools/receipt-feedback-report.cjs [--days=30] [--layout=gcash_express_send --revision=gcash_adaptive_20260910] [--labels-file=private-labels.json]');
-  const options = Object.fromEntries(args.map(arg => { const i = arg.indexOf('='); return [arg.slice(2, i), arg.slice(i + 1)]; }));
+function parseReportOptions(args) {
+  if (args.some(arg => !/^--(?:days|provider|destination|layout|revision|labels-file)=/.test(arg))) throw new Error('Usage: node tools/receipt-feedback-report.cjs [--days=30] [--provider=maya --destination=gcash --layout=maya_sent_money_v1 --revision=bank_adaptive_20260910] [--labels-file=private-labels.json]');
+  const options = {};
+  for (const arg of args) {
+    const i = arg.indexOf('='); const key = arg.slice(2, i); const value = arg.slice(i + 1);
+    if (!value.trim() || Object.hasOwn(options, key)) throw new Error(`Supply ${key} once with a nonempty value`);
+    options[key] = value;
+  }
   const days = Number(options.days || '30');
   if (!Number.isInteger(days) || days < 1 || days > 365) throw new Error('days must be an integer from 1 to 365');
   if (Boolean(options.layout) !== Boolean(options.revision)) throw new Error('Supply both layout and revision to inspect a preferred strategy');
+  if (Boolean(options.provider) !== Boolean(options.destination) || (options.provider && !options.layout)) throw new Error('Supply provider, destination, layout and revision together');
+  if (options.provider && !['gcash', 'maya', 'bdopay', 'bpi', 'gotyme', 'maribank', 'securitybank'].includes(options.provider)) throw new Error('Unsupported feedback provider');
+  if (options.destination && !['gcash', 'securitybank'].includes(options.destination)) throw new Error('Unsupported receiving route');
+  for (const key of ['layout', 'revision']) {
+    if (options[key] && (options[key].length > 100 || !/^[a-zA-Z0-9_-]+$/.test(options[key]))) throw new Error(`${key} must be a supported identifier of at most 100 characters`);
+  }
+  return { ...options, days };
+}
+
+async function main() {
+  const options = parseReportOptions(process.argv.slice(2));
   const env = localEnvironment();
   if (!env.SUPABASE_SERVICE_ROLE_KEY) throw new Error('SUPABASE_SERVICE_ROLE_KEY is required in the environment or .env.local');
   const supabase = createClient('https://wskzptxekldhsxluhgos.supabase.co', env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
-  const report = await supabase.rpc('receipt_feedback_report', { p_days: days });
+  const report = await supabase.rpc('receipt_feedback_report', { p_days: options.days });
   if (report.error) throw new Error(`Receipt report unavailable (${report.error.code || 'unknown code'}).`);
   const output = { report: report.data };
   if (options.layout) {
-    const preference = await supabase.rpc('receipt_preferred_reading_strategy', { p_layout: options.layout, p_parser_revision: options.revision });
+    const preference = options.provider
+      ? await supabase.rpc('receipt_preferred_provider_reading_strategy', { p_provider: options.provider, p_destination_provider: options.destination, p_layout: options.layout, p_parser_revision: options.revision })
+      : await supabase.rpc('receipt_preferred_reading_strategy', { p_layout: options.layout, p_parser_revision: options.revision });
     if (preference.error) throw new Error(`Receipt strategy report unavailable (${preference.error.code || 'unknown code'}).`);
     output.preference = preference.data;
   }
@@ -43,7 +60,8 @@ async function main() {
     const labels = validateLabels(JSON.parse(fs.readFileSync(path.resolve(options['labels-file']), 'utf8')));
     const events = [];
     // One latest analysis per independently labeled hash. Booking decisions do
-    // not affect offline correctness. Optional revision/layout scopes apply.
+    // not affect offline correctness. Optional provider/route/revision/layout
+    // scopes apply; GCash without explicit provider preserves legacy usage.
     for (const label of labels) {
       let query = supabase.from('receipt_feedback_events')
         .select('id,receipt_image_hash,booking_ref,event_type,outcome,created_at')
@@ -51,6 +69,12 @@ async function main() {
         .eq('booking_ref', label.bookingRef)
         .order('created_at', { ascending: false }).order('id', { ascending: false }).limit(1);
       if (options.revision) query = query.eq('parser_revision', options.revision).eq('layout', options.layout);
+      if (options.provider) {
+        query = query.eq('provider', options.provider);
+        query = options.provider === 'gcash' && options.destination === 'gcash' && options.layout === 'gcash_express_send'
+          ? query.in('destination_provider', ['gcash', 'unknown'])
+          : query.eq('destination_provider', options.destination);
+      }
       const result = await query;
       if (result.error) throw new Error(`Independent label evaluation unavailable (${result.error.code || 'unknown code'}).`);
       events.push(...(result.data || []));
@@ -60,4 +84,4 @@ async function main() {
   process.stdout.write(JSON.stringify(output, null, 2) + '\n');
 }
 if (require.main === module) main().catch(error => { process.stderr.write(error.message + '\n'); process.exitCode = 1; });
-module.exports = { localEnvironment };
+module.exports = { localEnvironment, parseReportOptions };

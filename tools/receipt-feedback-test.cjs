@@ -18,12 +18,15 @@ async function main() {
     await client.query('begin');
     await client.query("set local lock_timeout = '4s'");
     await client.query("set local statement_timeout = '30s'");
-    const source = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20260910130000_receipt_feedback.sql'), 'utf8');
-    if ((source.match(/^begin;$/gmi) || []).length !== 1 || (source.match(/^commit;$/gmi) || []).length !== 1) throw new Error('Unexpected migration transaction boundaries');
-    await client.query(source.replace(/^begin;$/mi, '').replace(/^commit;$/mi, ''));
-    const tests = fs.readFileSync(path.join(__dirname, '../supabase/tests/receipt_feedback.sql'), 'utf8');
-    await client.query(tests);
-    process.stdout.write('PASS: receipt feedback security, clean-evidence gate, deduplication, fixed strategies, owner outcome separation, aggregate reporting and failure isolation. All test changes rolled back.\n');
+    for (const filename of ['20260910130000_receipt_feedback.sql', '20260910140000_bank_receipt_feedback.sql']) {
+      const source = fs.readFileSync(path.join(__dirname, '../supabase/migrations', filename), 'utf8');
+      if ((source.match(/^begin;$/gmi) || []).length !== 1 || (source.match(/^commit;$/gmi) || []).length !== 1) throw new Error('Unexpected migration transaction boundaries');
+      await client.query(source.replace(/^begin;$/mi, '').replace(/^commit;$/mi, ''));
+    }
+    for (const filename of ['receipt_feedback.sql', 'bank_receipt_feedback.sql']) {
+      await client.query(fs.readFileSync(path.join(__dirname, '../supabase/tests', filename), 'utf8'));
+    }
+    process.stdout.write('PASS: GCash and bank feedback security, provider/route/layout isolation, native-confidence gate, distinct-image threshold, fixed strategies, owner outcome separation, compatible reporting and failure isolation. All test changes rolled back.\n');
   } finally {
     if (connected) { await client.query('rollback'); await client.end(); }
   }

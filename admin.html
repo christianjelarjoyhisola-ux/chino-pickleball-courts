@@ -7825,7 +7825,7 @@ function receiptReadingHistoryRows(b){
   }
   const recovery = ex.readingRecovery;
   if (recovery?.attempted === true) {
-    const readings = Array.isArray(recovery.readings) ? recovery.readings.filter(reading => reading && typeof reading === 'object') : [];
+    const readings = Array.isArray(recovery.readings) ? recovery.readings.filter(reading => reading && typeof reading === 'object' && reading.outcome !== 'skipped') : [];
     const serviceUnavailable = /unavailable|failed|timeout|transport|network/.test(String(recovery.reason || ''));
     const disagreed = /disagree|conflict|changed/.test(String(recovery.reason || ''));
     const readingResult = recovery.accepted === true
@@ -7894,6 +7894,7 @@ function receiptDetailsHtml(b){
   const approvalConfidence = hasApprovalConfidence ? `${Math.round(approvalConfidenceNumber * 100)}%` : '--';
   const approvalConfidenceSource = ({
     gcash_payment_fields: 'GCash payment details',
+    bank_payment_fields: 'Payment details for this method',
   })[String(ex.approvalConfidenceSource || '')] || 'Receipt OCR';
   const amountParse = parserLabel
     ? `${parserLabel} · ${ex.amountReliable === true ? 'reliable' : 'review'}`

@@ -1,8 +1,20 @@
 import {
+  isDedicatedReceiptProvider,
   parseProviderReceipt,
   UnsupportedReceiptProviderError,
   verifyProviderReceipt,
 } from "./index.ts";
+
+Deno.test("PNB remains owner-review-only until its real receipt fixtures are validated", () => {
+  assert(!isDedicatedReceiptProvider("pnb"), "PNB must not enter dedicated auto-approval");
+  let error: unknown;
+  try {
+    parseProviderReceipt("pnb", "PNB\nTransfer successful");
+  } catch (caught) {
+    error = caught;
+  }
+  assert(error instanceof UnsupportedReceiptProviderError, "PNB must not use another bank parser");
+});
 
 function assertEquals(
   actual: unknown,
@@ -61,6 +73,24 @@ InstaPay Reference No 987654321234
 2026-08-31 10:42 AM
 via InstaPay
 `;
+
+Deno.test("GoTyme and MariBank success phrases cannot override adverse status", () => {
+  for (const [provider, fixture] of [["gotyme", GOTYME_OCR], ["maribank", MARIBANK_OCR]]) {
+    assertEquals(verifyProviderReceipt(parseProviderReceipt(provider, fixture), CONTEXT).flags, [], `${provider} baseline`);
+    for (const [status, flag] of [
+      ["Processing", "TRANSFER_PENDING"],
+      ["Pending", "TRANSFER_PENDING"],
+      ["Failed", "TRANSFER_STATUS_INVALID"],
+      ["Reversed", "TRANSFER_STATUS_INVALID"],
+      ["Cancelled", "TRANSFER_STATUS_INVALID"],
+      ["Refunded", "TRANSFER_STATUS_INVALID"],
+    ]) {
+      const parsed = parseProviderReceipt(provider, `${fixture}\nTransaction status: ${status}`);
+      const verified = verifyProviderReceipt(parsed, CONTEXT);
+      assert(verified.flags.includes(flag), `${provider} ${status}: ${verified.flags}`);
+    }
+  }
+});
 
 const GCASH_OCR = `
 CHINO PICKLEBALL COURTS

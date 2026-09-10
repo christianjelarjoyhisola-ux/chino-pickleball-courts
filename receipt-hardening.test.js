@@ -51,6 +51,21 @@ test('saved OCR service failures and conflicting readings have different owner e
   assert.doesNotMatch(admin, /<button[^>]*>[\s\n]*Recheck Receipt/i);
 });
 
+test('bank reading history omits skipped views and reports native confidence honestly', () => {
+  const rows = readingHistoryRows({receiptExtracted:{provider:'maya',readingRecovery:{
+    attempted:true,accepted:true,reason:'consistent_readings',readings:[
+      {strategy:'bank_full_contrast_v1',outcome:'clean',confidence:.92},
+      {strategy:'bank_full_enlarged_v1',outcome:'clean',confidence:.94},
+      {strategy:'unused',outcome:'skipped'},
+    ],
+  }}});
+  const values=Object.fromEntries(rows.map(([label,value])=>[label,value]));
+  assert.equal(values['Additional Reading Attempts'],'2');
+  assert.equal(values['Additional OCR Confidence'],'92% / 94%');
+  assert.equal(values['Additional Reading'],'Additional reading matched');
+  assert.match(read('admin.html'), /bank_payment_fields: 'Payment details for this method'/);
+});
+
 test('dedicated Maya review keeps recipient and reference failures visible to staff', () => {
   const vm = require('node:vm');
   const admin = read('admin.html');

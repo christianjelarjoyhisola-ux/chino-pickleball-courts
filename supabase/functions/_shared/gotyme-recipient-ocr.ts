@@ -1,6 +1,7 @@
 import { Image } from "https://deno.land/x/imagescript@1.2.17/mod.ts";
 import {
   googleVisionOcr,
+  type GoogleVisionOcrResult,
   receiptImageDimensions,
   receiptImageSafeToDecode,
 } from "./google-vision.ts";
@@ -52,6 +53,8 @@ export async function rereadGotymeRecipient(
     primaryRecipient: primary.recipient,
     observations: [],
     region: region || null,
+    nativeRead: undefined as GoogleVisionOcrResult | undefined,
+    enlargedRead: undefined as GoogleVisionOcrResult | undefined,
   });
   if (primary.provider !== "gotyme" || !visionKey) {
     return unchanged("refinement_unavailable");
@@ -77,19 +80,21 @@ export async function rereadGotymeRecipient(
       return unchanged("recipient_crop_too_large");
     }
     const ocr = options.ocr || googleVisionOcr;
-    const native = await ocr(visionKey, base64(nativePng), {
-      featureType: "TEXT_DETECTION",
-      timeoutMs: 10_000,
-    });
-    const enlarged = await ocr(visionKey, base64(enlargedPng), {
-      featureType: "TEXT_DETECTION",
-      timeoutMs: 10_000,
-    });
+    const [native, enlarged] = await Promise.all(
+      [nativePng, enlargedPng].map((png) =>
+        ocr(visionKey, base64(png), {
+          featureType: "DOCUMENT_TEXT_DETECTION",
+          timeoutMs: 10_000,
+        })
+      ),
+    );
     return {
       ...refineGotymeRecipient(primary, { native, enlarged }),
       attempted: true,
       primaryRecipient: primary.recipient,
       region,
+      nativeRead: native,
+      enlargedRead: enlarged,
     };
   } catch {
     // A failed optional reread must never erase the original receipt evidence.

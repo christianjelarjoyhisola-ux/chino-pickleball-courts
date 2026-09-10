@@ -168,6 +168,8 @@ async function dispatchOcr(provider, visionResult, gaps = []) {
   const observed = [];
   const run = vm.runInNewContext(ocrDispatcher + '\nrunOCR;', {
     googleVisionOcr: async () => visionResult,
+    isBankAdaptiveProvider: provider => ['bdopay','maya','bpi','gotyme','maribank','securitybank'].includes(provider),
+    bankOcrText: read => read.layoutText || read.nativeLines?.map(line => line.text).join('\n') || read.text,
     ocrCriticalGaps: text => { observed.push(text); return gaps; },
     errMsg: error => error.message,
     console: { error() {} },
@@ -217,8 +219,8 @@ test('GCash uses its validated payment layout and keeps the original page score 
   assert.deepEqual(observed, [layout]);
 });
 
-test('providers without an applicable validated layout keep their original OCR ordering', async () => {
-  for (const provider of ['gcash', 'bdopay', 'maya', 'bpi', 'maribank', 'pnb', 'securitybank']) {
+test('providers without an applicable dedicated layout keep their original OCR ordering', async () => {
+  for (const provider of ['gcash', 'pnb']) {
     const { result, observed } = await dispatchOcr(provider, {
       text: 'Original receipt', layoutText: 'Reordered receipt', confidence: 0.95, confidenceSource: 'native',
     });
@@ -226,6 +228,22 @@ test('providers without an applicable validated layout keep their original OCR o
     assert.equal(result.originalText, 'Original receipt', provider);
     assert.equal(result.layoutApplied, false, provider);
     assert.deepEqual(observed, ['Original receipt']);
+  }
+});
+
+test('all dedicated banks use validated rows immediately and preserve the untouched original', async () => {
+  for (const provider of ['bdopay','maya','bpi','gotyme','maribank','securitybank']) {
+    const { result, observed } = await dispatchOcr(provider, {
+      text: 'Amount\nFee\n265.00\n10.00', layoutText: 'Amount 265.00\nFee 10.00',
+      confidence:.91, confidenceSource:'native',
+    });
+    assert.equal(result.text,'Amount 265.00\nFee 10.00');
+    assert.equal(result.originalText,'Amount\nFee\n265.00\n10.00');
+    assert.deepEqual(observed,['Amount 265.00\nFee 10.00']);
+    assert.equal(result.confidence,.91);
+    const fallback=await dispatchOcr(provider,{text:'Original receipt',confidence:.91,confidenceSource:'native'});
+    assert.equal(fallback.result.text,'Original receipt');
+    assert.equal(fallback.result.layoutApplied,false);
   }
 });
 

@@ -2,6 +2,7 @@ import {
   extractReceiptAmount,
   type ReceiptAmountExtraction,
 } from "../receipt-amount.ts";
+import { readReceiptTransferStatus } from "./transfer-status.ts";
 import type {
   BankReceiptTimestamp,
   ReceiptDedupeKey,
@@ -47,6 +48,8 @@ export type BdoPayReceiptParse = {
     providerBrand: boolean;
     competingProviderBrand: boolean;
     transferSuccess: boolean;
+    failureStatus: boolean;
+    pendingStatus: boolean;
     sendMoney: boolean;
     destinationGcash: boolean;
     instaPay: boolean;
@@ -408,6 +411,7 @@ export function parseBdoPayToGcashReceipt(
 ): BdoPayReceiptParse {
   const lines = linesOf(rawText);
   const text = lines.join("\n");
+  const status = readReceiptTransferStatus(text);
   const referenceResult = parseReference(lines, options.typedReference || "");
   const invoiceResult = parseInvoice(lines);
   const amount = failClosedOnConflictingAmounts(
@@ -457,7 +461,9 @@ export function parseBdoPayToGcashReceipt(
       competingProviderBrand:
         /\bsent\s+via\s+(?:gcash|bpi|maya|gotyme|go\s*tyme|maribank|mari\s*bank)\b/i
           .test(text) || /\btransfer\s+successful!?\b/i.test(text),
-      transferSuccess: lines.some((line) => /^sent\s*!?$/i.test(line)),
+      transferSuccess: !status.failureStatus && !status.pendingStatus &&
+        lines.some((line) => /^sent\s*!?$/i.test(line)),
+      ...status,
       sendMoney: /\bsend\s+money\b/i.test(text),
       destinationGcash: /\bg-?xchange\b/i.test(text) && /\bgcash\b/i.test(text),
       instaPay: /\binsta\s*pay\b/i.test(text),
@@ -483,7 +489,10 @@ export function verifyBdoPayToGcashReceipt(
   if (parsed.indicators.competingProviderBrand) {
     addUnique(flags, "METHOD_MISMATCH");
   }
-  if (!parsed.indicators.transferSuccess || !parsed.indicators.sendMoney) {
+  if (parsed.indicators.failureStatus) addUnique(flags, "TRANSFER_STATUS_INVALID");
+  if (parsed.indicators.pendingStatus) addUnique(flags, "TRANSFER_PENDING");
+  if ((!parsed.indicators.transferSuccess || !parsed.indicators.sendMoney) &&
+    !parsed.indicators.failureStatus && !parsed.indicators.pendingStatus) {
     addUnique(flags, "TRANSFER_STATUS_UNREADABLE");
   }
   if (!parsed.indicators.destinationGcash) {

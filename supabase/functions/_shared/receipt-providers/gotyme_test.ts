@@ -57,6 +57,23 @@ function verify(text = OCR, context = CONTEXT) {
   return verifyGotymeToGcashReceipt(parseGotymeToGcashReceipt(text), context);
 }
 
+Deno.test("GoTyme transferred heading cannot override an adverse transaction status", () => {
+  equal(verify().flags, [], "baseline receipt must be clean");
+  for (const [status, flag] of [
+    ["Processing", "TRANSFER_PENDING"],
+    ["Pending", "TRANSFER_PENDING"],
+    ["Failed", "TRANSFER_STATUS_INVALID"],
+    ["Reversed", "TRANSFER_STATUS_INVALID"],
+    ["Cancelled", "TRANSFER_STATUS_INVALID"],
+    ["Refunded", "TRANSFER_STATUS_INVALID"],
+  ]) {
+    const text = `${OCR}\nTransaction status: ${status}`;
+    includes(verify(text).flags, flag, status);
+    equal(parseGotymeToGcashReceipt(text).indicators.transferSuccess, false, status);
+  }
+  equal(verify(`${OCR}\nProcessing time: Instant`).flags, [], "metadata label remains valid");
+});
+
 Deno.test("GoTyme QR transfer extracts amount, destination, full reference, trace, and Manila date", () => {
   const parsed = parseGotymeToGcashReceipt(OCR);
   equal(
@@ -206,7 +223,7 @@ Deno.test("GoTyme logo's narrow InstaFay OCR spelling retains all other verifica
   equal(verify(text).flags, [], "known stylized logo OCR spelling");
   includes(
     verify(text.replace("Transferred", "Transfer pending")).flags,
-    "TRANSFER_STATUS_UNREADABLE",
+    "TRANSFER_PENDING",
     "logo spelling never replaces successful status",
   );
 });
@@ -324,12 +341,12 @@ Deno.test("GoTyme wrong amount, date, stale time, and unsuccessful status remain
   );
   includes(
     verify(OCR.replace("Transferred", "Transfer pending")).flags,
-    "TRANSFER_STATUS_UNREADABLE",
+    "TRANSFER_PENDING",
     "pending status",
   );
   includes(
     verify(`${OCR}\nTransfer failed`).flags,
-    "TRANSFER_STATUS_UNREADABLE",
+    "TRANSFER_STATUS_INVALID",
     "conflicting failure status",
   );
 });

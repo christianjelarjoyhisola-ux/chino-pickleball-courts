@@ -2,6 +2,7 @@ import {
   extractReceiptAmount,
   type ReceiptAmountExtraction,
 } from "../receipt-amount.ts";
+import { readReceiptTransferStatus } from "./transfer-status.ts";
 import type {
   BankReceiptTimestamp,
   ReceiptDedupeKey,
@@ -45,6 +46,8 @@ export type BpiReceiptParse = {
     providerBrand: boolean;
     competingProviderBrand: boolean;
     transferSuccess: boolean;
+    failureStatus: boolean;
+    pendingStatus: boolean;
     destinationGcash: boolean;
     instaPay: boolean;
     qrCodeRecipient: boolean;
@@ -345,6 +348,7 @@ export function parseBpiToGcashReceipt(
 ): BpiReceiptParse {
   const lines = linesOf(rawText);
   const text = lines.join("\n");
+  const status = readReceiptTransferStatus(text);
   const confirmation = uniqueField(
     lines,
     /^confirmation\s*(?:no\.?|number|#)\s*[:#\-–—]?\s*(.*)$/i,
@@ -395,7 +399,9 @@ export function parseBpiToGcashReceipt(
       competingProviderBrand:
         /\bsent\s+via\s+(?:gcash|maya|bdo|gotyme|go\s*tyme|maribank|mari\s*bank)\b/i
           .test(text),
-      transferSuccess: /\btransfer\s+successful!?\b/i.test(text),
+      transferSuccess: !status.failureStatus && !status.pendingStatus &&
+        /\btransfer\s+successful!?\b/i.test(text),
+      ...status,
       destinationGcash: /\bgcash\s*\/\s*g-?xchange\b/i.test(text),
       instaPay: /\binsta\s*pay\b/i.test(text),
       qrCodeRecipient: /\(\s*qr\s*code\s*\)/i.test(text),
@@ -422,7 +428,10 @@ export function verifyBpiToGcashReceipt(
   if (parsed.indicators.competingProviderBrand) {
     addUnique(flags, "METHOD_MISMATCH");
   }
-  if (!parsed.indicators.transferSuccess) {
+  if (parsed.indicators.failureStatus) addUnique(flags, "TRANSFER_STATUS_INVALID");
+  if (parsed.indicators.pendingStatus) addUnique(flags, "TRANSFER_PENDING");
+  if (!parsed.indicators.transferSuccess && !parsed.indicators.failureStatus &&
+    !parsed.indicators.pendingStatus) {
     addUnique(flags, "TRANSFER_STATUS_UNREADABLE");
   }
   if (!parsed.indicators.destinationGcash) {

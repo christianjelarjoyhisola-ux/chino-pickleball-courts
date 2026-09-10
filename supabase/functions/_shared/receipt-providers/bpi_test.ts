@@ -38,6 +38,22 @@ const CONTEXT = {
   earlyToleranceMinutes: 2,
 };
 
+Deno.test("BPI successful heading cannot override an adverse transaction status", () => {
+  assert(flagsFor(RECEIPT).length === 0, "baseline receipt must be clean");
+  for (const [status, flag] of [
+    ["Processing", "TRANSFER_PENDING"],
+    ["Pending", "TRANSFER_PENDING"],
+    ["Failed", "TRANSFER_STATUS_INVALID"],
+    ["Reversed", "TRANSFER_STATUS_INVALID"],
+    ["Cancelled", "TRANSFER_STATUS_INVALID"],
+    ["Refunded", "TRANSFER_STATUS_INVALID"],
+  ]) {
+    const text = `${RECEIPT}\nTransaction status: ${status}`;
+    assertFlag(text, flag);
+    assert(!parseBpiToGcashReceipt(text).indicators.transferSuccess, status);
+  }
+});
+
 function flagsFor(
   receipt: string,
   context: Partial<typeof CONTEXT> = {},
@@ -161,7 +177,7 @@ Deno.test("BPI verifier rejects stale, premature, and wrong-date evidence", () =
 Deno.test("BPI verifier requires successful BPI and InstaPay evidence only", () => {
   assertFlag(
     RECEIPT.replace("Transfer successful!", "Transfer processing"),
-    "TRANSFER_STATUS_UNREADABLE",
+    "TRANSFER_PENDING",
   );
   assertFlag(
     RECEIPT.replace("Sent via BPI", "Sent via Maya"),

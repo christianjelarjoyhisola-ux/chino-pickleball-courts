@@ -86,12 +86,12 @@ Deno.test("focused OCR uses original-size and doubled PNG pixels without expecte
     {
       key: "test-key",
       dimensions: { width: 160, height: 60 },
-      options: { featureType: "TEXT_DETECTION", timeoutMs: 10000 },
+      options: { featureType: "DOCUMENT_TEXT_DETECTION", timeoutMs: 10000 },
     },
     {
       key: "test-key",
       dimensions: { width: 320, height: 120 },
-      options: { featureType: "TEXT_DETECTION", timeoutMs: 10000 },
+      options: { featureType: "DOCUMENT_TEXT_DETECTION", timeoutMs: 10000 },
     },
   ]);
   assertEquals(result.accepted, true);

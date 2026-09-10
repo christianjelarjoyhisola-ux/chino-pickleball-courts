@@ -99,6 +99,38 @@ describing this workflow as independently authenticated proof of payment.
 
 ## Review and receipt guidance
 
+### Dedicated bank and wallet recovery
+
+Revision `bank_adaptive_20260910` extends automatic recovery to the existing
+Maya → GCash, BDO Pay → GCash, BPI → GCash, GoTyme → GCash,
+MariBank → GCash, and GCash → Security Bank formats. Each method retains its
+own parser, required transaction identifiers, recipient matching, principal
+versus fee rules, time window, and duplicate-reference protection.
+
+The shared OCR response retains native word geometry and confidence. Bank
+payment-field evidence is stored in `paymentFieldEvidence`, and its real
+approval confidence is separate from `originalOcrConfidence`. The verifier
+does not infer confidence from a matching expected amount or typed reference.
+A complete clean original read needs no recovery. Uncertain supported layouts
+can use two bounded full-image readings; both must pass the dedicated checks
+and agree on the observed payment identity. Trustworthy original values and
+explicit adverse status cannot be overwritten by a majority vote.
+
+Pending, processing, failed, cancelled, reversed and refunded transfers stay
+for owner review even if another part of the receipt says "sent" or
+"successful". A labelled "Processing time: Instant" describes transfer-speed
+metadata and is not a pending transaction status.
+
+Private reading preferences are isolated by provider, destination, supported
+layout, and verifier revision. They select among tested strategies only;
+owner decisions do not rewrite parsing or financial rules. See
+`tools/receipt-feedback.md` for aggregate reporting and independently labelled
+correctness evaluation.
+
+PNB remains owner-review-only. There is no validated PNB receipt fixture yet;
+`supabase/functions/_shared/receipt-providers/PNB-RECEIPT-FIXTURES.md` describes the evidence required before implementing
+and enabling its own dedicated verifier.
+
 Ask GCash customers to use **Download** on the completed receipt and upload
 that original image with the recipient, amount, reference, date, and time
 visible. Preserve the uploaded receipt while checking; a failed OCR request

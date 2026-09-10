@@ -11,6 +11,8 @@ export type GoogleVisionOcrResult = {
   confidenceSource: "native" | "heuristic" | "none";
   gcashEvidence?: GoogleVisionGcashEvidence;
   recipientCropEvidence?: GoogleVisionRecipientCropEvidence;
+  /** Native observed rows only; no merchant or player values are inserted. */
+  nativeLines?: GoogleVisionNativeLine[];
   requestMetrics?: GoogleVisionRequestMetrics;
 };
 
@@ -18,6 +20,21 @@ export type GoogleVisionRequestMetrics = {
   calls: number;
   retries: number;
   durationMs: number;
+};
+
+export type GoogleVisionNativeWord = {
+  text: string;
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+  confidence?: number;
+  symbols: Array<{ text: string; confidence?: number }>;
+};
+export type GoogleVisionNativeLine = {
+  text: string;
+  page: number;
+  words: GoogleVisionNativeWord[];
 };
 
 export type GoogleVisionRecipientCropEvidence = {
@@ -530,6 +547,37 @@ export function googleVisionLayoutText(
   originalText: string,
 ): string | undefined {
   return googleVisionLayout(annotation, originalText)?.text;
+}
+
+function nativeLinesFromLayout(
+  layout?: LayoutResult,
+): GoogleVisionNativeLine[] | undefined {
+  return layout?.pageRows.flatMap((rows, page) =>
+    rows.map((row) => ({
+      text: row.text || "",
+      page,
+      words: row.words.map((
+        { text, left, right, top, bottom, confidence, symbols },
+      ) => ({
+        text,
+        left,
+        right,
+        top,
+        bottom,
+        confidence,
+        symbols,
+      })),
+    }))
+  );
+}
+
+export function googleVisionNativeLines(
+  annotation: Record<string, unknown> | null,
+  originalText: string,
+): GoogleVisionNativeLine[] | undefined {
+  return nativeLinesFromLayout(
+    googleVisionLayout(annotation, originalText, true),
+  );
 }
 
 function recipientRegionFromLayout(
@@ -1112,6 +1160,9 @@ export async function googleVisionOcr(
       layout || googleVisionLayout(fullText, text, true),
     ),
     recipientCropEvidence: recipientCropEvidenceFromLayout(layout),
+    nativeLines: nativeLinesFromLayout(
+      layout || googleVisionLayout(fullText, text, true),
+    ),
     requestMetrics: requestMetrics(),
   };
 }
