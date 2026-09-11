@@ -115,11 +115,13 @@ test('premium TV promotes authoritative tomorrow slots every five seconds withou
   assert.match(promo, /DB\.getAvailabilityGraphic\(date, \[\]\)/, 'authoritative availability RPC is refreshed before display');
   assert.match(promo, /court\.slots\.slice[\s\S]*?slot\.label[\s\S]*?>Available</);
   assert.match(promo, /Book your court for tomorrow/);
-  assert.match(promo, /PaddleRageQRCode\.toCanvas[\s\S]*?chinopickleballcourt\.com/);
+  assert.match(promo, /PaddleRageQRCode\.toCanvas[\s\S]*?www\.chinopickleballcourt\.com/);
   assert.doesNotMatch(promo, /price|fullName|displayName|customer|email/i);
   assert.match(lifecycle, /if \(!_courtActivityTvPromoActive\)[\s\S]*?_courtActivityTvPage \+= 1/, 'today paging pauses during the promotion');
   assert.match(lifecycle, /clearInterval\(_courtActivityTvPromoScheduleTimer\)[\s\S]*?clearTimeout\(_courtActivityTvPromoEndTimer\)/, 'closing TV clears every promotion timer');
   assert.match(css, /\.ca-tv-promo-grid\s*\{[^}]*grid-template-columns:repeat\(2,minmax\(0,1fr\)\)[^}]*grid-template-rows:repeat\(2,minmax\(0,1fr\)\)/);
   assert.match(css, /\.ca-tv-promo-slots\s*\{[^}]*grid-template-columns:repeat\(3,minmax\(0,1fr\)\)[^}]*grid-template-rows:repeat\(2,minmax\(0,1fr\)\)/);
+  assert.match(css, /\.ca-tv-promo-hero h2\s*\{[^}]*font-family:'DM Sans',sans-serif[^}]*line-height:1\.08[^}]*text-transform:none/);
+  assert.match(css, /\.ca-tv-promo-cta small\s*\{[^}]*font-size:clamp\(16px,1\.25vw,23px\)[^}]*font-weight:850/);
   assert.match(css, /@media\(prefers-reduced-motion:reduce\)[\s\S]*?animation:none/);
 });
