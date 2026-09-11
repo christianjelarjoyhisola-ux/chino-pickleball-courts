@@ -205,7 +205,41 @@ Deno.test("high-confidence wrong amount, recipient, reference and pending status
   }
 });
 
-Deno.test("uncertain or failed alternatives never create consensus or native confidence", async () => {
+Deno.test("one clean field reading can be confirmed by an exact independent native original", async () => {
+  const primary = read();
+  primary.confidence = .817149;
+  delete primary.gcashEvidence;
+  const incomplete = read();
+  incomplete.gcashEvidence!.fields.recipientName!.confidence = .8;
+  let calls = 0;
+  const result = await recoverGcashReceipt(
+    await bytes(),
+    original(primary),
+    context,
+    "test-key",
+    {
+      ocr: async () => ++calls === 1 ? incomplete : read({ confidence: .9194 }),
+    },
+  );
+  eq(
+    result.accepted,
+    true,
+    "clean native payment fields are independently confirmed",
+  );
+  eq(
+    result.reason,
+    "original_and_field_reading_agree",
+    "audit identifies the two-reading acceptance policy",
+  );
+  eq(
+    result.selected?.approval.confidence,
+    .9194,
+    "field confidence is retained",
+  );
+  eq(calls, 2, "both transformed views are still attempted");
+});
+
+Deno.test("a weak original plus uncertain or failed alternatives never creates consensus", async () => {
   const missing = read();
   delete missing.gcashEvidence!.fields.reference;
   const heuristic = read();
@@ -219,9 +253,11 @@ Deno.test("uncertain or failed alternatives never create consensus or native con
     ]
   ) {
     let calls = 0;
+    const source = weak();
+    source.read.confidence = .79;
     const result = await recoverGcashReceipt(
       await bytes(),
-      weak(),
+      source,
       context,
       "test-key",
       { ocr: async () => ++calls === 1 ? read() : bad },
@@ -230,9 +266,11 @@ Deno.test("uncertain or failed alternatives never create consensus or native con
     eq(calls, 2, "bounded two views");
   }
   let calls = 0;
+  const source = weak();
+  source.read.confidence = .79;
   const failed = await recoverGcashReceipt(
     await bytes(),
-    weak(),
+    source,
     context,
     "test-key",
     {

@@ -61,7 +61,7 @@ export type GcashRecoveryResult = {
   reason: string;
   selected?: GcashRecoverySelected;
   audit: {
-    version: "gcash_adaptive_v1";
+    version: "gcash_adaptive_v2";
     attempted: boolean;
     accepted: boolean;
     strategy?: GcashRecoveryStrategy;
@@ -75,6 +75,22 @@ export type GcashRecoveryResult = {
 function nativeScore(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0.9 &&
     value <= 1;
+}
+
+const GCASH_CONFIRMING_READ_MIN_NATIVE_CONFIDENCE = 0.8;
+
+function originalConfirmsCleanReading(
+  original: GcashRecoveryOriginal,
+  originalVerificationFlags: string[],
+  candidate: GcashRecoverySelected,
+): boolean {
+  return original.read.confidenceSource === "native" &&
+    Number.isFinite(original.read.confidence) &&
+    original.read.confidence >= GCASH_CONFIRMING_READ_MIN_NATIVE_CONFIDENCE &&
+    original.read.confidence <= 1 &&
+    originalVerificationFlags.length === 0 &&
+    !gcashReceiptHasIncompleteStatus(original.read.text) &&
+    signature(original.parsed) === signature(candidate.parsed);
 }
 
 export function gcashReceiptHasIncompleteStatus(text: string): boolean {
@@ -341,7 +357,7 @@ export async function recoverGcashReceipt(
     reason,
     ...(selected ? { selected } : {}),
     audit: {
-      version: "gcash_adaptive_v1",
+      version: "gcash_adaptive_v2",
       attempted: readings.some((item) => item.outcome !== "skipped"),
       accepted: !!selected,
       ...(selected ? { strategy: selected.strategy } : {}),
@@ -478,6 +494,23 @@ export async function recoverGcashReceipt(
   const clean = candidates.filter((candidate) =>
     candidate.selected && candidate.reading.outcome === "clean"
   );
+  if (clean.length === 1) {
+    const selected = clean[0].selected!;
+    // A phone screenshot can make the monochrome view lose light-blue labels
+    // even when the color/enlarged view has complete native confidence for all
+    // six payment fields. Accept that field-complete view only when the native
+    // original read independently passes every hard rule and reproduces the
+    // exact same reference, amount, timestamp, phone, and masked name.
+    if (
+      originalConfirmsCleanReading(
+        original,
+        originalVerification.flags,
+        selected,
+      )
+    ) {
+      return result("original_and_field_reading_agree", selected);
+    }
+  }
   if (clean.length !== 2) return result("recovery_incomplete");
   if (
     signature(clean[0].selected!.parsed) !==
