@@ -285,7 +285,10 @@ function verifyGcashReceipt(
   }
   if (recipientComparison.phone === "mismatch") {
     addUnique(flags, "WRONG_GCASH_NUMBER");
-  } else if (!isGcashRecipientAccepted(recipientComparison)) {
+  } else if (
+    recipientComparison.phone !== "exact" &&
+    recipientComparison.phone !== "last4_only"
+  ) {
     addUnique(flags, "NUMBER_UNREADABLE");
   }
   if (recipientComparison.name === "mismatch") {

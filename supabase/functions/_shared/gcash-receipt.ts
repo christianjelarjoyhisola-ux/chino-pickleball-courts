@@ -224,6 +224,48 @@ function uniqueReferenceCandidates(
   return [...byValue.values()];
 }
 
+function leadingNumericCluster(value: string): { raw: string; value: string } | null {
+  const match = String(value || "").match(/^\s*(\d(?:[\d \t-]*\d)?)(?=\s*[A-Za-z]|\s*$)/);
+  if (!match) return null;
+  const raw = match[1].trim();
+  const digits = digitsOnly(raw);
+  return digits ? { raw, value: digits } : null;
+}
+
+/**
+ * GCash wraps long references inside a narrow left-hand column. Vision can
+ * therefore place the first digits beside "Ref No." and the remainder on one
+ * or two immediately following rows, while the date occupies the right-hand
+ * side of the same rows. Recover only that labelled, leading-digit sequence.
+ */
+function wrappedLabeledReference(
+  lines: string[],
+  labelLineIndex: number,
+  afterLabel: string,
+): ReferenceCandidate | null {
+  const chunks: Array<{ raw: string; value: string; lineIndex: number }> = [];
+  const first = leadingNumericCluster(afterLabel);
+  if (first) chunks.push({ ...first, lineIndex: labelLineIndex });
+
+  let nextIndex = labelLineIndex;
+  while (chunks.reduce((sum, chunk) => sum + chunk.value.length, 0) < 13) {
+    const candidateIndex = nextNonEmptyLineIndex(lines, nextIndex);
+    if (candidateIndex == null || candidateIndex > labelLineIndex + 2) break;
+    const next = leadingNumericCluster(lines[candidateIndex]);
+    if (!next) break;
+    chunks.push({ ...next, lineIndex: candidateIndex });
+    nextIndex = candidateIndex;
+  }
+
+  const value = chunks.map((chunk) => chunk.value).join("");
+  if (chunks.length < 2 || value.length !== 13) return null;
+  return {
+    raw: chunks.map((chunk) => chunk.raw).join(" "),
+    value,
+    lineIndex: labelLineIndex,
+  };
+}
+
 function parseReference(
   lines: string[],
   typedReference: string | undefined,
@@ -245,6 +287,11 @@ function parseReference(
     }
 
     if (labeled.some((candidate) => candidate.lineIndex === lineIndex)) return;
+    const wrapped = wrappedLabeledReference(lines, lineIndex, afterLabel);
+    if (wrapped) {
+      labeled.push(wrapped);
+      return;
+    }
     const nextIndex = nextNonEmptyLineIndex(lines, lineIndex);
     if (nextIndex == null) return;
     for (const candidate of numericClusters(lines[nextIndex])) {

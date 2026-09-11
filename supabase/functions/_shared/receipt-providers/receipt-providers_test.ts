@@ -174,6 +174,22 @@ Deno.test("GCash masked recipient acceptance preserves payment and identity chec
   }
 });
 
+Deno.test("GCash does not call a matched visible phone suffix unreadable", () => {
+  const parsed = parseProviderReceipt(
+    "gcash",
+    MASKED_GCASH_OCR.replace("KR••••E L•• C.", "KRE L. C."),
+  );
+  const evidence = verifyProviderReceipt(parsed, MASKED_GCASH_CONTEXT);
+  assert(
+    evidence.flags.includes("RECEIVER_NAME_MISMATCH"),
+    "collapsed recipient mask remains pending for name review",
+  );
+  assert(
+    !evidence.flags.includes("NUMBER_UNREADABLE"),
+    "visible matching phone suffix is not mislabeled unreadable",
+  );
+});
+
 const REORDERED_GCASH_OCR = `
 1:36 1
 Amount

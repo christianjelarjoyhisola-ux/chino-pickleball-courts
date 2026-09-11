@@ -360,6 +360,18 @@ Deno.test("normalizes a spaced labeled GCash reference", () => {
   assertEquals(parsed.reference.source, "ref_label", "spaced ref source");
 });
 
+Deno.test("joins a GCash reference wrapped below its label beside the date column", () => {
+  const parsed = parseGcashReceipt(
+    USER_GCASH_OCR.replace(
+      "Ref No. 2043350406766",
+      "Ref No. 1044 923 Sep 11, 2026 11:55\n718392 AM",
+    ),
+  );
+  assertEquals(parsed.reference.value, "1044923718392", "wrapped reference");
+  assertEquals(parsed.reference.source, "ref_label", "labelled reference source");
+  assertEquals(parsed.reference.confidence, "high", "labelled reference confidence");
+});
+
 Deno.test("keeps OCR evidence independent from a mismatched typed reference", () => {
   const parsed = parseGcashReceipt(USER_GCASH_OCR, {
     typedReference: "2043350406767",

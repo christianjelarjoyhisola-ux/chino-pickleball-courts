@@ -903,6 +903,71 @@ Deno.test("GCash field confidence uses observed payment words while preserving n
   );
 });
 
+Deno.test("GCash Send Money geometry without an Express Send heading retains recipient recovery", () => {
+  const fixture = gcashGeometry();
+  fixture.words = fixture.words.filter((entry) =>
+    entry.symbols.map((symbol) => symbol.text).join("") !== "Express Send"
+  );
+  fixture.text = fixture.words.map((entry) =>
+    entry.symbols.map((symbol) => symbol.text).join("")
+  ).join("\n");
+  fixture.annotation = {
+    text: fixture.text,
+    pages: [{ ...visionPage(fixture.words), confidence: 0.8829 }],
+  };
+  const evidence = googleVisionGcashEvidence(fixture.annotation, fixture.text);
+  assert(evidence, "heading-free Send Money receipt recognized");
+  assertEquals(
+    evidence.fields.recipientName?.text,
+    "KRE L. C.",
+    "headerless recipient name",
+  );
+  assertEquals(
+    evidence.fields.recipientPhone?.text,
+    "+63 92169",
+    "headerless recipient phone",
+  );
+  assert(evidence.recipientRegion, "recipient pixels remain available for two-view reread");
+});
+
+Deno.test("GCash geometry scores a reference wrapped onto an adjacent row", () => {
+  const fixture = gcashGeometry();
+  const first = fixture.words.find((entry) =>
+    entry.symbols.map((symbol) => symbol.text).join("") === "9044"
+  )!;
+  first.symbols = [..."1044 923"].map((text) => ({ text, confidence: 0.97 }));
+  first.confidence = 0.97;
+  const remainder = fixture.words.find((entry) =>
+    entry.symbols.map((symbol) => symbol.text).join("") === "881673119"
+  )!;
+  remainder.symbols = [..."718392"].map((text) => ({ text, confidence: 0.96 }));
+  remainder.confidence = 0.96;
+  remainder.boundingBox.vertices = [
+    { x: 150, y: 820 },
+    { x: 250, y: 820 },
+    { x: 250, y: 840 },
+    { x: 150, y: 840 },
+  ];
+  fixture.text = fixture.words.map((entry) =>
+    entry.symbols.map((symbol) => symbol.text).join("")
+  ).join("\n");
+  fixture.annotation = {
+    text: fixture.text,
+    pages: [{ ...visionPage(fixture.words), confidence: 0.8829 }],
+  };
+  const evidence = googleVisionGcashEvidence(fixture.annotation, fixture.text);
+  assert(evidence, "wrapped-reference GCash receipt recognized");
+  assertEquals(
+    evidence.fields.reference?.text,
+    "1044 923 718392",
+    "both observed reference rows are retained",
+  );
+  assert(
+    (evidence.fields.reference?.confidence || 0) >= 0.96,
+    "reference confidence comes from both native rows",
+  );
+});
+
 Deno.test("GCash unreadable or missing critical words cannot gain confidence from other fields", () => {
   const fixture = gcashGeometry();
   fixture.words.find((word) =>

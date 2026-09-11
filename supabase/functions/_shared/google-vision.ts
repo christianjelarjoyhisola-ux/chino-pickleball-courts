@@ -717,6 +717,28 @@ function gcashField(
   };
 }
 
+function gcashCombinedField(
+  parts: Array<{ row: LayoutRow; value: string }>,
+): GoogleVisionGcashFieldEvidence | undefined {
+  const fields = parts.map(({ row, value }) => gcashField(row, value));
+  if (fields.some((field) => !field)) return undefined;
+  const observed = fields as GoogleVisionGcashFieldEvidence[];
+  const weights = observed.map((field) => field.text.replace(/\s/g, "").length);
+  const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+  const complete = observed.every((field) => typeof field.confidence === "number");
+  return {
+    text: observed.map((field) => field.text).join(" "),
+    ...(complete && totalWeight > 0
+      ? {
+        confidence: observed.reduce(
+          (sum, field, index) => sum + field.confidence! * weights[index],
+          0,
+        ) / totalWeight,
+      }
+      : {}),
+  };
+}
+
 function gcashVisibleCharacterField(
   row: LayoutRow,
   allowed: RegExp,
@@ -750,14 +772,20 @@ function gcashEvidenceFromLayout(
   const sent = rows.filter((row) =>
     /^sent\s+via\s+g\s*cash$/i.test(row.text || "")
   );
-  // This field policy is specific to the standard Express Send receipt. Other
-  // receipt types retain the existing full-image OCR confidence policy.
-  if (express.length !== 1 || sent.length !== 1) return undefined;
-  const headerIndex = rows.indexOf(express[0]);
+  // This field policy covers the standard Express Send receipt and the newer
+  // heading-free Send Money receipt. Other layouts retain full-image policy.
+  if (express.length > 1 || sent.length !== 1) return undefined;
+  const headerIndex = express.length === 1 ? rows.indexOf(express[0]) : -1;
   const sentIndex = rows.indexOf(sent[0]);
   if (sentIndex <= headerIndex) return undefined;
   const fields: GoogleVisionGcashEvidence["fields"] = {};
-  const recipientRows = rows.slice(headerIndex + 1, sentIndex);
+  // Current GCash Send Money receipts omit the old "Express Send" heading.
+  // In that layout, bind identity only to the final few rows immediately above
+  // the unique "Sent via GCash" anchor.
+  const recipientStart = headerIndex >= 0
+    ? headerIndex + 1
+    : Math.max(0, sentIndex - 4);
+  const recipientRows = rows.slice(recipientStart, sentIndex);
   const phoneRows = recipientRows.filter((row) =>
     /^(?:\+?63|0)[\d\s*•●·xX.()-]{4,}$/i.test(row.text || "")
   );
@@ -790,9 +818,9 @@ function gcashEvidenceFromLayout(
       const padding = Math.ceil(
         Math.max(...words.map((word) => word.bottom - word.top)),
       );
-      const headerBottom = Math.max(
-        ...express[0].words.map((word) => word.bottom),
-      );
+      const headerBottom = headerIndex >= 0
+        ? Math.max(...express[0].words.map((word) => word.bottom))
+        : 0;
       const sentTop = Math.min(...sent[0].words.map((word) => word.top));
       if (
         typeof width === "number" && Number.isInteger(width) && width > 0 &&
@@ -839,7 +867,8 @@ function gcashEvidenceFromLayout(
       (totalRows[0].text || "").match(totalPattern)![1],
     );
   }
-  const referenceRows = rows.slice(sentIndex + 1).filter((row) =>
+  const postRecipientRows = rows.slice(sentIndex + 1);
+  const referenceRows = postRecipientRows.filter((row) =>
     /^ref(?:erence)?(?:\s*(?:no\.?|number))?[\s:#.-]+\d/i.test(row.text || "")
   );
   if (referenceRows.length === 1) {
@@ -855,6 +884,26 @@ function gcashEvidenceFromLayout(
       reference.replace(/\D/g, "").length <= 16
     ) {
       fields.reference = gcashField(row, reference);
+    } else {
+      const rowIndex = postRecipientRows.indexOf(row);
+      const first = value.match(/^(\d(?:[\d -]*\d)?)(?=\s*[A-Za-z]|\s*$)/)?.[1]
+        ?.trim();
+      const parts: Array<{ row: LayoutRow; value: string }> = first
+        ? [{ row, value: first }]
+        : [];
+      let digits = first?.replace(/\D/g, "") || "";
+      for (let offset = 1; offset <= 2 && digits.length < 13; offset++) {
+        const continuationRow = postRecipientRows[rowIndex + offset];
+        const continuation = (continuationRow?.text || "").match(
+          /^\s*(\d(?:[\d -]*\d)?)(?=\s*[A-Za-z]|\s*$)/,
+        )?.[1]?.trim();
+        if (!continuation) break;
+        parts.push({ row: continuationRow, value: continuation });
+        digits += continuation.replace(/\D/g, "");
+      }
+      if (parts.length >= 2 && digits.length === 13) {
+        fields.reference = gcashCombinedField(parts);
+      }
     }
   }
   const dateTimePattern =
