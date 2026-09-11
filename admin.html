@@ -7,7 +7,7 @@
 <link rel="icon" type="image/jpeg" href="logochino.jpg">
 <link rel="stylesheet" href="payment-method-brand.css?v=20260901-payment-icons-v2" />
 <link rel="stylesheet" href="availability-graphic.css?v=20260909-official-logo-v1" />
-<link rel="stylesheet" href="dashboard-court-activity.css?v=20260911-tomorrow-qr-scan-v8" />
+<link rel="stylesheet" href="dashboard-court-activity.css?v=20260911-tomorrow-qr-place-v9" />
 <script src="dashboard-court-activity.js?v=20260911-tomorrow-slots-v1"></script>
 <script src="payment-method-brand.js?v=20260909-security-bank"></script>
 <script src="chart.min.js"></script>
@@ -9595,7 +9595,7 @@ function renderCourtActivityTvPromo() {
     <footer class="ca-tv-promo-footer">
       <div class="ca-tv-promo-cta"><span>Ready to play?</span><strong>${hasOpenings ? 'Scan to reserve your court' : 'Scan to check another date'}</strong><small>www.chinopickleballcourt.com</small></div>
       <div class="ca-tv-promo-page" aria-label="Availability panel ${_courtActivityTvPromoPage + 1} of ${pageCount}">${pageCount > 1 ? `<span>${_courtActivityTvPromoPage + 1} / ${pageCount}</span><i><b style="width:${((_courtActivityTvPromoPage + 1) / pageCount) * 100}%"></b></i>` : '<span>Tomorrow’s live schedule</span>'}</div>
-      <div class="ca-tv-promo-qr" id="courtActivityTvPromoQr" aria-label="QR code for CHINO online booking"><span>Book online</span></div>
+      <div class="ca-tv-promo-qr-wrap"><span>Scan to book</span><div class="ca-tv-promo-qr" id="courtActivityTvPromoQr" aria-label="QR code for CHINO online booking"><span>Book online</span></div></div>
     </footer>
   </section>`;
   void renderCourtActivityTvPromoQr();
