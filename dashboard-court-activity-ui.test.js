@@ -106,11 +106,11 @@ test('TV display is today-only, privacy-safe, self-updating and closable', () =>
   assert.match(source, /fullscreenchange[\s\S]*?closeCourtActivityTv\(\)/);
 });
 
-test('premium TV promotes authoritative tomorrow slots every five minutes without prices or guests', () => {
+test('premium TV promotes authoritative tomorrow slots every five seconds without prices or guests', () => {
   const css = fs.readFileSync('dashboard-court-activity.css', 'utf8');
   const promo = source.slice(source.indexOf('function courtActivityTvPromoPageCount('), source.indexOf('function renderCourtActivityTv()'));
   const lifecycle = source.slice(source.indexOf('function renderCourtActivityTv()'), source.indexOf('function courtActivityCard('));
-  assert.match(source, /COURT_ACTIVITY_TV_PROMO_INTERVAL_MS = 5 \* 60 \* 1000/);
+  assert.match(source, /COURT_ACTIVITY_TV_PROMO_INTERVAL_MS = 5 \* 1000/);
   assert.match(source, /COURT_ACTIVITY_TV_PROMO_DURATION_MS = 20 \* 1000/);
   assert.match(promo, /DB\.getAvailabilityGraphic\(date, \[\]\)/, 'authoritative availability RPC is refreshed before display');
   assert.match(promo, /court\.slots\.slice[\s\S]*?slot\.label[\s\S]*?>Available</);
