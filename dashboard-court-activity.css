@@ -193,8 +193,8 @@ body.ca-tv-opened { overflow: hidden; }
 .ca-tv-promo-page { display:grid; justify-items:end; gap:7px; color:var(--tv-muted); font-size:clamp(9px,.62vw,12px); }
 .ca-tv-promo-page i { display:block; width:clamp(90px,8vw,145px); height:3px; overflow:hidden; border-radius:999px; background:rgba(255,255,255,.09); }
 .ca-tv-promo-page b { display:block; height:100%; border-radius:inherit; background:linear-gradient(90deg,#32bbaa,#66e7d9); transition:width .45s ease; }
-.ca-tv-promo-qr { width:104px; height:104px; overflow:hidden; display:grid; place-items:center; border:7px solid #fff; border-radius:12px; color:#092237; background:#fff; font-size:10px; font-weight:900; text-align:center; text-transform:uppercase; }
-.ca-tv-promo-qr canvas { display:block; width:100%; height:100%; }
+.ca-tv-promo-qr { width:132px; height:132px; overflow:hidden; display:grid; place-items:center; border:4px solid #fff; border-radius:12px; color:#092237; background:#fff; font-size:10px; font-weight:900; text-align:center; text-transform:uppercase; }
+.ca-tv-promo-qr canvas { display:block; width:100%; height:100%; image-rendering:pixelated; }
 @keyframes caTvPromoIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
 @keyframes caTvPromoCardIn { from { opacity:0; transform:translateY(14px) scale(.985); } to { opacity:1; transform:none; } }
 @keyframes caTvPromoSlotIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }

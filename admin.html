@@ -7,7 +7,7 @@
 <link rel="icon" type="image/jpeg" href="logochino.jpg">
 <link rel="stylesheet" href="payment-method-brand.css?v=20260901-payment-icons-v2" />
 <link rel="stylesheet" href="availability-graphic.css?v=20260909-official-logo-v1" />
-<link rel="stylesheet" href="dashboard-court-activity.css?v=20260911-tomorrow-compact-v7" />
+<link rel="stylesheet" href="dashboard-court-activity.css?v=20260911-tomorrow-qr-scan-v8" />
 <script src="dashboard-court-activity.js?v=20260911-tomorrow-slots-v1"></script>
 <script src="payment-method-brand.js?v=20260909-security-bank"></script>
 <script src="chart.min.js"></script>
@@ -9499,7 +9499,7 @@ const COURT_ACTIVITY_TV_PROMO_INTERVAL_MS = 5 * 1000;
 const COURT_ACTIVITY_TV_PROMO_DURATION_MS = 20 * 1000;
 const COURT_ACTIVITY_TV_PROMO_PAGE_MS = 6500;
 const COURT_ACTIVITY_TV_PROMO_PAGE_SIZE = 6;
-const COURT_ACTIVITY_BOOKING_URL = 'https://www.chinopickleballcourt.com/';
+const COURT_ACTIVITY_BOOKING_URL = 'HTTPS://WWW.CHINOPICKLEBALLCOURT.COM';
 let _courtActivityTvPromoScheduleTimer = null;
 let _courtActivityTvPromoEndTimer = null;
 let _courtActivityTvPromoPageTimer = null;
@@ -9567,7 +9567,8 @@ async function renderCourtActivityTvPromoQr() {
   const canvas = document.createElement('canvas');
   try {
     await window.PaddleRageQRCode.toCanvas(canvas, COURT_ACTIVITY_BOOKING_URL, {
-      width: 104, margin: 1, errorCorrectionLevel: 'M',
+      // Compact Version 2 symbol: exact 4 px modules plus the standard 4-module quiet zone.
+      width: 132, margin: 4, errorCorrectionLevel: 'M',
       color: { dark: '#071a28', light: '#ffffff' },
     });
     if (token !== _courtActivityTvPromoQrToken || !_courtActivityTvPromoActive || !holder.isConnected) return;
