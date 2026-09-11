@@ -101,7 +101,25 @@ test('TV display is today-only, privacy-safe, self-updating and closable', () =>
   assert.match(renderer, /item\.displayName/);
   assert.doesNotMatch(renderer, /item\.fullName|item\.email|item\.ref/);
   assert.match(renderer, /setInterval\(updateCourtActivityTvClock, 1000\)/);
-  assert.match(renderer, /setInterval\(\(\) => \{ _courtActivityTvPage \+= 1; renderCourtActivityTv\(\); \}, 12000\)/);
+  assert.match(renderer, /setInterval\(\(\) => \{ if \(!_courtActivityTvPromoActive\) \{ _courtActivityTvPage \+= 1; renderCourtActivityTv\(\); \} \}, 12000\)/);
   assert.match(source, /event\.key === 'Escape'[\s\S]*?closeCourtActivityTv\(\)/);
   assert.match(source, /fullscreenchange[\s\S]*?closeCourtActivityTv\(\)/);
+});
+
+test('premium TV promotes authoritative tomorrow slots every five minutes without prices or guests', () => {
+  const css = fs.readFileSync('dashboard-court-activity.css', 'utf8');
+  const promo = source.slice(source.indexOf('function courtActivityTvPromoPageCount('), source.indexOf('function renderCourtActivityTv()'));
+  const lifecycle = source.slice(source.indexOf('function renderCourtActivityTv()'), source.indexOf('function courtActivityCard('));
+  assert.match(source, /COURT_ACTIVITY_TV_PROMO_INTERVAL_MS = 5 \* 60 \* 1000/);
+  assert.match(source, /COURT_ACTIVITY_TV_PROMO_DURATION_MS = 20 \* 1000/);
+  assert.match(promo, /DB\.getAvailabilityGraphic\(date, \[\]\)/, 'authoritative availability RPC is refreshed before display');
+  assert.match(promo, /court\.slots\.slice[\s\S]*?slot\.label[\s\S]*?>Available</);
+  assert.match(promo, /Book your court for tomorrow/);
+  assert.match(promo, /PaddleRageQRCode\.toCanvas[\s\S]*?chinopickleballcourt\.com/);
+  assert.doesNotMatch(promo, /price|fullName|displayName|customer|email/i);
+  assert.match(lifecycle, /if \(!_courtActivityTvPromoActive\)[\s\S]*?_courtActivityTvPage \+= 1/, 'today paging pauses during the promotion');
+  assert.match(lifecycle, /clearInterval\(_courtActivityTvPromoScheduleTimer\)[\s\S]*?clearTimeout\(_courtActivityTvPromoEndTimer\)/, 'closing TV clears every promotion timer');
+  assert.match(css, /\.ca-tv-promo-grid\s*\{[^}]*grid-template-columns:repeat\(2,minmax\(0,1fr\)\)[^}]*grid-template-rows:repeat\(2,minmax\(0,1fr\)\)/);
+  assert.match(css, /\.ca-tv-promo-slots\s*\{[^}]*grid-template-columns:repeat\(3,minmax\(0,1fr\)\)[^}]*grid-template-rows:repeat\(2,minmax\(0,1fr\)\)/);
+  assert.match(css, /@media\(prefers-reduced-motion:reduce\)[\s\S]*?animation:none/);
 });

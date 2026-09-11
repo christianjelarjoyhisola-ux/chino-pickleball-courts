@@ -184,6 +184,60 @@
     return idMatch ? Number(idMatch[1]) : null;
   }
 
+  function tomorrowDateKey({ now = new Date() } = {}) {
+    const nowMs = new Date(now).getTime();
+    if (!Number.isFinite(nowMs)) throw new TypeError('A valid current time is required.');
+    const today = new Date(nowMs + PH_OFFSET_MS).toISOString().slice(0, 10);
+    return new Date(Date.parse(`${today}T00:00:00Z`) + DAY_MS).toISOString().slice(0, 10);
+  }
+
+  function buildTvAvailabilitySnapshot(raw, { now = new Date() } = {}) {
+    const expectedDate = tomorrowDateKey({ now });
+    if (!raw || typeof raw !== 'object' || raw.date !== expectedDate || raw.timezone !== 'Asia/Manila') {
+      throw new TypeError('Tomorrow availability must be a current Philippine-time snapshot.');
+    }
+    const generatedAt = text(raw.generatedAt ?? raw.asOf);
+    if (!Number.isFinite(Date.parse(generatedAt)) || !Array.isArray(raw.courts) || raw.courts.length === 0) {
+      throw new TypeError('Tomorrow availability is incomplete.');
+    }
+    const courts = raw.courts.map((court, courtIndex) => {
+      const id = text(court?.id);
+      const name = text(court?.name) || `Court ${courtIndex + 1}`;
+      if (!id || !Array.isArray(court?.slots)) throw new TypeError('Court availability is incomplete.');
+      const slots = court.slots.map(slot => {
+        const state = text(slot?.state);
+        const startHour = Number(slot?.startHour ?? slot?.hour);
+        const endHour = Number(slot?.endHour);
+        const startLabel = text(slot?.startLabel);
+        const endLabel = text(slot?.endLabel);
+        if (!['free', 'unavailable'].includes(state) || !Number.isInteger(startHour) ||
+            !Number.isInteger(endHour) || endHour !== startHour + 1 || !startLabel || !endLabel) {
+          throw new TypeError('Court availability contains an invalid time slot.');
+        }
+        return state === 'free' ? {
+          startHour,
+          endHour,
+          startLabel,
+          endLabel,
+          label: `${startLabel} – ${endLabel}`,
+        } : null;
+      }).filter(Boolean);
+      return { id, name, slots, availableCount: slots.length };
+    }).sort((left, right) => {
+      const leftNumber = courtNumber({ courtId: left.id, courtName: left.name });
+      const rightNumber = courtNumber({ courtId: right.id, courtName: right.name });
+      return (leftNumber ?? 999) - (rightNumber ?? 999) || left.name.localeCompare(right.name, undefined, { numeric: true });
+    });
+    const tomorrowStart = dateStart(expectedDate);
+    return {
+      date: expectedDate,
+      dateLabel: tvDateFormatter.format(tomorrowStart + 12 * 60 * MINUTE_MS),
+      generatedAt,
+      courts,
+      totalAvailable: courts.reduce((total, court) => total + court.availableCount, 0),
+    };
+  }
+
   function tvSession(item) {
     return {
       courtName: item.courtName,
@@ -228,5 +282,5 @@
     };
   }
 
-  return { buildSnapshot, buildTvSnapshot, publicDisplayName };
+  return { buildSnapshot, buildTvSnapshot, buildTvAvailabilitySnapshot, tomorrowDateKey, publicDisplayName };
 });

@@ -7,8 +7,8 @@
 <link rel="icon" type="image/jpeg" href="logochino.jpg">
 <link rel="stylesheet" href="payment-method-brand.css?v=20260901-payment-icons-v2" />
 <link rel="stylesheet" href="availability-graphic.css?v=20260909-official-logo-v1" />
-<link rel="stylesheet" href="dashboard-court-activity.css?v=20260911-tv-readability-v4" />
-<script src="dashboard-court-activity.js?v=20260911-tv-readability-v4"></script>
+<link rel="stylesheet" href="dashboard-court-activity.css?v=20260911-tomorrow-slots-v1" />
+<script src="dashboard-court-activity.js?v=20260911-tomorrow-slots-v1"></script>
 <script src="payment-method-brand.js?v=20260909-security-bank"></script>
 <script src="chart.min.js"></script>
 <script src="booking-balance.js?v=20260831-payment-state-v7"></script>
@@ -9495,6 +9495,20 @@ let _courtActivityTvClockTimer = null;
 let _courtActivityTvPageTimer = null;
 let _courtActivityTvPage = 0;
 let _courtActivityTvTrigger = null;
+const COURT_ACTIVITY_TV_PROMO_INTERVAL_MS = 5 * 60 * 1000;
+const COURT_ACTIVITY_TV_PROMO_DURATION_MS = 20 * 1000;
+const COURT_ACTIVITY_TV_PROMO_PAGE_MS = 6500;
+const COURT_ACTIVITY_TV_PROMO_PAGE_SIZE = 6;
+const COURT_ACTIVITY_BOOKING_URL = 'https://chinopickleballcourt.com/';
+let _courtActivityTvPromoScheduleTimer = null;
+let _courtActivityTvPromoEndTimer = null;
+let _courtActivityTvPromoPageTimer = null;
+let _courtActivityTvPromoSnapshot = null;
+let _courtActivityTvPromoPage = 0;
+let _courtActivityTvPromoActive = false;
+let _courtActivityTvPromoLoading = false;
+let _courtActivityTvPromoRequest = 0;
+let _courtActivityTvPromoQrToken = 0;
 
 function courtActivityTvCountdown(minutes, suffix) {
   const safe = Math.max(1, Math.ceil(minutes));
@@ -9528,16 +9542,119 @@ function updateCourtActivityTvClock() {
   if (clock) clock.textContent = courtActivityNow().toLocaleTimeString('en-PH',{timeZone:'Asia/Manila',hour:'numeric',minute:'2-digit',second:'2-digit',hour12:true});
 }
 
+function courtActivityTvPromoPageCount() {
+  const courts = _courtActivityTvPromoSnapshot?.courts || [];
+  return Math.max(1, ...courts.map(court => Math.ceil(court.slots.length / COURT_ACTIVITY_TV_PROMO_PAGE_SIZE)));
+}
+
+function courtActivityTvPromoCard(court, cardIndex) {
+  const start = _courtActivityTvPromoPage * COURT_ACTIVITY_TV_PROMO_PAGE_SIZE;
+  const slots = court.slots.slice(start, start + COURT_ACTIVITY_TV_PROMO_PAGE_SIZE);
+  const total = court.availableCount;
+  const empty = total === 0
+    ? '<div class="ca-tv-promo-empty"><strong>Fully booked tomorrow</strong><span>Explore another day online</span></div>'
+    : '<div class="ca-tv-promo-empty is-page"><strong>All openings shown</strong><span>More times appear on another panel</span></div>';
+  return `<article class="ca-tv-promo-court" style="--court-delay:${cardIndex * 80}ms">
+    <header><div><span>Tomorrow</span><h3>${esc(court.name)}</h3></div><b>${total} open ${total === 1 ? 'slot' : 'slots'}</b></header>
+    <div class="ca-tv-promo-slots">${slots.length ? slots.map((slot,index) => `<div class="ca-tv-promo-slot" style="--slot-delay:${cardIndex * 80 + index * 45}ms"><time>${esc(slot.label)}</time><span><i></i>Available</span></div>`).join('') : empty}</div>
+  </article>`;
+}
+
+async function renderCourtActivityTvPromoQr() {
+  const holder = $('courtActivityTvPromoQr');
+  const token = ++_courtActivityTvPromoQrToken;
+  if (!holder || typeof window.PaddleRageQRCode?.toCanvas !== 'function') return;
+  const canvas = document.createElement('canvas');
+  try {
+    await window.PaddleRageQRCode.toCanvas(canvas, COURT_ACTIVITY_BOOKING_URL, {
+      width: 104, margin: 1, errorCorrectionLevel: 'M',
+      color: { dark: '#071a28', light: '#ffffff' },
+    });
+    if (token !== _courtActivityTvPromoQrToken || !_courtActivityTvPromoActive || !holder.isConnected) return;
+    holder.replaceChildren(canvas);
+  } catch (_) { /* the booking URL remains visible if QR rendering is unavailable */ }
+}
+
+function renderCourtActivityTvPromo() {
+  const body = $('courtActivityTvBody');
+  const snapshot = _courtActivityTvPromoSnapshot;
+  if (!body || !snapshot || !_courtActivityTvPromoActive) return;
+  const pageCount = courtActivityTvPromoPageCount();
+  _courtActivityTvPromoPage %= pageCount;
+  const hasOpenings = snapshot.totalAvailable > 0;
+  body.classList.add('is-promo');
+  $('courtActivityTvDate').textContent = snapshot.dateLabel;
+  $('courtActivityTvTitle').textContent = 'Tomorrow’s Court Availability';
+  body.innerHTML = `<section class="ca-tv-promo" aria-label="Tomorrow’s available court times">
+    <header class="ca-tv-promo-hero">
+      <div><span class="ca-tv-promo-kicker">Tomorrow at CHINO</span><h2>${hasOpenings ? 'Your next game is waiting.' : 'Tomorrow is fully booked.'}</h2><p>${hasOpenings ? 'Book your court for tomorrow.' : 'Explore the next available play date online.'}</p></div>
+      <div class="ca-tv-promo-live"><i></i><span>Live availability</span><small>Updated ${esc(new Date(snapshot.generatedAt).toLocaleTimeString('en-PH',{timeZone:'Asia/Manila',hour:'numeric',minute:'2-digit'}))} PH</small></div>
+    </header>
+    <div class="ca-tv-promo-grid">${snapshot.courts.map(courtActivityTvPromoCard).join('')}</div>
+    <footer class="ca-tv-promo-footer">
+      <div class="ca-tv-promo-cta"><span>Ready to play?</span><strong>${hasOpenings ? 'Scan to reserve your court' : 'Scan to check another date'}</strong><small>chinopickleballcourt.com</small></div>
+      <div class="ca-tv-promo-page" aria-label="Availability panel ${_courtActivityTvPromoPage + 1} of ${pageCount}">${pageCount > 1 ? `<span>${_courtActivityTvPromoPage + 1} / ${pageCount}</span><i><b style="width:${((_courtActivityTvPromoPage + 1) / pageCount) * 100}%"></b></i>` : '<span>Tomorrow’s live schedule</span>'}</div>
+      <div class="ca-tv-promo-qr" id="courtActivityTvPromoQr" aria-label="QR code for CHINO online booking"><span>Book online</span></div>
+    </footer>
+  </section>`;
+  void renderCourtActivityTvPromoQr();
+}
+
+function endCourtActivityTvPromo() {
+  _courtActivityTvPromoActive = false;
+  _courtActivityTvPromoSnapshot = null;
+  _courtActivityTvPromoPage = 0;
+  clearTimeout(_courtActivityTvPromoEndTimer);
+  clearInterval(_courtActivityTvPromoPageTimer);
+  _courtActivityTvPromoEndTimer = null;
+  _courtActivityTvPromoPageTimer = null;
+  renderCourtActivityTv();
+}
+
+async function showCourtActivityTvPromo() {
+  const overlay = $('courtActivityTv');
+  if (!overlay || overlay.hidden || document.hidden || _courtActivityTvPromoActive || _courtActivityTvPromoLoading ||
+      !window.ChinoCourtActivity?.tomorrowDateKey || !window.ChinoCourtActivity?.buildTvAvailabilitySnapshot ||
+      typeof DB.getAvailabilityGraphic !== 'function') return;
+  const request = ++_courtActivityTvPromoRequest;
+  _courtActivityTvPromoLoading = true;
+  try {
+    const now = courtActivityNow();
+    const date = window.ChinoCourtActivity.tomorrowDateKey({ now });
+    const raw = await DB.getAvailabilityGraphic(date, []);
+    if (request !== _courtActivityTvPromoRequest || overlay.hidden) return;
+    _courtActivityTvPromoSnapshot = window.ChinoCourtActivity.buildTvAvailabilitySnapshot(raw, { now });
+    _courtActivityTvPromoPage = 0;
+    _courtActivityTvPromoActive = true;
+    renderCourtActivityTvPromo();
+    const pageCount = courtActivityTvPromoPageCount();
+    if (pageCount > 1) {
+      _courtActivityTvPromoPageTimer = setInterval(() => {
+        _courtActivityTvPromoPage = (_courtActivityTvPromoPage + 1) % pageCount;
+        renderCourtActivityTvPromo();
+      }, COURT_ACTIVITY_TV_PROMO_PAGE_MS);
+    }
+    _courtActivityTvPromoEndTimer = setTimeout(endCourtActivityTvPromo, COURT_ACTIVITY_TV_PROMO_DURATION_MS);
+  } catch (_) {
+    // Never replace current live activity with stale or incomplete availability.
+  } finally {
+    if (request === _courtActivityTvPromoRequest) _courtActivityTvPromoLoading = false;
+  }
+}
+
 function renderCourtActivityTv() {
   const overlay = $('courtActivityTv');
   const body = $('courtActivityTvBody');
   if (!overlay || overlay.hidden || !body || !_courtActivityBookings || !window.ChinoCourtActivity?.buildTvSnapshot) return;
+  if (_courtActivityTvPromoActive) { renderCourtActivityTvPromo(); return; }
   const snapshot = window.ChinoCourtActivity.buildTvSnapshot(_courtActivityBookings, { now: courtActivityNow() });
   const pageSize = 8;
   const pageCount = Math.max(1, Math.ceil(snapshot.upcomingToday.length / pageSize));
   _courtActivityTvPage %= pageCount;
   const upcoming = snapshot.upcomingToday.slice(_courtActivityTvPage * pageSize, (_courtActivityTvPage + 1) * pageSize);
+  body.classList.remove('is-promo');
   $('courtActivityTvDate').textContent = snapshot.dateLabel;
+  $('courtActivityTvTitle').textContent = 'Today’s Court Activity';
   updateCourtActivityTvClock();
   body.innerHTML = `<div class="ca-tv-now-grid">${snapshot.courts.map(courtActivityTvNowCard).join('')}</div><div class="ca-tv-lower"><section class="ca-tv-next" aria-labelledby="caTvNextTitle"><header><div><span class="ca-tv-kicker">Next on court</span><h2 id="caTvNextTitle">Up next</h2></div><span class="ca-tv-section-count">${snapshot.courts.filter(court => court.upNext).length} scheduled</span></header><div class="ca-tv-next-grid">${snapshot.courts.map(courtActivityTvNextCard).join('')}</div></section><section class="ca-tv-upcoming" aria-labelledby="caTvUpcomingTitle"><header><div><span class="ca-tv-kicker">Later on the schedule</span><h2 id="caTvUpcomingTitle">Upcoming today</h2></div>${pageCount > 1 ? `<span class="ca-tv-pages">${_courtActivityTvPage + 1} / ${pageCount}</span>` : ''}</header><div class="ca-tv-upcoming-list">${upcoming.length ? upcoming.map(item => `<article><time>${esc(item.startLabel)}</time><span>${esc(item.courtName)}</span><strong>${esc(item.displayName)}</strong></article>`).join('') : '<div class="ca-tv-finished"><strong>Schedule clear</strong><span>No additional bookings after the up-next sessions.</span></div>'}</div></section></div>`;
 }
@@ -9552,8 +9669,10 @@ function openCourtActivityTv() {
   renderCourtActivityTv();
   clearInterval(_courtActivityTvClockTimer);
   clearInterval(_courtActivityTvPageTimer);
+  clearInterval(_courtActivityTvPromoScheduleTimer);
   _courtActivityTvClockTimer = setInterval(updateCourtActivityTvClock, 1000);
-  _courtActivityTvPageTimer = setInterval(() => { _courtActivityTvPage += 1; renderCourtActivityTv(); }, 12000);
+  _courtActivityTvPageTimer = setInterval(() => { if (!_courtActivityTvPromoActive) { _courtActivityTvPage += 1; renderCourtActivityTv(); } }, 12000);
+  _courtActivityTvPromoScheduleTimer = setInterval(() => { void showCourtActivityTvPromo(); }, COURT_ACTIVITY_TV_PROMO_INTERVAL_MS);
   void DB.getSettings().then(settings => {
     const venueName = $('courtActivityTvVenueName');
     const venueAddress = $('courtActivityTvVenueAddress');
@@ -9569,10 +9688,20 @@ function closeCourtActivityTv() {
   if (!overlay) return;
   overlay.hidden = true;
   document.body.classList.remove('ca-tv-opened');
+  _courtActivityTvPromoRequest += 1;
+  _courtActivityTvPromoActive = false;
+  _courtActivityTvPromoLoading = false;
+  _courtActivityTvPromoSnapshot = null;
   clearInterval(_courtActivityTvClockTimer);
   clearInterval(_courtActivityTvPageTimer);
+  clearInterval(_courtActivityTvPromoScheduleTimer);
+  clearInterval(_courtActivityTvPromoPageTimer);
+  clearTimeout(_courtActivityTvPromoEndTimer);
   _courtActivityTvClockTimer = null;
   _courtActivityTvPageTimer = null;
+  _courtActivityTvPromoScheduleTimer = null;
+  _courtActivityTvPromoPageTimer = null;
+  _courtActivityTvPromoEndTimer = null;
   if (document.fullscreenElement === overlay) void document.exitFullscreen().catch(() => {});
   if (_courtActivityTvTrigger?.isConnected) _courtActivityTvTrigger.focus({preventScroll:true});
   _courtActivityTvTrigger = null;

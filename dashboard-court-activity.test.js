@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { buildSnapshot, buildTvSnapshot, publicDisplayName } = require('./dashboard-court-activity');
+const { buildSnapshot, buildTvSnapshot, buildTvAvailabilitySnapshot, tomorrowDateKey, publicDisplayName } = require('./dashboard-court-activity');
 
 const now = new Date('2026-09-09T09:00:00+08:00');
 function booking(overrides = {}) {
@@ -222,4 +222,44 @@ test('TV keeps an overnight active session but excludes future days and invalid 
   assert.equal(tv.courts[0].playing.startLabel, '11:00 PM');
   assert.equal(tv.courts[0].upNext.startLabel, '11:00 PM');
   assert.equal(tv.courts.flatMap(court => court.upcoming).length, 0);
+});
+
+test('TV tomorrow promotion preserves individual available hours without prices or customer data', () => {
+  const raw = {
+    date: '2026-09-10', timezone: 'Asia/Manila', asOf: '2026-09-09T09:00:00+08:00',
+    courts: [{
+      id: 'c1', name: 'Court 1', customer: 'Private Customer',
+      slots: [
+        { startHour: 16, endHour: 17, startLabel: '4:00 PM', endLabel: '5:00 PM', state: 'free', price: 265 },
+        { startHour: 17, endHour: 18, startLabel: '5:00 PM', endLabel: '6:00 PM', state: 'free', price: 265 },
+        { startHour: 18, endHour: 19, startLabel: '6:00 PM', endLabel: '7:00 PM', state: 'unavailable', reason: 'booked' },
+      ],
+    }],
+  };
+  const snapshot = buildTvAvailabilitySnapshot(raw, { now });
+  assert.equal(snapshot.date, '2026-09-10');
+  assert.equal(snapshot.totalAvailable, 2);
+  assert.deepEqual(snapshot.courts[0].slots.map(slot => slot.label), [
+    '4:00 PM – 5:00 PM', '5:00 PM – 6:00 PM',
+  ], 'adjacent available hours stay as separate TV tiles');
+  assert.equal(snapshot.courts[0].availableCount, 2);
+  for (const privateKey of ['price', 'customer', 'reason']) {
+    assert.equal(JSON.stringify(snapshot).includes(privateKey), false, `${privateKey} stays off the TV model`);
+  }
+  assert.equal(tomorrowDateKey({ now }), '2026-09-10');
+  assert.equal(tomorrowDateKey({ now: '2026-12-31T23:30:00+08:00' }), '2027-01-01');
+});
+
+test('TV tomorrow promotion fails closed on stale dates or malformed slot evidence', () => {
+  const base = {
+    date: '2026-09-10', timezone: 'Asia/Manila', generatedAt: '2026-09-09T01:00:00Z',
+    courts: [{ id: 'c1', name: 'Court 1', slots: [
+      { startHour: 16, endHour: 17, startLabel: '4:00 PM', endLabel: '5:00 PM', state: 'free' },
+    ] }],
+  };
+  assert.throws(() => buildTvAvailabilitySnapshot({ ...base, date: '2026-09-11' }, { now }), /Philippine-time/);
+  assert.throws(() => buildTvAvailabilitySnapshot({ ...base, courts: [{ ...base.courts[0], slots: [
+    { ...base.courts[0].slots[0], endHour: 18 },
+  ] }] }, { now }), /invalid time slot/);
+  assert.throws(() => buildTvAvailabilitySnapshot({ ...base, courts: [] }, { now }), /incomplete/);
 });

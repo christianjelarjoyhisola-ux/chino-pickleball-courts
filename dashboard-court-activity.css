@@ -156,6 +156,46 @@ body.ca-tv-opened { overflow: hidden; }
 .ca-tv-finished strong { font-size:clamp(15px,1vw,18px); }
 .ca-tv-finished span { margin-top:4px; color:var(--tv-muted); font-size:clamp(11px,.72vw,13px); }
 .ca-tv-loading { align-self:center; justify-self:center; color:var(--tv-muted); font-size:18px; }
+.ca-tv-stage.is-promo { display:block; padding:clamp(16px,1.7vw,32px); }
+.ca-tv-promo { position:relative; isolation:isolate; height:100%; min-height:0; display:grid; grid-template-rows:auto minmax(0,1fr) auto; gap:clamp(14px,1.35vw,24px); animation:caTvPromoIn .65s cubic-bezier(.2,.8,.2,1) both; }
+.ca-tv-promo::before { content:""; position:absolute; z-index:-1; inset:-8%; pointer-events:none; background:radial-gradient(circle at 8% 0%,rgba(65,215,199,.13),transparent 28%),radial-gradient(circle at 94% 90%,rgba(215,169,86,.11),transparent 27%); }
+.ca-tv-promo-hero { display:flex; align-items:end; justify-content:space-between; gap:32px; }
+.ca-tv-promo-kicker { display:block; margin-bottom:6px; color:#f0bf69; font-size:clamp(10px,.72vw,13px); font-weight:900; letter-spacing:.2em; text-transform:uppercase; }
+.ca-tv-promo-hero h2 { margin:0; font-size:clamp(30px,3.2vw,58px); font-weight:900; line-height:.98; letter-spacing:-.05em; }
+.ca-tv-promo-hero p { margin:8px 0 0; color:#a7eee5; font-size:clamp(15px,1.2vw,22px); font-weight:700; }
+.ca-tv-promo-live { flex:0 0 auto; display:grid; grid-template-columns:auto auto; align-items:center; gap:2px 9px; padding:12px 16px; border:1px solid rgba(65,215,199,.2); border-radius:14px; background:rgba(12,37,48,.72); }
+.ca-tv-promo-live i { grid-row:1/3; width:9px; height:9px; border-radius:50%; background:#52dfcf; box-shadow:0 0 0 6px rgba(82,223,207,.1),0 0 20px rgba(82,223,207,.55); }
+.ca-tv-promo-live span { color:#b8f2eb; font-size:clamp(11px,.75vw,14px); font-weight:850; letter-spacing:.08em; text-transform:uppercase; }
+.ca-tv-promo-live small { color:var(--tv-muted); font-size:clamp(9px,.62vw,12px); }
+.ca-tv-promo-grid { min-height:0; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); grid-template-rows:repeat(2,minmax(0,1fr)); gap:clamp(12px,1.15vw,20px); }
+.ca-tv-promo-court { position:relative; min-height:0; overflow:hidden; display:grid; grid-template-rows:auto minmax(0,1fr); border:1px solid rgba(142,185,225,.19); border-radius:clamp(17px,1.35vw,25px); background:linear-gradient(145deg,rgba(18,39,62,.96),rgba(9,27,43,.94)); box-shadow:0 18px 46px rgba(0,0,0,.2),inset 0 1px rgba(255,255,255,.035); animation:caTvPromoCardIn .58s cubic-bezier(.2,.8,.2,1) both; animation-delay:var(--court-delay); }
+.ca-tv-promo-court::before { content:""; position:absolute; inset:0 auto 0 0; width:3px; background:linear-gradient(180deg,#54e2d2,#248f88); box-shadow:0 0 20px rgba(65,215,199,.35); }
+.ca-tv-promo-court > header { display:flex; align-items:center; justify-content:space-between; gap:18px; padding:clamp(11px,.9vw,16px) clamp(17px,1.2vw,23px); border-bottom:1px solid rgba(148,171,204,.13); }
+.ca-tv-promo-court > header span { display:block; color:var(--tv-muted); font-size:clamp(8px,.56vw,10px); font-weight:800; letter-spacing:.14em; text-transform:uppercase; }
+.ca-tv-promo-court h3 { margin:2px 0 0; font-size:clamp(18px,1.35vw,25px); font-weight:850; line-height:1; }
+.ca-tv-promo-court > header b { padding:7px 10px; border:1px solid rgba(65,215,199,.18); border-radius:999px; color:#9ceade; background:rgba(65,215,199,.07); font-size:clamp(9px,.66vw,12px); font-weight:800; white-space:nowrap; }
+.ca-tv-promo-slots { min-height:0; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); grid-template-rows:repeat(2,minmax(0,1fr)); gap:clamp(7px,.55vw,10px); padding:clamp(10px,.8vw,15px) clamp(13px,1vw,19px) clamp(13px,1vw,18px); }
+.ca-tv-promo-slot { min-width:0; display:grid; place-content:center; justify-items:center; gap:5px; padding:7px 5px; border:1px solid rgba(77,220,204,.25); border-radius:clamp(10px,.8vw,14px); background:linear-gradient(145deg,rgba(54,210,190,.12),rgba(34,128,128,.07)); box-shadow:inset 0 1px rgba(255,255,255,.035); animation:caTvPromoSlotIn .48s cubic-bezier(.2,.8,.2,1) both; animation-delay:calc(170ms + var(--slot-delay)); }
+.ca-tv-promo-slot time { color:#f6fbff; font-size:clamp(11px,.83vw,16px); font-weight:850; line-height:1.15; text-align:center; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.ca-tv-promo-slot span { display:flex; align-items:center; gap:6px; color:#7fe3d6; font-size:clamp(8px,.55vw,10px); font-weight:900; letter-spacing:.12em; text-transform:uppercase; }
+.ca-tv-promo-slot i { width:5px; height:5px; border-radius:50%; background:#55e4d3; box-shadow:0 0 10px rgba(85,228,211,.65); }
+.ca-tv-promo-empty { grid-column:1/-1; grid-row:1/-1; display:grid; place-content:center; justify-items:center; text-align:center; border:1px dashed rgba(148,171,204,.18); border-radius:14px; }
+.ca-tv-promo-empty strong { font-size:clamp(14px,1vw,18px); }
+.ca-tv-promo-empty span { margin-top:5px; color:var(--tv-muted); font-size:clamp(10px,.7vw,13px); }
+.ca-tv-promo-empty.is-page { opacity:.7; }
+.ca-tv-promo-footer { display:grid; grid-template-columns:minmax(0,1fr) auto auto; align-items:center; gap:clamp(20px,2vw,38px); min-height:88px; padding:10px 12px 10px clamp(18px,1.4vw,26px); border:1px solid rgba(148,171,204,.15); border-radius:18px; background:rgba(7,20,34,.82); }
+.ca-tv-promo-cta { display:grid; gap:1px; }
+.ca-tv-promo-cta span { color:#f0bf69; font-size:clamp(9px,.62vw,12px); font-weight:900; letter-spacing:.15em; text-transform:uppercase; }
+.ca-tv-promo-cta strong { font-size:clamp(17px,1.35vw,25px); line-height:1.1; }
+.ca-tv-promo-cta small { margin-top:3px; color:#a7eee5; font-size:clamp(11px,.78vw,15px); font-weight:700; }
+.ca-tv-promo-page { display:grid; justify-items:end; gap:7px; color:var(--tv-muted); font-size:clamp(9px,.62vw,12px); }
+.ca-tv-promo-page i { display:block; width:clamp(90px,8vw,145px); height:3px; overflow:hidden; border-radius:999px; background:rgba(255,255,255,.09); }
+.ca-tv-promo-page b { display:block; height:100%; border-radius:inherit; background:linear-gradient(90deg,#32bbaa,#66e7d9); transition:width .45s ease; }
+.ca-tv-promo-qr { width:104px; height:104px; overflow:hidden; display:grid; place-items:center; border:7px solid #fff; border-radius:12px; color:#092237; background:#fff; font-size:10px; font-weight:900; text-align:center; text-transform:uppercase; }
+.ca-tv-promo-qr canvas { display:block; width:100%; height:100%; }
+@keyframes caTvPromoIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
+@keyframes caTvPromoCardIn { from { opacity:0; transform:translateY(14px) scale(.985); } to { opacity:1; transform:none; } }
+@keyframes caTvPromoSlotIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
 .ca-tv button:focus-visible { outline:3px solid var(--tv-cyan); outline-offset:3px; }
 @media(max-width:1000px) {
   .ca-lane { grid-template-columns: 135px minmax(0,1fr); }
@@ -168,6 +208,9 @@ body.ca-tv-opened { overflow: hidden; }
   .ca-tv-now-grid { grid-template-columns:1fr; grid-template-rows:none; }
   .ca-tv-court { min-height:260px; }
   .ca-tv-lower { grid-template-columns:1fr; }
+  .ca-tv-stage.is-promo { overflow:auto; }
+  .ca-tv-promo { height:auto; min-height:100%; }
+  .ca-tv-promo-grid { grid-template-rows:repeat(2,minmax(245px,1fr)); }
 }
 @media(max-width:700px) {
   .court-activity { border-radius: 14px; }
@@ -211,4 +254,15 @@ body.ca-tv-opened { overflow: hidden; }
   .ca-tv-next-card { grid-template-columns:74px 70px minmax(0,1fr); }
   .ca-tv-next-grid,.ca-tv-upcoming-list { grid-template-columns:1fr; }
   .ca-tv-next-grid { grid-template-rows:none; }
+  .ca-tv-promo-hero { align-items:start; }
+  .ca-tv-promo-live { display:none; }
+  .ca-tv-promo-grid { grid-template-columns:1fr; grid-template-rows:none; }
+  .ca-tv-promo-court { min-height:230px; }
+  .ca-tv-promo-footer { grid-template-columns:minmax(0,1fr) auto; }
+  .ca-tv-promo-page { display:none; }
+  .ca-tv-promo-qr { width:86px; height:86px; }
+}
+@media(prefers-reduced-motion:reduce) {
+  .ca-tv-promo,.ca-tv-promo-court,.ca-tv-promo-slot { animation:none; }
+  .ca-tv-promo-page b { transition:none; }
 }
