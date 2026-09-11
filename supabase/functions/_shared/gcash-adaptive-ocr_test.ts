@@ -205,11 +205,17 @@ Deno.test("high-confidence wrong amount, recipient, reference and pending status
   }
 });
 
-Deno.test("one clean field reading can be confirmed by an exact independent native original", async () => {
-  const primary = read();
+Deno.test("one clean field reading can be confirmed by a matching independent native original", async () => {
+  const primary = read({ name: "KR....E L. C.", phone: "09609422169" });
   primary.confidence = .817149;
   delete primary.gcashEvidence;
-  const incomplete = read();
+  const recovered = () =>
+    read({
+      name: "KR....E L.. C.",
+      phone: "09609422169",
+      confidence: .9194,
+    });
+  const incomplete = recovered();
   incomplete.gcashEvidence!.fields.recipientName!.confidence = .8;
   let calls = 0;
   const result = await recoverGcashReceipt(
@@ -218,7 +224,7 @@ Deno.test("one clean field reading can be confirmed by an exact independent nati
     context,
     "test-key",
     {
-      ocr: async () => ++calls === 1 ? incomplete : read({ confidence: .9194 }),
+      ocr: async () => ++calls === 1 ? incomplete : recovered(),
     },
   );
   eq(
@@ -237,6 +243,33 @@ Deno.test("one clean field reading can be confirmed by an exact independent nati
     "field confidence is retained",
   );
   eq(calls, 2, "both transformed views are still attempted");
+});
+
+Deno.test("mask-dot variation cannot confirm a receipt when the phone is still masked", async () => {
+  const primary = read({ name: "KR....E L. C." });
+  primary.confidence = .817149;
+  delete primary.gcashEvidence;
+  const changedMask = read({ name: "KR....E L.. C." });
+  changedMask.gcashEvidence!.fields.recipientName!.confidence = .8;
+  let calls = 0;
+  const result = await recoverGcashReceipt(
+    await bytes(),
+    original(primary),
+    context,
+    "test-key",
+    {
+      ocr: async () =>
+        ++calls === 1
+          ? changedMask
+          : read({ name: "KR....E L.. C.", confidence: .9194 }),
+    },
+  );
+  eq(
+    result.accepted,
+    false,
+    "masked phone cannot authorize changed mask positions",
+  );
+  eq(result.reason, "recovery_incomplete", "no confirmation consensus");
 });
 
 Deno.test("a weak original plus uncertain or failed alternatives never creates consensus", async () => {

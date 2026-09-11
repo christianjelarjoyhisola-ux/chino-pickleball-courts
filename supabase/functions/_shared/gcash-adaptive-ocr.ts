@@ -90,7 +90,7 @@ function originalConfirmsCleanReading(
     original.read.confidence <= 1 &&
     originalVerificationFlags.length === 0 &&
     !gcashReceiptHasIncompleteStatus(original.read.text) &&
-    signature(original.parsed) === signature(candidate.parsed);
+    confirmationFieldsAgree(original.parsed, candidate.parsed);
 }
 
 export function gcashReceiptHasIncompleteStatus(text: string): boolean {
@@ -167,6 +167,27 @@ function signature(parsed: GcashProviderReceiptParse): string {
     phone: canonicalPhone(receipt.receiver.phone.raw),
     name: canonicalName(receipt.receiver.name.raw),
   });
+}
+
+function confirmationFieldsAgree(
+  original: GcashProviderReceiptParse,
+  candidate: GcashProviderReceiptParse,
+): boolean {
+  if (signature(original) === signature(candidate)) return true;
+  const primary = original.receipt;
+  const recovered = candidate.receipt;
+  // GCash mask dots are decorative and can merge or disappear between optical
+  // views. They may vary only when both reads expose the same full phone; all
+  // visible name letters and every transaction field must still be identical.
+  return primary.receiver.phone.visibility === "full" &&
+    recovered.receiver.phone.visibility === "full" &&
+    primary.receiver.phone.normalized === recovered.receiver.phone.normalized &&
+    canonicalName(primary.receiver.name.raw).replace(/\*/g, "") ===
+      canonicalName(recovered.receiver.name.raw).replace(/\*/g, "") &&
+    primary.reference.value === recovered.reference.value &&
+    Math.round((primary.amount.amount ?? 0) * 100) ===
+      Math.round((recovered.amount.amount ?? 0) * 100) &&
+    primary.timestamp.instant === recovered.timestamp.instant;
 }
 
 function observedCents(value: string | undefined): number | null {
