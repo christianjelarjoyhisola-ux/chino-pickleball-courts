@@ -122,6 +122,8 @@ test('premium TV promotes authoritative tomorrow slots every five seconds withou
   assert.match(css, /\.ca-tv-promo-grid\s*\{[^}]*grid-template-columns:repeat\(2,minmax\(0,1fr\)\)[^}]*grid-template-rows:repeat\(2,minmax\(0,1fr\)\)/);
   assert.match(css, /\.ca-tv-promo-slots\s*\{[^}]*grid-template-columns:repeat\(3,minmax\(0,1fr\)\)[^}]*grid-template-rows:repeat\(2,minmax\(0,1fr\)\)/);
   assert.match(css, /\.ca-tv-promo-hero h2\s*\{[^}]*font-family:'DM Sans',sans-serif[^}]*line-height:1\.08[^}]*text-transform:none/);
+  assert.match(css, /\.ca-tv-promo-kicker\s*\{[^}]*font-size:clamp\(15px,1\.05vw,20px\)/);
+  assert.match(css, /\.ca-tv-promo-hero p\s*\{[^}]*font-size:clamp\(20px,1\.45vw,28px\)[^}]*font-weight:750/);
   assert.match(css, /\.ca-tv-promo-cta small\s*\{[^}]*font-size:clamp\(16px,1\.25vw,23px\)[^}]*font-weight:850/);
   assert.match(css, /@media\(prefers-reduced-motion:reduce\)[\s\S]*?animation:none/);
 });
