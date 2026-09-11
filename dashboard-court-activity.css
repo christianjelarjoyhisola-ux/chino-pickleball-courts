@@ -185,7 +185,7 @@ body.ca-tv-opened { overflow: hidden; }
 .ca-tv-promo-empty strong { font-size:clamp(14px,1vw,18px); }
 .ca-tv-promo-empty span { margin-top:5px; color:var(--tv-muted); font-size:clamp(10px,.7vw,13px); }
 .ca-tv-promo-empty.is-page { opacity:.7; }
-.ca-tv-promo-footer { display:grid; grid-template-columns:minmax(0,1fr) auto auto; align-items:center; gap:clamp(20px,2vw,38px); min-height:clamp(158px,18vh,194px); padding:12px 14px 12px clamp(18px,1.4vw,26px); border:1px solid rgba(148,171,204,.15); border-radius:18px; background:rgba(7,20,34,.82); }
+.ca-tv-promo-footer { display:grid; grid-template-columns:minmax(0,1fr) auto auto; align-items:center; gap:clamp(20px,2vw,38px); min-height:88px; padding:10px 12px 10px clamp(18px,1.4vw,26px); border:1px solid rgba(148,171,204,.15); border-radius:18px; background:rgba(7,20,34,.82); }
 .ca-tv-promo-cta { display:grid; gap:2px; }
 .ca-tv-promo-cta span { color:#f0bf69; font-size:clamp(9px,.62vw,12px); font-weight:900; letter-spacing:.15em; text-transform:uppercase; }
 .ca-tv-promo-cta strong { font-size:clamp(17px,1.35vw,25px); line-height:1.1; }
@@ -193,9 +193,7 @@ body.ca-tv-opened { overflow: hidden; }
 .ca-tv-promo-page { display:grid; justify-items:end; gap:7px; color:var(--tv-muted); font-size:clamp(9px,.62vw,12px); }
 .ca-tv-promo-page i { display:block; width:clamp(90px,8vw,145px); height:3px; overflow:hidden; border-radius:999px; background:rgba(255,255,255,.09); }
 .ca-tv-promo-page b { display:block; height:100%; border-radius:inherit; background:linear-gradient(90deg,#32bbaa,#66e7d9); transition:width .45s ease; }
-.ca-tv-promo-qr-wrap { display:grid; justify-items:center; gap:7px; }
-.ca-tv-promo-qr-wrap > span { color:#f0bf69; font-size:clamp(11px,.78vw,15px); font-weight:900; letter-spacing:.14em; line-height:1; text-transform:uppercase; }
-.ca-tv-promo-qr { width:clamp(140px,9vw,176px); height:clamp(140px,9vw,176px); overflow:hidden; display:grid; place-items:center; border:9px solid #fff; border-radius:15px; color:#092237; background:#fff; box-shadow:0 16px 42px rgba(0,0,0,.32),0 0 0 1px rgba(255,255,255,.18); font-size:12px; font-weight:900; text-align:center; text-transform:uppercase; }
+.ca-tv-promo-qr { width:104px; height:104px; overflow:hidden; display:grid; place-items:center; border:7px solid #fff; border-radius:12px; color:#092237; background:#fff; font-size:10px; font-weight:900; text-align:center; text-transform:uppercase; }
 .ca-tv-promo-qr canvas { display:block; width:100%; height:100%; }
 @keyframes caTvPromoIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
 @keyframes caTvPromoCardIn { from { opacity:0; transform:translateY(14px) scale(.985); } to { opacity:1; transform:none; } }
@@ -265,9 +263,7 @@ body.ca-tv-opened { overflow: hidden; }
   .ca-tv-promo-court { min-height:230px; }
   .ca-tv-promo-footer { grid-template-columns:minmax(0,1fr) auto; }
   .ca-tv-promo-page { display:none; }
-  .ca-tv-promo-footer { min-height:134px; }
-  .ca-tv-promo-qr-wrap > span { font-size:10px; }
-  .ca-tv-promo-qr { width:112px; height:112px; border-width:7px; }
+  .ca-tv-promo-qr { width:86px; height:86px; }
 }
 @media(prefers-reduced-motion:reduce) {
   .ca-tv-promo,.ca-tv-promo-court,.ca-tv-promo-slot { animation:none; }
