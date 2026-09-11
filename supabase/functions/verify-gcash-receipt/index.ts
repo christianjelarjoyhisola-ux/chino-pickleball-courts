@@ -94,7 +94,7 @@ const PAYMENT_WINDOW_MINUTES = 15;
 // OCR usually reads only minute-level timestamps. A receipt paid during the
 // same minute as the hold can look a few seconds "before" the booking.
 const PAYMENT_EARLY_TOLERANCE_MINUTES = 2;
-const GCASH_VERIFIER_REVISION = "gcash_adaptive_20260911";
+const GCASH_VERIFIER_REVISION = "gcash_adaptive_20260911_v2";
 const BANK_VERIFIER_REVISION = "bank_name_policy_20260910";
 
 const MAX_BYTES = 5 * 1024 * 1024;

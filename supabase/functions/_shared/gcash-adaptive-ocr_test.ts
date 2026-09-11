@@ -298,6 +298,79 @@ Deno.test("unsafe image sizes, expired preparation deadline and unknown strategi
   eq(calls, 2, "fixed validated strategies only");
 });
 
+Deno.test("1320 x 2550 GCash screenshot reaches both bounded full-image rereads", async () => {
+  const input = await new Image(1320, 2550).fill(0xffffffff).encode();
+  const snapshot = input.slice();
+  const observed: Array<{ width: number; height: number }> = [];
+  const result = await recoverGcashReceipt(
+    input,
+    weak(),
+    context,
+    "test-key",
+    {
+      ocr: async (_key, encoded, options) => {
+        const png = Uint8Array.from(
+          atob(encoded),
+          (value) => value.charCodeAt(0),
+        );
+        const dimensions = receiptImageDimensions(png)!;
+        observed.push(dimensions);
+        assert(png.length <= 4 * 1024 * 1024, "encoded retry stays bounded");
+        assert(
+          options?.timeoutMs! > 0 && options?.timeoutMs! <= 10000,
+          "preparation shares the recovery deadline",
+        );
+        return read();
+      },
+    },
+  );
+  eq(result.accepted, true, result.reason);
+  eq(observed.length, 2, "large screenshot receives both optical strategies");
+  assert(
+    observed[0].width * observed[0].height <= 2_000_000,
+    "contrast view fits 2 MP",
+  );
+  assert(
+    observed[1].width * observed[1].height <= 4_000_000,
+    "color view fits 4 MP",
+  );
+  assert(observed[1].width > observed[0].width, "views stay independent");
+  for (const dimensions of observed) {
+    assert(
+      Math.abs(dimensions.width / dimensions.height - 1320 / 2550) < .001,
+      "full receipt aspect ratio is preserved",
+    );
+  }
+  eq(input, snapshot, "uploaded receipt remains unchanged");
+});
+
+Deno.test("GCash recovery rejects oversized headers before decode or OCR", async () => {
+  let calls = 0;
+  for (const [width, height] of [[4000, 2500], [5000, 100]]) {
+    const png = new Uint8Array(24);
+    png.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    png.set([0x49, 0x48, 0x44, 0x52], 12);
+    const header = new DataView(png.buffer);
+    header.setUint32(16, width);
+    header.setUint32(20, height);
+    const result = await recoverGcashReceipt(
+      png,
+      weak(),
+      context,
+      "test-key",
+      {
+        ocr: async () => {
+          calls++;
+          return read();
+        },
+      },
+    );
+    eq(result.reason, "recovery_image_unavailable", "unsafe image refused");
+    eq(result.audit.attempted, false, "unsafe image has no OCR attempt");
+  }
+  eq(calls, 0, "unsafe headers never reach OCR");
+});
+
 Deno.test("candidate evaluator preserves dedupe key for the independent database replay guard", () => {
   const candidate = evaluateGcashRecoveryRead(
     "gcash_full_contrast_v1",

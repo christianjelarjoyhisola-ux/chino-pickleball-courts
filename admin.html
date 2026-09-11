@@ -7924,6 +7924,35 @@ function receiptReadingHistoryRows(b){
   if (Number.isSafeInteger(retries) && retries > 0) rows.push(['Automatic Service Retries', receiptDetailValue(retries)]);
   return rows;
 }
+function receiptConfidencePercent(value){
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < 0 || number > 1) return '--';
+  const percent = number * 100;
+  // Never round a value just below the 90% gate up to a displayed 90.00%.
+  if (number < .9 && percent >= 89.99) {
+    return `${(Math.floor(percent * 10000) / 10000).toFixed(4)}%`;
+  }
+  return `${percent.toFixed(2)}%`;
+}
+function gcashApprovalRequirement(ex){
+  if (String(ex?.approvalConfidenceSource || '') !== 'gcash_payment_fields') return '';
+  const confidence = Number(ex.approvalConfidence);
+  if (!Number.isFinite(confidence) || confidence < 0 || confidence > 1) return '';
+  const fields = ex?.gcash?.ocrEvidence?.fields || {};
+  const labels = {
+    amount:'Amount', totalAmount:'Total amount', reference:'Reference',
+    dateTime:'Receipt date and time', recipientPhone:'Recipient phone',
+    recipientName:'Recipient name',
+  };
+  const weakest = Object.keys(labels).find(key => {
+    const raw = fields?.[key]?.confidence;
+    const value = Number(raw);
+    return typeof raw === 'number' && Number.isFinite(value) && value >= 0 && value <= 1 &&
+      Math.abs(value - confidence) < 1e-9;
+  });
+  const state = confidence < .9 ? 'Below' : 'Meets';
+  return `${state} minimum 90.00%${weakest ? ` · Weakest field: ${labels[weakest]} (${receiptConfidencePercent(fields[weakest].confidence)})` : ''}`;
+}
 function receiptDetailsHtml(b){
   const ex = b.receiptExtracted || b.receipt_extracted || {};
   const gcash = ex.gcash || null;
@@ -7970,7 +7999,8 @@ function receiptDetailsHtml(b){
   const approvalConfidenceNumber = Number(ex.approvalConfidence);
   const hasApprovalConfidence = ex.approvalConfidence != null && Number.isFinite(approvalConfidenceNumber) &&
     approvalConfidenceNumber >= 0 && approvalConfidenceNumber <= 1;
-  const approvalConfidence = hasApprovalConfidence ? `${Math.round(approvalConfidenceNumber * 100)}%` : '--';
+  const approvalConfidence = hasApprovalConfidence ? receiptConfidencePercent(approvalConfidenceNumber) : '--';
+  const approvalRequirement = hasApprovalConfidence ? gcashApprovalRequirement(ex) : '';
   const approvalConfidenceSource = ({
     gcash_payment_fields: 'GCash payment details',
     bank_payment_fields: 'Payment details for this method',
@@ -8096,6 +8126,7 @@ function receiptDetailsHtml(b){
     [hasApprovalConfidence ? 'Original OCR Confidence' : 'OCR Confidence', receiptDetailValue(ocrConfidence)],
     ...(hasApprovalConfidence ? [
       ['Approval Confidence', receiptDetailValue(approvalConfidence)],
+      ...(approvalRequirement ? [['Approval Requirement', receiptDetailValue(approvalRequirement), true]] : []),
       ['Approval Confidence Based On', receiptDetailValue(approvalConfidenceSource), true],
     ] : []),
   ];

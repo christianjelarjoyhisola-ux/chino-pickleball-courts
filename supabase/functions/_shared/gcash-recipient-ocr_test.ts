@@ -113,6 +113,56 @@ Deno.test("GCash optical refinement rejects changed names, phone digits and disa
   }
 });
 
+Deno.test("GCash reconciles only a high-confidence single mask dropout with two-of-three structure", () => {
+  const original = primary("KR••••E L•• C.", "+63 960 942 2169");
+  const complete = observation("KR....E L.. C.\n+63 960 942 2169");
+  const dropped = observation("KR....E L. C.\n+63 960 942 2169");
+  dropped.recipientCropEvidence.name.confidence = 0.943793474;
+  complete.recipientCropEvidence.name.confidence = 0.9171828;
+  for (const crops of [
+    { native: dropped, enlarged: complete },
+    { native: complete, enlarged: dropped },
+  ]) {
+    const result = refineGcashRecipient(original, crops);
+    assertEquals(result.accepted, true);
+    assertEquals(result.changed, false);
+    assertEquals(result.reason, "mask_dropout_agreement");
+    assertEquals(result.receiver.name.raw, "KR....E L.. C.");
+    assertEquals(result.receiver.phone.raw, "+63 960 942 2169");
+    assertEquals(result.confidence, 0.9171828);
+    assertEquals(
+      result.observations.map((item) => item.text),
+      [crops.native.text, crops.enlarged.text],
+      "raw optical observations remain auditable",
+    );
+  }
+});
+
+Deno.test("GCash mask-dropout exception rejects character, mask-position and phone ambiguity", () => {
+  const original = primary("KR••••E L•• C.", "+63 960 942 2169");
+  const complete = "KR....E L.. C.\n+63 960 942 2169";
+  for (const other of [
+    "JR....E L. C.\n+63 960 942 2169",
+    "K....RE L. C.\n+63 960 942 2169",
+    "KRE L. C.\n+63 960 942 2169",
+    "KR....E L. C.\n+63 960 942 2179",
+    "KR....E L. C.\n+63 9.....2169",
+  ]) {
+    const result = refineGcashRecipient(original, {
+      native: observation(other),
+      enlarged: observation(complete),
+    });
+    assertEquals(result.accepted, false);
+    assertEquals(result.reason, "crop_recipients_disagree");
+  }
+  const bothDropped = refineGcashRecipient(original, {
+    native: observation("KR....E L. C.\n+63 960 942 2169"),
+    enlarged: observation("KR....E L. C.\n+63 960 942 2169"),
+  });
+  assertEquals(bothDropped.accepted, false);
+  assertEquals(bothDropped.reason, "crop_name_changed");
+});
+
 Deno.test("GCash crop scores must be native and above threshold in both views", () => {
   for (
     const bad of [

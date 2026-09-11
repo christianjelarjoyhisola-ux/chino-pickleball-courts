@@ -127,6 +127,22 @@ Deno.test("GCash accepted native recipient rereads replace only recipient field 
   });
 });
 
+Deno.test("GCash live mask-dropout consensus clears only the weak recipient fields", () => {
+  const observed = evidence();
+  observed.fields.amount!.confidence = 0.98965883;
+  observed.fields.totalAmount!.confidence = 0.9061786;
+  observed.fields.reference!.confidence = 0.98979497;
+  observed.fields.dateTime!.confidence = 0.98474344625;
+  observed.fields.recipientPhone!.confidence = 0.9767577483333333;
+  observed.fields.recipientName!.confidence = 0.8964695599999999;
+  const reread = crop(0.9171828);
+  reread.reason = "mask_dropout_agreement";
+  assertEquals(
+    gcashApprovalConfidence(0.9565279, "native", observed, reread),
+    { confidence: 0.9061786, source: "gcash_payment_fields" },
+  );
+});
+
 Deno.test("GCash rejected recipient rereads retain primary payment-field confidence", () => {
   const observed = evidence();
   observed.fields.recipientName!.confidence = 0.6;

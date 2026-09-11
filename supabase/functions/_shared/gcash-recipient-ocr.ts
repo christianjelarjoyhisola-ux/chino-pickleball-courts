@@ -51,6 +51,30 @@ function visibleName(value: string | null): string {
   return normalizedName(value).replace(/\*/g, "");
 }
 
+function differsOnlyByOneMissingMask(
+  completePattern: string,
+  partialPattern: string,
+): boolean {
+  if (completePattern === partialPattern) return false;
+  let completeIndex = 0;
+  let partialIndex = 0;
+  let droppedMasks = 0;
+  while (completeIndex < completePattern.length) {
+    if (
+      partialIndex < partialPattern.length &&
+      completePattern[completeIndex] === partialPattern[partialIndex]
+    ) {
+      completeIndex++;
+      partialIndex++;
+      continue;
+    }
+    if (completePattern[completeIndex] !== "*") return false;
+    droppedMasks++;
+    completeIndex++;
+  }
+  return droppedMasks === 1 && partialIndex === partialPattern.length;
+}
+
 function visiblePhone(value: string | null): string {
   let digits = String(value || "").replace(/\D/g, "");
   if (digits.startsWith("63")) digits = digits.slice(2);
@@ -170,41 +194,71 @@ export function refineGcashRecipient(
   }
   const [native, enlarged] = observations.map((entry) => entry.receiver);
   if (
-    normalizedName(native.name.raw) !== normalizedName(enlarged.name.raw) ||
     native.phone.visibility !== enlarged.phone.visibility ||
     normalizedPhone(native.phone.raw) !== normalizedPhone(enlarged.phone.raw)
   ) return reject("crop_recipients_disagree");
+  const primaryName = normalizedName(primary.receiver.name.raw);
+  const nativeName = normalizedName(native.name.raw);
+  const enlargedName = normalizedName(enlarged.name.raw);
+  let consensus = native;
+  let maskDropoutAgreement = false;
+  if (nativeName !== enlargedName) {
+    // Google Vision can read one dot from a short GCash mask run as ordinary
+    // punctuation. Accept that omission only with strict 2-of-3 structure:
+    // the primary read and one crop must match exactly, both crops must show
+    // the same visible letters and the same full phone, and the odd crop may
+    // only have removed mask tokens. No expected customer data participates.
+    if (
+      native.phone.visibility !== "full" ||
+      visibleName(native.name.raw) !== visibleName(enlarged.name.raw)
+    ) return reject("crop_recipients_disagree");
+    const aligned = nativeName === primaryName
+      ? { receiver: native, complete: nativeName, partial: enlargedName }
+      : enlargedName === primaryName
+      ? { receiver: enlarged, complete: enlargedName, partial: nativeName }
+      : null;
+    if (
+      !primaryName.includes("*") || !aligned ||
+      !differsOnlyByOneMissingMask(aligned.complete, aligned.partial)
+    ) return reject("crop_recipients_disagree");
+    consensus = aligned.receiver;
+    maskDropoutAgreement = true;
+  }
   if (
-    visibleName(primary.receiver.name.raw) !== visibleName(native.name.raw) ||
+    visibleName(primary.receiver.name.raw) !== visibleName(consensus.name.raw) ||
     (normalizedName(primary.receiver.name.raw).includes("*") &&
       normalizedName(primary.receiver.name.raw) !==
-        normalizedName(native.name.raw))
+        normalizedName(consensus.name.raw))
   ) return reject("crop_name_changed");
   if (
-    primary.receiver.phone.last4 !== native.phone.last4 ||
+    primary.receiver.phone.last4 !== consensus.phone.last4 ||
     visiblePhone(primary.receiver.phone.raw) !==
-      visiblePhone(native.phone.raw) ||
+      visiblePhone(consensus.phone.raw) ||
     (normalizedPhone(primary.receiver.phone.raw).includes("*") &&
       normalizedPhone(primary.receiver.phone.raw) !==
-        normalizedPhone(native.phone.raw)) ||
+        normalizedPhone(consensus.phone.raw)) ||
     (primary.receiver.phone.visibility === "full" &&
-      (native.phone.visibility !== "full" ||
-        primary.receiver.phone.normalized !== native.phone.normalized))
+      (consensus.phone.visibility !== "full" ||
+        primary.receiver.phone.normalized !== consensus.phone.normalized))
   ) return reject("crop_phone_changed");
   const changed = normalizedName(primary.receiver.name.raw) !==
-      normalizedName(native.name.raw) ||
-    primary.receiver.phone.raw !== native.phone.raw;
+      normalizedName(consensus.name.raw) ||
+    primary.receiver.phone.raw !== consensus.phone.raw;
   return {
     ...base,
     accepted: true,
     changed,
-    reason: changed ? "optical_agreement" : "unchanged",
+    reason: maskDropoutAgreement
+      ? "mask_dropout_agreement"
+      : changed
+      ? "optical_agreement"
+      : "unchanged",
     confidence: Math.min(
       ...observations.map((entry) => nativeIdentityConfidence(entry)!),
     ),
     receiver: {
-      name: { ...native.name, lineIndex: primary.receiver.name.lineIndex },
-      phone: { ...native.phone, lineIndex: primary.receiver.phone.lineIndex },
+      name: { ...consensus.name, lineIndex: primary.receiver.name.lineIndex },
+      phone: { ...consensus.phone, lineIndex: primary.receiver.phone.lineIndex },
     },
   };
 }

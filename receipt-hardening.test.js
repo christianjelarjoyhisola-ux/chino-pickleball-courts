@@ -167,6 +167,40 @@ test('receipt reading history shows only saved attempts and keeps agreement sepa
   assert.match(read('admin.html'), /ex\.originalOcrConfidence \?\? ex\.ocrConfidence/);
 });
 
+test('GCash approval confidence shows the true boundary and weakest payment field', () => {
+  const ui=receiptReviewUi();
+  const booking={receiptStatus:'manual_review',paymentStatus:'for_verification',status:'pending',
+    receiptFlags:['LOW_OCR_CONFIDENCE'],receiptExtracted:{provider:'gcash',
+      originalOcrConfidence:.9565279,approvalConfidence:.8964695599999999,
+      approvalConfidenceSource:'gcash_payment_fields',
+      gcash:{receiver:{name:{raw:'KR....E L.. C.'}},recipientComparison:{phone:'exact',name:'masked_compatible'},
+        indicators:{classification:'gcash'},ocrEvidence:{fields:{
+          amount:{confidence:.98965883},totalAmount:{confidence:.9061786},
+          reference:{confidence:.98979497},dateTime:{confidence:.98474344625},
+          recipientPhone:{confidence:.9767577483333333},recipientName:{confidence:.8964695599999999},
+        }}},
+    }};
+  const before=JSON.stringify(booking);
+  const html=ui.receiptDetailsHtml(booking);
+  assert.match(html,/Approval Confidence[\s\S]*?89\.65%/);
+  assert.match(html,/Approval Requirement[\s\S]*?Below minimum 90\.00%/);
+  assert.match(html,/Weakest field: Recipient name \(89\.65%\)/);
+  assert.match(html,/GCash payment details/);
+  assert.equal(JSON.stringify(booking),before,'confidence display cannot mutate review evidence');
+
+  const near=structuredClone(booking);
+  near.receiptExtracted.approvalConfidence=.89995;
+  near.receiptExtracted.gcash.ocrEvidence.fields.recipientName.confidence=.89995;
+  assert.match(ui.receiptDetailsHtml(near),/89\.9950%[\s\S]*?Below minimum 90\.00%/);
+  const boundary=structuredClone(booking);
+  boundary.receiptFlags=[];
+  boundary.receiptExtracted.approvalConfidence=.9;
+  boundary.receiptExtracted.gcash.ocrEvidence.fields.recipientName.confidence=.9;
+  assert.match(ui.receiptDetailsHtml(boundary),/90\.00%[\s\S]*?Meets minimum 90\.00%/);
+  const admin=read('admin.html');
+  assert.doesNotMatch(admin,/approvalConfidenceNumber \* 100\)\}%/);
+});
+
 test('saved OCR service failures and conflicting readings have different owner explanations', () => {
   const service = readingHistoryRows({receiptExtracted:{readingRecovery:{
     attempted:true, accepted:false, reason:'transport_unavailable', readings:[{outcome:'error'}],
