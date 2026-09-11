@@ -7,7 +7,7 @@
 <link rel="icon" type="image/jpeg" href="logochino.jpg">
 <link rel="stylesheet" href="payment-method-brand.css?v=20260901-payment-icons-v2" />
 <link rel="stylesheet" href="availability-graphic.css?v=20260909-official-logo-v1" />
-<link rel="stylesheet" href="dashboard-court-activity.css?v=20260911-tomorrow-date-v5" />
+<link rel="stylesheet" href="dashboard-court-activity.css?v=20260911-tomorrow-date-v6" />
 <script src="dashboard-court-activity.js?v=20260911-tomorrow-slots-v1"></script>
 <script src="payment-method-brand.js?v=20260909-security-bank"></script>
 <script src="chart.min.js"></script>
@@ -9587,8 +9587,8 @@ function renderCourtActivityTvPromo() {
   $('courtActivityTvTitle').textContent = 'Tomorrow’s Court Availability';
   body.innerHTML = `<section class="ca-tv-promo" aria-label="Tomorrow’s available court times">
     <header class="ca-tv-promo-hero">
-      <div class="ca-tv-promo-copy"><span class="ca-tv-promo-kicker">Tomorrow at CHINO</span><h2>${hasOpenings ? 'Your next game is waiting.' : 'Tomorrow is fully booked.'}</h2><p>${hasOpenings ? 'Book your court for tomorrow.' : 'Explore the next available play date online.'}</p></div>
-      <div class="ca-tv-promo-status"><div class="ca-tv-promo-date"><span>Tomorrow’s date</span><strong>${esc(snapshot.dateLabel)}</strong></div><div class="ca-tv-promo-live"><i></i><span>Live availability</span><small>Updated ${esc(new Date(snapshot.generatedAt).toLocaleTimeString('en-PH',{timeZone:'Asia/Manila',hour:'numeric',minute:'2-digit'}))} PH</small></div></div>
+      <div class="ca-tv-promo-copy"><span class="ca-tv-promo-kicker">Tomorrow at CHINO</span><strong class="ca-tv-promo-date-line">${esc(snapshot.dateLabel)}</strong><h2>${hasOpenings ? 'Your next game is waiting.' : 'Tomorrow is fully booked.'}</h2><p>${hasOpenings ? 'Book your court for tomorrow.' : 'Explore the next available play date online.'}</p></div>
+      <div class="ca-tv-promo-live"><i></i><span>Live availability</span><small>Updated ${esc(new Date(snapshot.generatedAt).toLocaleTimeString('en-PH',{timeZone:'Asia/Manila',hour:'numeric',minute:'2-digit'}))} PH</small></div>
     </header>
     <div class="ca-tv-promo-grid">${snapshot.courts.map(courtActivityTvPromoCard).join('')}</div>
     <footer class="ca-tv-promo-footer">

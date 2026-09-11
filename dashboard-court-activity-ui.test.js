@@ -124,8 +124,9 @@ test('premium TV promotes authoritative tomorrow slots every five seconds withou
   assert.match(css, /\.ca-tv-promo-hero h2\s*\{[^}]*font-family:'DM Sans',sans-serif[^}]*line-height:1\.08[^}]*text-transform:none/);
   assert.match(css, /\.ca-tv-promo-kicker\s*\{[^}]*font-size:clamp\(15px,1\.05vw,20px\)/);
   assert.match(css, /\.ca-tv-promo-hero p\s*\{[^}]*font-size:clamp\(20px,1\.45vw,28px\)[^}]*font-weight:750/);
-  assert.match(promo, /ca-tv-promo-date[\s\S]*?Tomorrow’s date[\s\S]*?snapshot\.dateLabel/);
-  assert.match(css, /\.ca-tv-promo-date strong\s*\{[^}]*font-size:clamp\(21px,1\.55vw,30px\)[^}]*font-weight:850/);
+  assert.match(promo, /ca-tv-promo-date-line[\s\S]*?snapshot\.dateLabel/);
+  assert.match(css, /\.ca-tv-promo-date-line\s*\{[^}]*font-size:clamp\(21px,1\.55vw,30px\)[^}]*font-weight:850/);
+  assert.doesNotMatch(promo, /ca-tv-promo-status|Tomorrow’s date/);
   assert.match(css, /\.ca-tv-promo-cta small\s*\{[^}]*font-size:clamp\(16px,1\.25vw,23px\)[^}]*font-weight:850/);
   assert.match(css, /\.ca-tv-promo-qr\s*\{[^}]*width:clamp\(140px,9vw,176px\)[^}]*height:clamp\(140px,9vw,176px\)[^}]*border:9px solid #fff/);
   assert.match(promo, /ca-tv-promo-qr-wrap[\s\S]*?>Scan to book</);
