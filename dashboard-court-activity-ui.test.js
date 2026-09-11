@@ -115,7 +115,7 @@ test('premium TV promotes authoritative tomorrow slots every five seconds withou
   assert.match(promo, /DB\.getAvailabilityGraphic\(date, \[\]\)/, 'authoritative availability RPC is refreshed before display');
   assert.match(promo, /court\.slots\.slice[\s\S]*?slot\.label[\s\S]*?>Available</);
   assert.match(promo, /Book your court for tomorrow/);
-  assert.match(promo, /PaddleRageQRCode\.toCanvas[\s\S]*?www\.chinopickleballcourt\.com/);
+  assert.match(promo, /PaddleRageQRCode\.toCanvas[\s\S]*?width: 220[\s\S]*?www\.chinopickleballcourt\.com/);
   assert.doesNotMatch(promo, /price|fullName|displayName|customer|email/i);
   assert.match(lifecycle, /if \(!_courtActivityTvPromoActive\)[\s\S]*?_courtActivityTvPage \+= 1/, 'today paging pauses during the promotion');
   assert.match(lifecycle, /clearInterval\(_courtActivityTvPromoScheduleTimer\)[\s\S]*?clearTimeout\(_courtActivityTvPromoEndTimer\)/, 'closing TV clears every promotion timer');
@@ -125,5 +125,7 @@ test('premium TV promotes authoritative tomorrow slots every five seconds withou
   assert.match(css, /\.ca-tv-promo-kicker\s*\{[^}]*font-size:clamp\(15px,1\.05vw,20px\)/);
   assert.match(css, /\.ca-tv-promo-hero p\s*\{[^}]*font-size:clamp\(20px,1\.45vw,28px\)[^}]*font-weight:750/);
   assert.match(css, /\.ca-tv-promo-cta small\s*\{[^}]*font-size:clamp\(16px,1\.25vw,23px\)[^}]*font-weight:850/);
+  assert.match(css, /\.ca-tv-promo-qr\s*\{[^}]*width:clamp\(140px,9vw,176px\)[^}]*height:clamp\(140px,9vw,176px\)[^}]*border:9px solid #fff/);
+  assert.match(promo, /ca-tv-promo-qr-wrap[\s\S]*?>Scan to book</);
   assert.match(css, /@media\(prefers-reduced-motion:reduce\)[\s\S]*?animation:none/);
 });
