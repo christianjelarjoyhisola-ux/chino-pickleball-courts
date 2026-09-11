@@ -1128,6 +1128,16 @@ tr:hover td { background: var(--bg2); }
   font-size: .75rem; line-height: 1.55;
 }
 .booking-payment-reject-warning strong { color: var(--red); }
+.booking-cancel-overlay { z-index: 555; }
+.booking-cancel-modal { max-width: 580px; display:flex; flex-direction:column; overflow:hidden; }
+.booking-cancel-modal .m-body { min-height:0; overflow-y:auto; }
+.booking-cancel-modal :is(button,select,textarea):disabled { opacity:.55; cursor:not-allowed; transform:none; }
+.booking-cancel-summary { display:grid; grid-template-columns:1fr 1fr; gap:9px; margin-bottom:14px; }
+.booking-cancel-summary > div { padding:11px 12px; border:1px solid var(--border); border-radius:10px; background:var(--input); }
+.booking-cancel-summary span { display:block; color:var(--text3); font-size:.62rem; font-weight:800; letter-spacing:.65px; text-transform:uppercase; margin-bottom:4px; }
+.booking-cancel-summary strong { display:block; color:var(--text); overflow-wrap:anywhere; }
+.booking-cancel-note { min-height:108px; resize:vertical; line-height:1.5; }
+.booking-cancel-privacy { margin-top:12px; padding:10px 12px; border:1px solid rgba(200,160,96,.28); border-radius:10px; background:rgba(200,160,96,.08); color:var(--text2); font-size:.74rem; line-height:1.5; }
 .booking-payment-transfer-overlay { z-index: 570; }
 .booking-payment-transfer-modal { max-width: 780px; display: flex; flex-direction: column; overflow: hidden; }
 .booking-payment-transfer-modal .m-hd,
@@ -1186,6 +1196,7 @@ tr:hover td { background: var(--bg2); }
   .booking-payment-reject-summary { grid-template-columns: 1fr; }
   .booking-payment-reject-summary .amount { text-align: left; }
   .booking-payment-reject-help { align-items: flex-start; }
+  .booking-cancel-summary { grid-template-columns:1fr; }
   .booking-payment-transfer-modal { max-width: 100%; max-height: calc(100dvh - 24px); }
   .booking-payment-transfer-modal .m-hd { padding: 14px 16px; }
   .booking-payment-transfer-modal .m-body { padding: 14px 16px; }
@@ -6684,6 +6695,47 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(45, 62, 79, .1
   </div>
 </div>
 
+<!-- BOOKING CANCELLATION RECORD -->
+<div class="overlay booking-cancel-overlay" id="bookingCancelModal" aria-hidden="true" inert hidden>
+  <div class="modal booking-cancel-modal" id="bookingCancelDialog" role="dialog" aria-modal="true" aria-labelledby="bookingCancelTitle" aria-describedby="bookingCancelImpact" aria-busy="false" tabindex="-1" onkeydown="bookingCancelModalKeydown(event)">
+    <div class="m-hd booking-payment-reject-head">
+      <div><h2 id="bookingCancelTitle">CANCEL BOOKING</h2><p style="margin:4px 0 0;color:var(--muted);font-size:.75rem">Save a permanent internal cancellation record.</p></div>
+      <button class="m-x" type="button" id="bookingCancelClose" aria-label="Keep booking and close" onclick="closeBookingCancelModal()">&#10005;</button>
+    </div>
+    <div class="m-body">
+      <div class="booking-cancel-summary">
+        <div><span>Booking</span><strong id="bookingCancelRef">—</strong></div>
+        <div><span>Schedule</span><strong id="bookingCancelSchedule">—</strong></div>
+      </div>
+      <p class="booking-payment-reject-impact" id="bookingCancelImpact">Loading booking impact…</p>
+      <div class="fg">
+        <label class="fl" for="bookingCancelReason">Cancellation reason <span style="color:var(--red)">*</span></label>
+        <select class="fi" id="bookingCancelReason" required onchange="syncBookingCancelForm()">
+          <option value="">Choose a reason</option>
+          <option value="player_request">Player requested cancellation</option>
+          <option value="duplicate_mistake">Duplicate or mistaken booking</option>
+          <option value="payment_not_received">Payment not received</option>
+          <option value="court_unavailable">Court unavailable or maintenance</option>
+          <option value="weather">Weather</option>
+          <option value="incomplete_hold">Incomplete reservation released</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div class="fg" style="margin-top:12px">
+        <label class="fl" for="bookingCancelNote">Internal note <span id="bookingCancelNoteRequirement">Optional</span></label>
+        <textarea class="fi booking-cancel-note" id="bookingCancelNote" maxlength="1000" aria-describedby="bookingCancelNoteHelp bookingCancelCount" placeholder="Add useful context for the court owner. Do not include payment secrets." oninput="syncBookingCancelForm()"></textarea>
+        <div class="booking-payment-reject-help"><span id="bookingCancelNoteHelp">Required only when Other is selected.</span><span id="bookingCancelCount">0 / 1000</span></div>
+      </div>
+      <div class="booking-cancel-privacy"><strong>Internal record:</strong> the selected reason, note, operator, and Philippine cancellation time will be kept in Booking Details and Activity History. The private note is not sent to the player.</div>
+      <div class="booking-payment-reject-warning" style="margin-top:12px"><strong>Slots will be released.</strong> <span id="bookingCancelWarning">This booking will be cancelled.</span></div>
+    </div>
+    <div class="m-foot">
+      <button class="btn btn-g" type="button" id="bookingCancelKeep" onclick="closeBookingCancelModal()">Keep booking</button>
+      <button class="btn btn-d" type="button" id="bookingCancelConfirm" disabled onclick="confirmBookingCancellation()">Cancel booking</button>
+    </div>
+  </div>
+</div>
+
 <!-- VERIFY PAYMENT MODAL -->
 <div class="overlay" id="verifyModal" aria-hidden="true" inert hidden>
   <div class="modal verify-payment-modal" role="dialog" aria-modal="true" aria-labelledby="verifyPaymentTitle" tabindex="-1" onkeydown="verifyPaymentModalKeydown(event)">
@@ -8761,6 +8813,22 @@ function renderAdminRescheduleHistory(rows, bookings) {
     </div>`;
   }).join('')}</div>`;
 }
+function renderBookingCancellationHistory(rows){
+  if(!Array.isArray(rows)||!rows.length) return '';
+  return `<div class="booking-detail-section"><h3>Cancellation record</h3>${rows.map(record=>{
+    const cancelledAt=bookingCancellationValue(record,'cancelledAt','cancelled_at');
+    const parsed=new Date(cancelledAt||'');
+    const when=Number.isNaN(parsed.getTime())?'Time unavailable':parsed.toLocaleString('en-PH',{timeZone:'Asia/Manila',month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'});
+    const reason=bookingCancellationReasonLabel(bookingCancellationValue(record,'reasonCode','reason_code'));
+    const note=bookingCancellationValue(record,'note','note');
+    const actor=bookingCancellationValue(record,'cancelledByName','cancelled_by_name')||'Administrator';
+    const role=String(bookingCancellationValue(record,'cancelledByRole','cancelled_by_role')||'').replace(/_/g,' ');
+    return `<div class="booking-reschedule-history-item" style="padding:12px 0;border-bottom:1px solid var(--border);overflow-wrap:anywhere">
+      <strong>${esc(reason)}</strong><div style="color:var(--text3);font-size:.72rem;margin-top:4px">${esc(when)} · PH time · ${esc(actor)}${role?` (${esc(role)})`:''}</div>
+      <div style="margin-top:9px;font-size:.8rem"><span style="color:var(--text3)">Internal note:</span><div style="white-space:pre-wrap;margin-top:4px">${esc(note||'No additional note.')}</div></div>
+    </div>`;
+  }).join('')}</div>`;
+}
 async function openBookingDetails(ref) {
   const modal = $('bookingDetailsModal');
   const body = $('bookingDetailsBody');
@@ -8776,6 +8844,11 @@ async function openBookingDetails(ref) {
     if(DB.getAdminRescheduleHistory) {
       try { rescheduleHistory=renderAdminRescheduleHistory(await DB.getAdminRescheduleHistory(historyBookings.map(item=>item.ref)),historyBookings); }
       catch (_) { rescheduleHistory='<div class="booking-detail-section"><h3>Reschedule history</h3><p>History could not be loaded. Reopen Booking Details to retry.</p></div>'; }
+    }
+    let cancellationHistory='';
+    if(DB.getBookingCancellationHistory){
+      try { cancellationHistory=renderBookingCancellationHistory(await DB.getBookingCancellationHistory(historyBookings.map(item=>item.ref))); }
+      catch (_) { cancellationHistory='<div class="booking-detail-section"><h3>Cancellation record</h3><p>The record could not be loaded. Reopen Booking Details to retry.</p></div>'; }
     }
     const notifications = b.hostBooking && DB.getBookingBalanceNotifications ? await DB.getBookingBalanceNotifications(bookingKey) : [];
     const total = Number(b.total || 0);
@@ -8816,6 +8889,7 @@ async function openBookingDetails(ref) {
         <div class="booking-detail-row"><span>Payment state</span><strong>${pendingBalance ? 'Balance receipt awaiting review' : esc(payStatusText(b.paymentStatus))}</strong></div>
         <div class="booking-detail-row"><span>Policy</span><strong>Final and non-refundable</strong></div>
       </div>
+      ${cancellationHistory}
       ${rescheduleHistory}
       ${b.hostBooking ? `<div class="booking-detail-section"><h3>Email history</h3><div class="booking-notice-list">${notices}</div></div>` : ''}`;
     const actionRef = b.primaryRef || b.ref;
@@ -11672,7 +11746,132 @@ function quickConfirmBooking(ref, trigger) {
   return confirmBookingTransaction(ref, { trigger });
 }
 
+const BOOKING_CANCELLATION_REASON_LABELS = {
+  player_request:'Player requested cancellation',
+  duplicate_mistake:'Duplicate or mistaken booking',
+  payment_not_received:'Payment not received',
+  court_unavailable:'Court unavailable or maintenance',
+  weather:'Weather',
+  incomplete_hold:'Incomplete reservation released',
+  other:'Other',
+};
+let _bookingCancelContext = null;
+let _bookingCancelInFlight = false;
+function bookingCancellationValue(record, camel, snake){ return record?.[camel] ?? record?.[snake] ?? null; }
+function bookingCancellationReasonLabel(code){ return BOOKING_CANCELLATION_REASON_LABELS[String(code || '').toLowerCase()] || 'Recorded cancellation'; }
+function bookingCancellationCustomerMessage(reasonCode){
+  return ({
+    player_request:'The booking was cancelled at the player’s request.',
+    duplicate_mistake:'The duplicate or mistaken booking was cancelled by the CHINO team.',
+    payment_not_received:'The booking was cancelled because payment was not received or confirmed.',
+    court_unavailable:'The booking was cancelled because the court became unavailable. Please contact the CHINO team if you need help rebooking.',
+    weather:'The booking was cancelled because of weather conditions.',
+    incomplete_hold:'The incomplete reservation was released.',
+  })[reasonCode] || 'The booking was cancelled by the CHINO team.';
+}
+function syncBookingCancelForm(){
+  const reason = String($('bookingCancelReason')?.value || '');
+  const noteField = $('bookingCancelNote');
+  const note = String(noteField?.value || '').trim();
+  const noteRequired = reason === 'other';
+  if (noteField) noteField.required = noteRequired;
+  if ($('bookingCancelNoteRequirement')) $('bookingCancelNoteRequirement').textContent = noteRequired ? 'Required' : 'Optional';
+  if ($('bookingCancelNoteHelp')) $('bookingCancelNoteHelp').textContent = noteRequired ? 'Enter at least 5 characters for Other.' : 'Optional context for the internal record.';
+  if ($('bookingCancelCount')) $('bookingCancelCount').textContent = `${String(noteField?.value || '').length} / 1000`;
+  const button = $('bookingCancelConfirm');
+  if (button) button.disabled = _bookingCancelInFlight || !_bookingCancelContext || !reason || (noteRequired && note.length < 5);
+}
+function setBookingCancelBusy(busy){
+  $('bookingCancelDialog')?.setAttribute('aria-busy', busy ? 'true' : 'false');
+  ['bookingCancelClose','bookingCancelKeep','bookingCancelReason','bookingCancelNote'].forEach(id => { const control=$(id); if(control) control.disabled=!!busy; });
+  syncBookingCancelForm();
+}
+function bookingCancelModalKeydown(event){
+  const overlay=$('bookingCancelModal');
+  if(!overlay?.classList.contains('show')) return;
+  if(event.key==='Escape'){ event.preventDefault(); closeBookingCancelModal(); return; }
+  if(event.key!=='Tab') return;
+  const focusable=[...overlay.querySelectorAll('button:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])')].filter(el=>el.offsetParent!==null);
+  if(!focusable.length) return;
+  const first=focusable[0],last=focusable[focusable.length-1];
+  if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}
+  else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
+}
+function closeBookingCancelModal({restoreFocus=true,force=false}={}){
+  if(_bookingCancelInFlight&&!force) return;
+  const context=_bookingCancelContext;
+  const overlay=$('bookingCancelModal');
+  if(overlay){overlay.classList.remove('show');overlay.setAttribute('aria-hidden','true');overlay.inert=true;overlay.hidden=true;}
+  if($('bookingCancelReason')) $('bookingCancelReason').value='';
+  if($('bookingCancelNote')) $('bookingCancelNote').value='';
+  _bookingCancelContext=null;
+  syncBookingCancelForm();
+  renderBookings().catch(()=>{});
+  if(restoreFocus&&context?.trigger?.isConnected) requestAnimationFrame(()=>context.trigger.focus());
+}
+async function openBookingCancelModal(ref,trigger=null){
+  if(!canManuallyResolvePayment()){toast('Only the system owner or court owner can cancel a booking.','err');return;}
+  const actionRef=String(ref||'').trim();
+  if(!actionRef||_bookingCancelInFlight) return;
+  try{
+    const booking=await getBookingGroupByRef(actionRef);
+    if(!booking) throw new Error('Booking not found.');
+    if(['completed','forfeited'].includes(String(booking.status||'').toLowerCase())) throw new Error('Completed or forfeited bookings cannot be cancelled here.');
+    if(booking.paymentReassignedToRef||bookingGroupRowsForPaymentGuard(booking).some(row=>Boolean(row?.paymentReassignedToRef))) throw new Error('This payment-transfer source must remain cancelled for the permanent audit.');
+    const items=booking.allItems||booking.items||[booking];
+    const canonicalRef=booking.primaryRef||booking.ref||actionRef;
+    _bookingCancelContext={ref:canonicalRef,trigger};
+    $('bookingCancelRef').textContent=booking.displayRef||canonicalRef;
+    $('bookingCancelSchedule').textContent=booking.scheduleLabel||`${fmtD(booking.date)} · ${booking.timeLabel||''}`;
+    $('bookingCancelImpact').textContent=items.length===1?'This will cancel the booking and release its court slots.':`This will cancel all ${items.length} court reservations in this booking and release their slots.`;
+    $('bookingCancelWarning').textContent=items.length===1?'This booking will be cancelled and its slots released.':`All ${items.length} linked reservations will receive the same permanent reason.`;
+    $('bookingCancelReason').value=isPlaceholderHold(booking)?'incomplete_hold':'';
+    $('bookingCancelNote').value='';
+    const overlay=$('bookingCancelModal');
+    overlay.hidden=false;overlay.inert=false;overlay.setAttribute('aria-hidden','false');overlay.classList.add('show');
+    setBookingCancelBusy(false);
+    requestAnimationFrame(()=>$('bookingCancelReason').focus());
+  }catch(error){toast(error?.message||'Could not open booking cancellation.','err');await renderBookings();}
+}
+async function confirmBookingCancellation(){
+  const context=_bookingCancelContext;
+  const reasonCode=String($('bookingCancelReason')?.value||'').trim();
+  const note=String($('bookingCancelNote')?.value||'').trim();
+  if(!context||_bookingCancelInFlight) return;
+  if(!BOOKING_CANCELLATION_REASON_LABELS[reasonCode]){toast('Choose a cancellation reason.','err');return;}
+  if(reasonCode==='other'&&note.length<5){toast('Enter a short note when Other is selected.','err');$('bookingCancelNote')?.focus();return;}
+  if(typeof DB.cancelBookingGroup!=='function'){toast('The cancellation service is unavailable. Refresh and try again.','err');return;}
+  const button=$('bookingCancelConfirm');
+  const idleText=button?.textContent||'Cancel booking';
+  let committed=false;
+  _bookingCancelInFlight=true;if(button){button.disabled=true;button.textContent='Cancelling…';}setBookingCancelBusy(true);
+  try{
+    const current=await getBookingGroupByRef(context.ref);
+    if(!current) throw new Error('Booking not found.');
+    const canonicalRef=current.primaryRef||current.ref||context.ref;
+    const result=await DB.cancelBookingGroup(canonicalRef,reasonCode,note);
+    if(result?.transitioned===false){closeBookingCancelModal({restoreFocus:false,force:true});toast('This booking was already cancelled. Its original record was kept.','inf');return;}
+    committed=true;
+    closeBookingCancelModal({restoreFocus:false,force:true});
+    await Promise.allSettled([renderBookings(),renderDash()]);
+    Promise.allSettled([
+      DB.sendBookingStatusEmail(canonicalRef,'booking_cancelled',bookingCancellationCustomerMessage(reasonCode),{allowFailure:true}),
+      notifyBookingUpdateSafe(canonicalRef,'booking_cancelled'),
+    ]).catch(()=>{});
+    toast(`Booking cancelled. “${bookingCancellationReasonLabel(reasonCode)}” was saved permanently.`,'inf');
+  }catch(error){
+    if(committed){closeBookingCancelModal({restoreFocus:false,force:true});toast('The cancellation was saved, but this screen could not fully refresh. Reload to see the record.','err');}
+    else toast(error?.message||'Could not cancel this booking.','err');
+  }finally{
+    _bookingCancelInFlight=false;setBookingCancelBusy(false);if(button?.isConnected){button.disabled=false;button.textContent=idleText;}syncBookingCancelForm();
+  }
+}
+
 async function updateStatus(ref, status) {
+  if (status === 'cancelled') {
+    await openBookingCancelModal(ref, document.activeElement);
+    return;
+  }
   const current = await getBookingGroupByRef(ref);
   if (current?.paymentReassignedToRef || bookingGroupRowsForPaymentGuard(current).some(row => Boolean(row?.paymentReassignedToRef))) {
     toast('This is the cancelled source of a completed payment move. It must remain cancelled for the permanent audit.', 'err');
@@ -19253,6 +19452,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     if(e.target!==ov) return;
     if(ov.id==='hostAccountModal') closeHostAccountDetails();
     else if(ov.id==='bookingDetailsModal') closeBookingDetails();
+    else if(ov.id==='bookingCancelModal') closeBookingCancelModal();
     else if(ov.id==='verifyModal') closeVerifyModal();
     else if(ov.id==='bookingPaymentRejectModal') closeBookingPaymentRejectModal();
     else if(ov.id==='bookingPaymentTransferModal') closeBookingPaymentTransferModal();

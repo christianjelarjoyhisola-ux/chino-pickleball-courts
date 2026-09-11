@@ -47,6 +47,9 @@
     quickConfirmBooking: 'Confirm booking payment received',
     verifyAndConfirm: 'Confirm booking payment received',
     updateStatus: 'Change the booking status',
+    openBookingCancelModal: 'Open the booking cancellation form',
+    closeBookingCancelModal: 'Close without cancelling the booking',
+    confirmBookingCancellation: 'Cancel a booking with a recorded reason',
     updatePaymentStatus: 'Change the booking payment status',
     restoreForfeitedHostBooking: 'Restore a forfeited host booking as fully paid',
     resendConfirmationEmail: 'Resend the booking confirmation email',
@@ -126,6 +129,8 @@
   change('#prSearch', 'payment_review_search', 'Search payments for review', 'payreview');
   change('#prType', 'payment_review_type_filter', 'Filter payments by booking type', 'payreview');
   change('#prStatus', 'payment_review_status_filter', 'Filter payments by review status', 'payreview');
+  change('#bookingCancelReason', 'booking_cancellation_reason_select', 'Choose a booking cancellation reason', 'bookings');
+  change('#bookingCancelNote', 'booking_cancellation_note_edit', 'Edit the internal booking cancellation note', 'bookings');
   add('#sec-payreview .pr-log-panel > summary', 'payment_review_log_toggle', 'Show or hide the recent payment log', 'payreview');
   for (const [period, label] of Object.entries({ week: 'View this week’s revenue report', month: 'View this month’s revenue report', all: 'View the revenue report for all dates', custom: 'Choose a custom report period' })) {
     add(`#rp-${period}`, `report_period_${period}`, label, 'reports');

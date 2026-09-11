@@ -1996,6 +1996,37 @@ window.DB = {
     _pbClearFastCache(['bookings']);
   },
 
+  async cancelBookingGroup(ref, reasonCode, note = '') {
+    const bookingRef = String(ref || '').trim();
+    if (!bookingRef) throw new Error('A booking reference is required.');
+    const { data, error } = await _sb.rpc('cancel_booking_group', {
+      p_booking_ref: bookingRef,
+      p_reason_code: String(reasonCode || '').trim().toLowerCase(),
+      p_note: String(note || '').trim() || null,
+    });
+    if (error) {
+      console.error('cancelBookingGroup:', error);
+      throw new Error(_extractFnError(error, 'Could not cancel this booking'));
+    }
+    const result = Array.isArray(data) ? data[0] || null : data;
+    if (!result || typeof result.transitioned !== 'boolean') {
+      throw new Error('The cancellation service returned an invalid result.');
+    }
+    _pbClearFastCache(['bookings']);
+    return result;
+  },
+
+  async getBookingCancellationHistory(refs) {
+    const bookingRefs = [...new Set((Array.isArray(refs) ? refs : [refs])
+      .map(value => String(value || '').trim()).filter(Boolean))];
+    if (!bookingRefs.length) return [];
+    const { data, error } = await _sb.from('booking_cancellation_records')
+      .select('*').overlaps('booking_refs', bookingRefs)
+      .order('cancelled_at', { ascending: false });
+    if (error) throw new Error(_extractFnError(error, 'Could not load cancellation history'));
+    return data || [];
+  },
+
   async confirmBookingTransaction(ref) {
     const bookingRef = String(ref || '').trim();
     if (!bookingRef) throw new Error('A booking reference is required.');
@@ -3710,6 +3741,7 @@ window.DB = {
     return {
       courts: defaultCourts(),
       bookings: defaultHostDemoBookings(),
+      bookingCancellationRecords: [],
       bookingRescheduleRequests: [],
       openPlayRegistrations: [],
       openPlayHostApplications: [],
@@ -3772,6 +3804,7 @@ window.DB = {
       settings: { ...defaultSettings(), ...(parsed.settings || {}) },
       courts: Array.isArray(parsed.courts) ? parsed.courts : defaultCourts(),
       bookings,
+      bookingCancellationRecords: Array.isArray(parsed.bookingCancellationRecords) ? parsed.bookingCancellationRecords : [],
       bookingRescheduleRequests: Array.isArray(parsed.bookingRescheduleRequests) ? parsed.bookingRescheduleRequests : [],
       openPlayRegistrations: Array.isArray(parsed.openPlayRegistrations) ? parsed.openPlayRegistrations : [],
       openPlayHostApplications: Array.isArray(parsed.openPlayHostApplications) ? parsed.openPlayHostApplications : [],
@@ -5334,6 +5367,51 @@ window.DB = {
         throw missing;
       }
       writeDb(db);
+    },
+    async cancelBookingGroup(ref, reasonCode, note = '') {
+      const session = window.Auth?.getSession?.() || null;
+      if (!session || !['owner','court_owner'].includes(String(session.role || '')) ||
+          (session.status && session.status !== 'active')) {
+        throw new Error('Only an active owner or court owner can cancel a booking.');
+      }
+      const bookingRef = String(ref || '').trim();
+      const reasonKey = String(reasonCode || '').trim().toLowerCase();
+      const cleanNote = String(note || '').trim();
+      const allowed = new Set(['player_request','duplicate_mistake','payment_not_received','court_unavailable','weather','incomplete_hold','other']);
+      if (!allowed.has(reasonKey)) throw new Error('Choose a cancellation reason.');
+      if (reasonKey === 'other' && cleanNote.length < 5) throw new Error('Enter a short note when Other is selected.');
+      if (cleanNote.length > 1000) throw new Error('Keep the cancellation note within 1000 characters.');
+      const db = readDb();
+      const anchor = db.bookings.find(item => String(item.ref) === bookingRef);
+      if (!anchor) throw new Error('Booking not found.');
+      const groupRef = String(anchor.groupRef || anchor.bookingGroupRef || anchor.booking_group_ref || '').trim();
+      const rows = groupRef
+        ? db.bookings.filter(item => String(item.groupRef || item.bookingGroupRef || item.booking_group_ref || '').trim() === groupRef)
+        : [anchor];
+      if (rows.some(item => ['completed','forfeited'].includes(String(item.status || '').toLowerCase()))) {
+        throw new Error('Completed or forfeited bookings cannot be cancelled here.');
+      }
+      if (rows.some(item => item.paymentReassignedToRef || item.payment_reassigned_to_ref)) {
+        throw new Error('A cancelled payment-transfer source must remain unchanged.');
+      }
+      const bookingRefs = rows.map(item => String(item.ref));
+      const existing = rows.every(item => String(item.status || '').toLowerCase() === 'cancelled');
+      if (existing) {
+        const previous = (db.bookingCancellationRecords || []).find(item =>
+          (item.bookingRefs || item.booking_refs || []).some(value => bookingRefs.includes(String(value))));
+        return { transitioned:false,booking_ref:bookingRef,booking_refs:bookingRefs,cancellation_id:previous?.id || null,cancelled_at:previous?.cancelledAt || previous?.cancelled_at || null };
+      }
+      const cancelledAt = new Date().toISOString();
+      db.bookings = db.bookings.map(item => bookingRefs.includes(String(item.ref)) ? { ...item,status:'cancelled' } : item);
+      const record = { id:localRef('cancel'),bookingRef,bookingGroupRef:groupRef || null,bookingRefs,reasonCode:reasonKey,note:cleanNote || null,cancelledByUserId:session.id || null,cancelledByName:session.fullName || session.name || session.username || 'Administrator',cancelledByRole:session.role,cancelledAt };
+      db.bookingCancellationRecords = [record, ...(db.bookingCancellationRecords || [])];
+      writeDb(db);
+      return { transitioned:true,booking_ref:bookingRef,booking_refs:bookingRefs,cancellation_id:record.id,cancelled_at:cancelledAt };
+    },
+    async getBookingCancellationHistory(refs) {
+      const wanted = new Set((Array.isArray(refs) ? refs : [refs]).map(value => String(value || '')).filter(Boolean));
+      return (readDb().bookingCancellationRecords || []).filter(record =>
+        (record.bookingRefs || record.booking_refs || []).some(value => wanted.has(String(value))));
     },
     async confirmBookingTransaction(ref) {
       const bookingRef = String(ref || '').trim();
