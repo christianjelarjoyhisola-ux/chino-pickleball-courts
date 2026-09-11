@@ -55,14 +55,16 @@ const CONTEXT = {
 
 Deno.test("Maya completed receipt cannot override an adverse transaction status", () => {
   assert(flagsFor(RECEIPT).length === 0, "baseline receipt must be clean");
-  for (const [status, flag] of [
-    ["Processing", "TRANSFER_PENDING"],
-    ["Pending", "TRANSFER_PENDING"],
-    ["Failed", "TRANSFER_STATUS_INVALID"],
-    ["Reversed", "TRANSFER_STATUS_INVALID"],
-    ["Cancelled", "TRANSFER_STATUS_INVALID"],
-    ["Refunded", "TRANSFER_STATUS_INVALID"],
-  ]) {
+  for (
+    const [status, flag] of [
+      ["Processing", "TRANSFER_PENDING"],
+      ["Pending", "TRANSFER_PENDING"],
+      ["Failed", "TRANSFER_STATUS_INVALID"],
+      ["Reversed", "TRANSFER_STATUS_INVALID"],
+      ["Cancelled", "TRANSFER_STATUS_INVALID"],
+      ["Refunded", "TRANSFER_STATUS_INVALID"],
+    ]
+  ) {
     const text = `${RECEIPT}\nTransaction status: ${status}`;
     assertFlag(text, flag);
     assert(!parseMayaToGcashReceipt(text).indicators.completionScreen, status);
@@ -109,7 +111,11 @@ Deno.test("Maya parser verifies the supplied live Maya-to-GCash layout", () => {
   );
   assertEquals(parsed.transferFee.amount, 10, "separate transfer fee");
   assertEquals(parsed.timestamp.date, "2026-09-05", "receipt date");
-  assertEquals(parsed.timestamp.time24, "12:02", "receipt time, not status-bar clock");
+  assertEquals(
+    parsed.timestamp.time24,
+    "12:02",
+    "receipt time, not status-bar clock",
+  );
   assertEquals(parsed.timestamp.zone, "Asia/Manila", "receipt timezone");
   assertEquals(
     parsed.timestamp.instant,
@@ -259,14 +265,16 @@ Deno.test("Maya typed reference is comparison-only and both receipt refs are req
 });
 
 Deno.test("Maya auto-verification requires both transaction date and time", () => {
-  for (const incomplete of [
-    "Sep 5, 2026",
-    "12:02 pm",
-    "Sep 5, 2026, 12:02",
-    "Sep 5, 2026, 12:75 pm",
-    "Feb 30, 2026, 12:02 pm",
-    "",
-  ]) {
+  for (
+    const incomplete of [
+      "Sep 5, 2026",
+      "12:02 pm",
+      "Sep 5, 2026, 12:02",
+      "Sep 5, 2026, 12:75 pm",
+      "Feb 30, 2026, 12:02 pm",
+      "",
+    ]
+  ) {
     const receipt = RECEIPT.replace("Sep 5, 2026, 12:02 pm", incomplete);
     assertFlag(receipt, "TIME_UNREADABLE");
     assert(
@@ -278,7 +286,11 @@ Deno.test("Maya auto-verification requires both transaction date and time", () =
     RECEIPT.replace("12:02 pm", "12:02 am"),
   );
   assertEquals(midnight.timestamp.time24, "00:02", "midnight conversion");
-  assertEquals(midnight.timestamp.instant, "2026-09-04T16:02:00.000Z", "midnight UTC storage");
+  assertEquals(
+    midnight.timestamp.instant,
+    "2026-09-04T16:02:00.000Z",
+    "midnight UTC storage",
+  );
 });
 
 Deno.test("Maya verifier binds the exact GCash account and masked recipient name", () => {
@@ -347,29 +359,99 @@ Deno.test("Maya verifier rejects incomplete, pending, failed, or competing scree
 });
 
 Deno.test("Maya processing bank-transfer photo cannot auto-approve a booking", () => {
-  const receipt = `8:33
-Bank transfer to
-KR****E L** C.
-DWQM4TK3JDNZU9WO7
+  const receipt = `2:46
+K****** L*U C.
+09609422169
 - ₱1,335.00
 Processing
 Source
 My Wallet
++63 938 995 3410
 Destination
 G-Xchange Inc. / GCash
-KR****E L** C.
-DWQM4TK3JDNZU9WO7
+K****** L*U C.
+09609422169
 Purpose
-Payment
+Booking payment
 Transaction details
+Transaction fee
+₱10.00
+Gateway
+instaPay
+Reference ID
+38bb6a1579aa
 maya`;
-  const parsed = parseMayaToGcashReceipt(receipt);
+  const parsed = parseMayaToGcashReceipt(receipt, {
+    typedReference: "38BB6A1579AA",
+  });
   assert(parsed.indicators.pendingStatus, "Processing must be identified");
   assert(!parsed.indicators.completionScreen, "Processing is not completion");
-  const flags = flagsFor(receipt, { expectedAmount: 1325, typedReference: "" });
-  for (const flag of ["TRANSFER_PENDING", "REF_UNREADABLE", "DATE_UNREADABLE"]) {
+  assertEquals(
+    parsed.reference.value,
+    "38BB6A1579AA",
+    "displayed Maya reference",
+  );
+  assertEquals(parsed.reference.typedMatch, "match", "typed Maya reference");
+  assertEquals(
+    parsed.railReference.value,
+    null,
+    "no invented InstaPay rail reference",
+  );
+  assertEquals(parsed.amount.amount, 1335, "diagnostic debit amount");
+  assertEquals(
+    parsed.amount.reliable,
+    false,
+    "pending amount cannot become approval evidence",
+  );
+  assertEquals(
+    parsed.recipient.phoneNormalized,
+    "9609422169",
+    "destination phone",
+  );
+  assertEquals(
+    parsed.recipient.nameRaw,
+    "K****** L*U C.",
+    "masked destination name",
+  );
+  assert(
+    parsed.indicators.destinationGcash,
+    "GCash destination must be recognized",
+  );
+  assert(parsed.indicators.instaPay, "InstaPay gateway must be recognized");
+  assertEquals(
+    parsed.timestamp.instant,
+    null,
+    "status-bar clock is not transaction time",
+  );
+  assertEquals(
+    parsed.timestamp.completeness,
+    "missing",
+    "pending screen has no transaction timestamp",
+  );
+  const flags = flagsFor(receipt, {
+    expectedAmount: 1335,
+    expectedRecipientNumber: "09609422169",
+    expectedRecipientName: "Kristie Lou Cachuela",
+    typedReference: "38BB6A1579AA",
+  });
+  for (
+    const flag of [
+      "TRANSFER_PENDING",
+      "INSTAPAY_REF_UNREADABLE",
+      "DATE_UNREADABLE",
+      "TIME_UNREADABLE",
+    ]
+  ) {
     assert(flags.includes(flag), `${flag} must block automatic approval`);
   }
+  assert(
+    !flags.includes("WRONG_GCASH_NUMBER"),
+    "diagnostic phone must not be a false mismatch",
+  );
+  assert(
+    !flags.includes("RECEIVER_NAME_MISMATCH"),
+    "masked pending name must not be a false mismatch",
+  );
   assertFlag(RECEIPT + "\nProcessing\n", "TRANSFER_PENDING");
 });
 

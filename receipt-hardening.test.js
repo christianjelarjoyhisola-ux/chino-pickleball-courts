@@ -14,7 +14,7 @@ function receiptReviewUi() {
   const vm = require('node:vm');
   const admin = read('admin.html');
   const source = admin.slice(admin.indexOf('const RECEIPT_FLAG_LABELS ='), admin.indexOf('function bookingSourceLabel('));
-  return vm.runInNewContext(source + '\n({bankReceiptAccountDisplay,receiptFlagsForDisplay,receiptFlagLabel,receiptReasonText,receiptFlagChips,receiptDetailsHtml});', {
+  return vm.runInNewContext(source + '\n({bankReceiptAccountDisplay,isMayaPendingReceipt,receiptFlagsForDisplay,receiptFlagLabel,receiptReasonText,receiptFlagChips,receiptDetailsHtml});', {
     esc: value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])),
     fmt: value => `₱${value}`,
   });
@@ -235,17 +235,55 @@ test('bank reading history omits skipped views and reports native confidence hon
 });
 
 test('dedicated Maya review keeps recipient and reference failures visible to staff', () => {
-  const vm = require('node:vm');
-  const admin = read('admin.html');
-  const source = admin.slice(admin.indexOf('function removeReceiptFlags('), admin.indexOf('function receiptBadge('));
-  const context = vm.createContext({});
-  vm.runInContext(source, context);
+  const context = receiptReviewUi();
   const failures = ['WRONG_GCASH_NUMBER', 'NUMBER_UNREADABLE', 'RECEIVER_NAME_MISMATCH', 'REF_FORMAT_INVALID', 'TIME_EXPIRED', 'TIME_FUTURE'];
   const result = context.receiptFlagsForDisplay({
     paymentMethod: 'maya', gcashRef: 'B7942F55EC99', receiptFlags: failures,
     receiptExtracted: { parserVersion: 'maya_to_gcash_v1', receiptAgeMinutes: null },
   });
   assert.deepEqual(Array.from(result), failures);
+});
+
+test('Maya Processing receipt shows one actionable warning while retaining raw audit evidence', () => {
+  const ui = receiptReviewUi();
+  const booking = {
+    paymentMethod: 'maya', receiptStatus: 'manual_review', paymentStatus: 'for_verification', status: 'pending',
+    receiptFlags: [
+      'TRANSFER_PENDING','INSTAPAY_QRPH_UNREADABLE','GXI_DESTINATION_UNREADABLE',
+      'NUMBER_UNREADABLE','RECEIVER_NAME_UNREADABLE','INSTAPAY_REF_UNREADABLE',
+      'AMOUNT_UNREADABLE','DATE_UNREADABLE','TIME_UNREADABLE','LOW_OCR_CONFIDENCE',
+    ],
+    receiptExtracted: {
+      provider: 'maya', parserVersion: 'maya_to_gcash_v1', ref: '38BB6A1579AA', amount: 1335,
+      originalOcrConfidence: .92, approvalConfidence: 0, approvalConfidenceSource: 'bank_payment_fields',
+      bankTransfer: {
+        provider: 'maya', reference: {value:'38BB6A1579AA'}, railReference: {value:null},
+        recipient: {nameRaw:'K****** L*U C.',phoneNormalized:'9609422169'},
+        recipientComparison: {name:'masked_compatible',phone:'exact'},
+        indicators: {pendingStatus:true,completionScreen:false,providerBrand:true,destinationGcash:true,instaPay:true},
+      },
+    },
+  };
+  const before = JSON.stringify(booking);
+  assert.equal(ui.isMayaPendingReceipt(booking), true);
+  assert.deepEqual(Array.from(ui.receiptFlagsForDisplay(booking)), ['TRANSFER_PENDING']);
+  const chips = ui.receiptFlagChips(ui.receiptFlagsForDisplay(booking), false, booking);
+  assert.match(chips, /receipt-chip-pending/);
+  assert.match(chips, /upload the completed Maya receipt/);
+  assert.doesNotMatch(chips, /unreadable|confidence below/i);
+  const html = ui.receiptDetailsHtml(booking);
+  assert.match(html, /Approval Confidence[\s\S]*?Not evaluated — transfer pending/);
+  assert.match(html, /Approval Confidence Based On[\s\S]*?Not evaluated until transfer is completed/);
+  assert.match(html, /Receipt Evidence[\s\S]*?Transfer processing \/ Maya source \/ GCash destination/);
+  assert.match(html, /Pending Receipt Note[\s\S]*?completed Maya receipt is uploaded/);
+  assert.doesNotMatch(html, /Approval Confidence[\s\S]{0,120}?0\.00%/);
+  assert.equal(JSON.stringify(booking), before, 'presentation cannot mutate saved audit flags');
+
+  const contradiction = structuredClone(booking);
+  contradiction.receiptFlags.push('AMOUNT_MISMATCH','TRANSFER_STATUS_INVALID');
+  assert.deepEqual(Array.from(ui.receiptFlagsForDisplay(contradiction)), [
+    'TRANSFER_PENDING','AMOUNT_MISMATCH','TRANSFER_STATUS_INVALID',
+  ]);
 });
 
 test('admin releases decoded receipt images when review modals close', () => {

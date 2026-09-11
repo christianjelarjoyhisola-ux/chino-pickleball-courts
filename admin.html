@@ -686,6 +686,10 @@ tr:hover td { background: var(--bg2); }
   color: #e53935; border: 1px solid rgba(229,57,53,.25);
   border-radius: 10px; padding: 1px 8px; line-height: 1.35;
 }
+.receipt-chip.receipt-chip-pending {
+  color: #9a6700; background: rgba(232,185,77,.14);
+  border-color: rgba(200,160,96,.38);
+}
 .receipt-detail-grid {
   display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
   margin: 10px 0; padding: 10px; border: 1px solid var(--border);
@@ -7639,7 +7643,7 @@ const RECEIPT_FLAG_LABELS = {
   REF_UNREADABLE:'Reference unreadable', INVOICE_UNREADABLE:'Invoice unreadable', LOW_OCR_CONFIDENCE:'OCR confidence below threshold', OCR_UNAVAILABLE:'Receipt-checking service unavailable', IMAGE_UNREADABLE:'Receipt text could not be read', AMOUNT_UNREADABLE:'Amount unreadable',
   AMOUNT_REVIEW:'Amount needs owner review', AMOUNT_CONFIRMATION_UNREADABLE:'Amount confirmation incomplete',
   REF_MISMATCH:'Reference does not match', INSTAPAY_REF_UNREADABLE:'InstaPay reference unreadable', INSTAPAY_UNREADABLE:'InstaPay unreadable', TRANSFER_STATUS_UNREADABLE:'Transfer status needs review', PROVIDER_REVIEW_REQUIRED:'Payment provider requires owner review',
-  TRANSFER_STATUS_INVALID:'Transfer failed or reversed', TRANSFER_PENDING:'Transfer still pending',
+  TRANSFER_STATUS_INVALID:'Transfer failed or reversed', TRANSFER_PENDING:'Transfer is still processing — upload the completed Maya receipt',
   PAYMENT_STATUS_NOT_COMPLETED:'Transfer is not completed', OCR_READINGS_DISAGREE:'Receipt readings conflict', OCR_REREAD_UNAVAILABLE:'Additional receipt reading unavailable',
   DATE_UNREADABLE:'Date unreadable', TIME_UNREADABLE:'Time unreadable', NUMBER_UNREADABLE:'Receiver number unreadable', REF_LABEL_UNREADABLE:'Reference label unreadable',
   BDO_PAY_UNREADABLE:'BDO Pay/InstaPay unreadable', MAYA_UNREADABLE:'Maya unreadable', BPI_UNREADABLE:'BPI success unreadable', BPI_CONFIRMATION_UNREADABLE:'BPI confirmation unreadable', BPI_TRANSACTION_UNREADABLE:'BPI transaction ref unreadable', INSTAPAY_QRPH_UNREADABLE:'InstaPay/QRPh unreadable', GXI_DESTINATION_UNREADABLE:'GXI/GCash destination unreadable', RECEIVER_NAME_UNREADABLE:'Receiver name unreadable', MERCHANT_CONFIG_MISSING:'Recipient account details incomplete', BOOKING_GROUP_PAYMENT_MISMATCH:'Booking payment details need review', AUTO_APPROVAL_FAILED:'Auto-verification could not finalize', REJECTION_FINALIZATION_FAILED:'Duplicate rejection could not finalize',
@@ -7724,6 +7728,26 @@ function receiptReasonText(flags, b){
   if (!flags || !flags.length) return 'No specific reason saved';
   return receiptAccountFlagsForDisplay(flags, b).map(f => receiptFlagLabel(f, b)).join(', ');
 }
+const MAYA_PENDING_CASCADE_FLAGS = new Set([
+  'INSTAPAY_QRPH_UNREADABLE','GXI_DESTINATION_UNREADABLE','NUMBER_UNREADABLE',
+  'RECEIVER_NAME_UNREADABLE','INSTAPAY_REF_UNREADABLE','AMOUNT_UNREADABLE',
+  'DATE_UNREADABLE','TIME_UNREADABLE','LOW_OCR_CONFIDENCE','REF_UNREADABLE',
+  'TRANSFER_STATUS_UNREADABLE','PROVIDER_REVIEW_REQUIRED',
+]);
+const MAYA_PENDING_CRITICAL_FLAGS = new Set([
+  'DUPLICATE_REF','POSSIBLE_DUPLICATE_REF','DUPLICATE_INSTAPAY_REF',
+  'AMOUNT_MISMATCH','RECEIVER_NAME_MISMATCH','WRONG_GCASH_NUMBER',
+  'RECEIVER_ACCOUNT_MISMATCH','METHOD_MISMATCH','TRANSFER_STATUS_INVALID',
+  'SUSPECTED_FAKE','EDITED_METADATA',
+]);
+function isMayaPendingReceipt(b){
+  const ex = b?.receiptExtracted || b?.receipt_extracted || {};
+  const method = String(b?.paymentMethod || b?.payment_method || '').toLowerCase();
+  const parser = String(ex.parserVersion || '').toLowerCase();
+  const flags = Array.isArray(b?.receiptFlags) ? b.receiptFlags : [];
+  return method === 'maya' && parser === 'maya_to_gcash_v1' &&
+    (flags.includes('TRANSFER_PENDING') || ex.bankTransfer?.indicators?.pendingStatus === true);
+}
 function removeReceiptFlags(flags, blocked){
   const blockedSet = new Set(blocked);
   return (flags || []).filter(f => !blockedSet.has(f));
@@ -7735,7 +7759,12 @@ function receiptFlagsForDisplay(b){
   const ref = String(b?.gcashRef || b?.gcash_ref || ex.ref || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 
   const dedicatedMaya = method === 'maya' && String(ex.parserVersion || '').toLowerCase() === 'maya_to_gcash_v1';
-  // Dedicated evidence must be shown exactly as the verifier recorded it.
+  // Raw verifier flags remain in the saved audit. A Maya Processing screen gets
+  // one actionable warning; independent contradictions still remain visible.
+  if (dedicatedMaya && isMayaPendingReceipt(b)) {
+    const critical = flags.filter(flag => MAYA_PENDING_CRITICAL_FLAGS.has(flag));
+    return ['TRANSFER_PENDING', ...critical];
+  }
   if (dedicatedMaya) return flags;
   if (method === 'bdopay' || method === 'maya') {
     flags = removeReceiptFlags(flags, ['WRONG_GCASH_NUMBER', 'NUMBER_UNREADABLE', 'RECEIVER_NAME_MISMATCH']);
@@ -7832,7 +7861,8 @@ function receiptFlagChips(flags, transferResolved = false, b){
     const label = transferResolved && duplicateFlags.has(f)
       ? `Historical: ${RECEIPT_FLAG_LABELS[f] || f} · ownership resolved`
       : receiptFlagLabel(f, b);
-    return `<span class="receipt-chip">${esc(label)}</span>`;
+    const tone = f === 'TRANSFER_PENDING' ? ' receipt-chip-pending' : '';
+    return `<span class="receipt-chip${tone}">${esc(label)}</span>`;
   }).join(' ');
 }
 function receiptDetailValue(value, fallback = '--'){
@@ -7978,6 +8008,11 @@ function receiptDetailsHtml(b){
     gcash_to_securitybank_v1: 'Dedicated GCash → Security Bank v1',
   })[String(ex.parserVersion || '').toLowerCase()] || '';
   const displayFlags = receiptFlagsForDisplay(b);
+  const mayaPending = isMayaPendingReceipt(b);
+  const rawFlags = [...new Set(b?.receiptFlags || [])];
+  const hiddenPendingChecks = mayaPending
+    ? rawFlags.filter(flag => MAYA_PENDING_CASCADE_FLAGS.has(flag) && flag !== 'TRANSFER_PENDING')
+    : [];
   const paymentState = String(b.paymentStatus || '').toLowerCase();
   const bookingState = String(b.status || '').toLowerCase();
   const canonicallyResolved = ['paid','downpayment_paid','deposit_retained'].includes(paymentState) ||
@@ -7999,7 +8034,9 @@ function receiptDetailsHtml(b){
   const approvalConfidenceNumber = Number(ex.approvalConfidence);
   const hasApprovalConfidence = ex.approvalConfidence != null && Number.isFinite(approvalConfidenceNumber) &&
     approvalConfidenceNumber >= 0 && approvalConfidenceNumber <= 1;
-  const approvalConfidence = hasApprovalConfidence ? receiptConfidencePercent(approvalConfidenceNumber) : '--';
+  const approvalConfidence = mayaPending
+    ? 'Not evaluated — transfer pending'
+    : hasApprovalConfidence ? receiptConfidencePercent(approvalConfidenceNumber) : '--';
   const approvalRequirement = hasApprovalConfidence ? gcashApprovalRequirement(ex) : '';
   const approvalConfidenceSource = ({
     gcash_payment_fields: 'GCash payment details',
@@ -8074,7 +8111,7 @@ function receiptDetailsHtml(b){
       ['Recipient Account', receiptDetailValue(bankTransfer.recipient?.phoneNormalized || bankTransfer.recipient?.accountRaw), true],
       ['Recipient Check', receiptDetailValue(`Name: ${bankTransfer.recipientComparison?.name || 'review'} / ${bankAccountDisplay?.label || `Phone: ${gcashPhoneCheckLabel(bankTransfer.recipientComparison?.phone)}`}`), true],
       ['Receipt Evidence', receiptDetailValue([
-        bankTransfer.indicators?.completionScreen ? 'Sent receipt' : 'Transfer status needs review',
+        bankTransfer.indicators?.completionScreen ? 'Sent receipt' : bankTransfer.indicators?.pendingStatus ? 'Transfer processing' : 'Transfer status needs review',
         bankTransfer.indicators?.providerBrand ? 'Maya source' : 'Maya source unreadable',
         bankTransfer.indicators?.destinationGcash ? 'GCash destination' : 'GCash destination unreadable',
       ].join(' / ')), true],
@@ -8122,12 +8159,17 @@ function receiptDetailsHtml(b){
     ...(ex.ocrFallbackReason ? [[ocrDiagnosticLabel, receiptDetailValue(ex.ocrFallbackReason), true]] : []),
     ...(ex.amountReliable !== undefined ? [['Amount Parse', receiptDetailValue(amountParse), true]] : []),
     ['Reason', receiptDetailValue(reason), true],
+    ...(hiddenPendingChecks.length ? [[
+      'Pending Receipt Note',
+      receiptDetailValue('Final receipt fields will be checked after the completed Maya receipt is uploaded.'),
+      true,
+    ]] : []),
     ...receiptReadingHistoryRows(b),
     [hasApprovalConfidence ? 'Original OCR Confidence' : 'OCR Confidence', receiptDetailValue(ocrConfidence)],
-    ...(hasApprovalConfidence ? [
+    ...((hasApprovalConfidence || mayaPending) ? [
       ['Approval Confidence', receiptDetailValue(approvalConfidence)],
-      ...(approvalRequirement ? [['Approval Requirement', receiptDetailValue(approvalRequirement), true]] : []),
-      ['Approval Confidence Based On', receiptDetailValue(approvalConfidenceSource), true],
+      ...(!mayaPending && approvalRequirement ? [['Approval Requirement', receiptDetailValue(approvalRequirement), true]] : []),
+      ['Approval Confidence Based On', receiptDetailValue(mayaPending ? 'Not evaluated until transfer is completed' : approvalConfidenceSource), true],
     ] : []),
   ];
   return rows.map(([label, value, full]) => `<div class="receipt-detail-item ${full ? 'receipt-detail-full' : ''}">
@@ -11820,7 +11862,9 @@ async function vmPopulateReceipt(b){
   } else if (s === 'rejected') {
     lbl = displayFlags.length ? `Rejected: ${receiptReasonText(displayFlags, b)}` : 'Flagged earlier — details parsed correctly; review manually';
   } else if (s === 'manual_review' && displayFlags.length) {
-    lbl = `Needs review: ${receiptReasonText(displayFlags, b)}`;
+    lbl = isMayaPendingReceipt(b)
+      ? receiptReasonText(displayFlags, b)
+      : `Needs review: ${receiptReasonText(displayFlags, b)}`;
   }
   if (st) { st.style.color = c; st.style.background = bg; st.textContent = lbl; }
   $('vmReceiptFlags').innerHTML = receiptFlagChips(displayFlags, Boolean(b.paymentReassignedFromRef || b.paymentReassignedToRef), b);

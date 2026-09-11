@@ -112,6 +112,9 @@ const ACCOUNT_NUMBER_LABEL_RE =
 const ACCOUNT_NAME_LABEL_RE = /^account\s*name\b\s*[:#\-–—]?\s*(.*)$/i;
 const TRANSFER_FEE_LABEL_RE =
   /^(?:transfer|service)\s*fee\b\s*[:#\-–—]?\s*(.*)$/i;
+const DESTINATION_LABEL_RE = /^destination\b\s*[:#\-–—]?\s*(.*)$/i;
+const MODERN_DETAIL_BOUNDARY_RE =
+  /^(?:source|destination|purpose|transaction\s+details|more\s+actions)\b/i;
 const DESTINATION_RE = /\bg-?xchange\s*(?:,|\.)?\s*inc\.?\s*\/\s*gcash\b/i;
 const MONEY_RE = /(?:PHP|₱|P)\s*((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})(?![\d,.])/i;
 
@@ -490,7 +493,7 @@ function strictGcashMobile(value: string): string | null {
   return normalizeGcashMobile(text);
 }
 
-function parseRecipient(lines: string[]): {
+function parseRecipient(lines: string[], allowModernPendingLayout = false): {
   recipient: MayaReceiptRecipient;
   destinationRaw: string | null;
   ambiguousDestination: boolean;
@@ -505,7 +508,7 @@ function parseRecipient(lines: string[]): {
       ? index
       : -1
   ).filter((index) => index >= 0);
-  if (!labelIndexes.length) {
+  if (!labelIndexes.length && !allowModernPendingLayout) {
     return {
       recipient: {
         nameRaw: null,
@@ -523,8 +526,42 @@ function parseRecipient(lines: string[]): {
       invalidName: false,
     };
   }
-  const start = Math.min(...labelIndexes);
-  const end = fieldBlockEnd(lines, Math.max(...labelIndexes));
+  const destinationLabelIndexes = allowModernPendingLayout
+    ? lines.map((line, index) => DESTINATION_LABEL_RE.test(line) ? index : -1)
+      .filter((index) => index >= 0)
+    : [];
+  const effectiveLabelIndexes = labelIndexes.length
+    ? labelIndexes
+    : destinationLabelIndexes;
+  if (!effectiveLabelIndexes.length) {
+    return {
+      recipient: {
+        nameRaw: null,
+        nameNormalized: null,
+        accountRaw: null,
+        phoneNormalized: null,
+        nameLineIndex: null,
+        accountLineIndex: null,
+      },
+      destinationRaw: null,
+      ambiguousDestination: false,
+      ambiguousAccount: false,
+      ambiguousName: false,
+      invalidAccount: false,
+      invalidName: false,
+    };
+  }
+  const start = Math.min(...effectiveLabelIndexes);
+  let end = fieldBlockEnd(lines, Math.max(...effectiveLabelIndexes));
+  if (!labelIndexes.length) {
+    end = lines.length;
+    for (let index = start + 1; index < lines.length; index++) {
+      if (MODERN_DETAIL_BOUNDARY_RE.test(lines[index])) {
+        end = index;
+        break;
+      }
+    }
+  }
   const blockIndexes = Array.from(
     { length: Math.max(0, end - start) },
     (_, offset) => start + offset,
@@ -533,12 +570,18 @@ function parseRecipient(lines: string[]): {
   // Keep explicit but invalid inline values. Otherwise a contradictory label
   // could be ignored and a later valid-looking value could silently win.
   const destinationCandidates = inlineValues(lines, ACCOUNT_TYPE_LABEL_RE);
+  if (allowModernPendingLayout) {
+    destinationCandidates.push(...inlineValues(lines, DESTINATION_LABEL_RE));
+  }
   const accountCandidates = inlineValues(lines, ACCOUNT_NUMBER_LABEL_RE);
   const nameCandidates = inlineValues(lines, ACCOUNT_NAME_LABEL_RE);
 
   for (const lineIndex of blockIndexes) {
     const line = lines[lineIndex];
-    if (DESTINATION_RE.test(line) && !ACCOUNT_TYPE_LABEL_RE.test(line)) {
+    if (
+      DESTINATION_RE.test(line) && !ACCOUNT_TYPE_LABEL_RE.test(line) &&
+      !DESTINATION_LABEL_RE.test(line)
+    ) {
       destinationCandidates.push({ raw: line, lineIndex });
     }
     const phone = strictGcashMobile(line);
@@ -548,7 +591,8 @@ function parseRecipient(lines: string[]): {
     if (
       !ACCOUNT_TYPE_LABEL_RE.test(line) &&
       !ACCOUNT_NUMBER_LABEL_RE.test(line) &&
-      !ACCOUNT_NAME_LABEL_RE.test(line) && looksLikeRecipientName(line)
+      !ACCOUNT_NAME_LABEL_RE.test(line) &&
+      !DESTINATION_LABEL_RE.test(line) && looksLikeRecipientName(line)
     ) {
       nameCandidates.push({ raw: line, lineIndex });
     }
@@ -705,8 +749,13 @@ export function parseMayaToGcashReceipt(
   const amount = extractReceiptAmount(text, { provider: "maya" });
   const transferFee = parseTransferFee(lines);
   const timestamp = parseTimestamp(lines);
-  const parsedRecipient = parseRecipient(lines);
   const { failureStatus, pendingStatus } = readReceiptTransferStatus(text);
+  // Maya's in-progress bank-transfer screen uses a Destination block instead
+  // of the completed receipt's Account type/number/name labels. Read that
+  // block only as diagnostic evidence while an explicit pending status is
+  // present. The verifier still requires the completed labels and timestamp,
+  // and TRANSFER_PENDING remains a hard automatic-approval veto.
+  const parsedRecipient = parseRecipient(lines, pendingStatus);
   const sentMoneyVia = /\bsent\s+money\s+via\b/i.test(text);
   const issues: string[] = [];
   if (reference.ambiguous) issues.push("AMBIGUOUS_REFERENCE");
@@ -789,8 +838,10 @@ export function verifyMayaToGcashReceipt(
     addUnique(flags, "TRANSFER_STATUS_INVALID");
   }
   if (parsed.indicators.pendingStatus) addUnique(flags, "TRANSFER_PENDING");
-  if ((!parsed.indicators.sentMoneyVia || !parsed.indicators.completionScreen) &&
-    !parsed.indicators.failureStatus && !parsed.indicators.pendingStatus) {
+  if (
+    (!parsed.indicators.sentMoneyVia || !parsed.indicators.completionScreen) &&
+    !parsed.indicators.failureStatus && !parsed.indicators.pendingStatus
+  ) {
     addUnique(flags, "TRANSFER_STATUS_UNREADABLE");
   }
   if (!parsed.indicators.instaPay) {
