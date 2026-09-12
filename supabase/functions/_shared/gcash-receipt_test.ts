@@ -5,6 +5,7 @@ import {
   normalizeGcashMobile,
   parseGcashReceipt,
   recoverGcashReferenceText,
+  recoverGcashTimestampText,
 } from "./gcash-receipt.ts";
 
 function assertEquals(
@@ -726,6 +727,61 @@ Sep 10, 2026 4:46 PM`;
     recoverGcashReferenceText(layout, `${layout}\n0044896805912`),
     layout,
     "standalone digits are not enough for cross-reading recovery",
+  );
+});
+
+Deno.test("layout recovery moves a uniquely misplaced meridiem back to the timestamp", () => {
+  const original = `Express Send
+KR....E L.. C.
++63 960 942 2169
+Sent via GCash
+Amount 530.00
+Total Amount Sent P530.00
+Ref No. 6044965571662 Sep 12, 2026 3:09 PM`;
+  const layout = `Express Send
+KR....E L.. C.
++63 960 942 2169
+Sent via GCash
+Amount 530.00
+Total Amount Sent P530.00
+Ref No. 6044965571662 PM
+Sep 12, 2026 3:09`;
+  const recovered = recoverGcashTimestampText(layout, original);
+  const parsed = parseGcashReceipt(recovered);
+  assertEquals(parsed.timestamp.time24, "15:09", "receipt time recovered");
+  assertEquals(
+    parsed.timestamp.completeness,
+    "date_time",
+    "timestamp complete",
+  );
+  assertEquals(parsed.reference.value, "6044965571662", "reference preserved");
+
+  const unchanged = [
+    layout.replace("3:09", "3:10"),
+    layout.replace("Sep 12", "Sep 11"),
+    layout.replace(" PM", " AM"),
+    `${layout}\nRef No. 1111111111111 PM`,
+  ];
+  for (const candidate of unchanged) {
+    assertEquals(
+      recoverGcashTimestampText(candidate, original),
+      candidate,
+      "conflicting or ambiguous layout remains untouched",
+    );
+  }
+  assertEquals(
+    recoverGcashTimestampText(layout, `${original}\nSep 12, 2026 3:10 PM`),
+    layout,
+    "multiple raw timestamps are never reconciled",
+  );
+  const complete = layout.replace(
+    "Ref No. 6044965571662 PM\nSep 12, 2026 3:09",
+    "Ref No. 6044965571662\nSep 12, 2026 3:09 PM",
+  );
+  assertEquals(
+    recoverGcashTimestampText(complete, original),
+    complete,
+    "complete layouts remain untouched",
   );
 });
 

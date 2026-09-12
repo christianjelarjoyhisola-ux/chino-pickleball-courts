@@ -457,6 +457,35 @@ Deno.test("candidate evaluator preserves dedupe key for the independent database
   eq(candidate.reading.confidence, .98, "score comes from native fields");
 });
 
+Deno.test("candidate evaluator recovers a meridiem displaced onto the reference row", () => {
+  const candidateRead = read();
+  candidateRead.gcashEvidence!.layoutText = candidateRead.text.replace(
+    "Ref No. 9900123456789 Sep 10, 2026 9:06 AM",
+    "Ref No. 9900123456789 AM\nSep 10, 2026 9:06",
+  );
+  const candidate = evaluateGcashRecoveryRead(
+    "gcash_full_contrast_v1",
+    candidateRead,
+    context,
+  );
+  eq(
+    candidate.selected.parsed.receipt.timestamp.time24,
+    "09:06",
+    "time recovered",
+  );
+  eq(
+    candidate.selected.parsed.receipt.reference.value,
+    "9900123456789",
+    "reference retained",
+  );
+  eq(candidate.reading.outcome, "clean", "valid retry stays clean");
+  eq(
+    candidate.reading.layoutText,
+    candidateRead.gcashEvidence!.layoutText,
+    "original layout remains available in audit",
+  );
+});
+
 Deno.test("receipt-only retries conserve a strong original reference even when two alternatives agree on another", async () => {
   const source = read();
   source.gcashEvidence!.fields.recipientName!.confidence = .8;

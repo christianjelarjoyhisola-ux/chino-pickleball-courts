@@ -20,6 +20,7 @@ import {
   type ReceiptVerificationContext,
   verifyProviderReceipt,
 } from "./receipt-providers/index.ts";
+import { recoverGcashTimestampText } from "./gcash-receipt.ts";
 
 export const GCASH_RECOVERY_STRATEGIES = [
   "gcash_full_contrast_v1",
@@ -264,9 +265,12 @@ export function evaluateGcashRecoveryRead(
   context: ReceiptVerificationContext,
   originalRefinement: GcashRecipientOcrResult | null = null,
 ): { selected: GcashRecoverySelected; reading: GcashRecoveryReading } {
+  const parseText = read.gcashEvidence?.layoutText
+    ? recoverGcashTimestampText(read.gcashEvidence.layoutText, read.text)
+    : read.text;
   const parsed = parseProviderReceipt(
     "gcash",
-    read.gcashEvidence?.layoutText || read.text,
+    parseText,
     { typedReference: context.typedReference },
   ) as GcashProviderReceiptParse;
   let refinement: GcashRecipientOcrResult | null = null;

@@ -390,6 +390,82 @@ export function recoverGcashReferenceText(
   return `${layoutText.trimEnd()}\nRef No. ${recovered}`;
 }
 
+/**
+ * Repair the one known Vision layout failure where the receipt's AM/PM token
+ * is attached to the labelled reference row instead of the date row. Recovery
+ * is deliberately evidence-conserving: raw OCR must contain one complete
+ * timestamp and both readings must agree on the date and clock digits.
+ */
+export function recoverGcashTimestampText(
+  layoutText: string,
+  originalText: string,
+): string {
+  const layoutLines = layoutText.replace(/\r\n?/g, "\n").split("\n");
+  const normalizedLayoutLines = layoutLines.map((line) => line.trim());
+  const layoutTimestamp = parseTimestamp(
+    layoutText,
+    receiptLines(layoutText),
+  );
+  const originalTimestamp = parseTimestamp(
+    originalText,
+    receiptLines(originalText),
+  );
+  if (
+    layoutTimestamp.completeness !== "date_only" ||
+    originalTimestamp.completeness !== "date_time" ||
+    !layoutTimestamp.date ||
+    layoutTimestamp.date !== originalTimestamp.date ||
+    !originalTimestamp.time24
+  ) return layoutText;
+
+  const datePattern =
+    /(?<![a-z])(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}(?:st|nd|rd|th)?[\s,.\-]+\d{4}\b/i;
+  const dateRows = normalizedLayoutLines
+    .map((line, index) => ({ line, index }))
+    .filter(({ line }) => datePattern.test(line));
+  if (dateRows.length !== 1) return layoutText;
+
+  const dateRow = dateRows[0];
+  const clockMatch = dateRow.line.match(/\b(\d{1,2})\s*[:;.]\s*(\d{2})\s*$/);
+  if (!clockMatch || /\b[ap](?:\s*\.?\s*m\.?)?\s*$/i.test(dateRow.line)) {
+    return layoutText;
+  }
+
+  const rawFullTimestamps = originalText.replace(/\s+/g, " ").match(
+    /(?<![a-z])(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}(?:st|nd|rd|th)?[\s,.\-]+\d{4}\b.{0,80}?\b\d{1,2}\s*[:;.]\s*\d{2}(?:\s*[:;.]\s*\d{2})?\s*[ap](?:\s*\.?\s*m\.?)?\b/gi,
+  ) || [];
+  if (rawFullTimestamps.length !== 1) return layoutText;
+
+  const [hour24Text, minute24] = originalTimestamp.time24.split(":");
+  const hour24 = Number(hour24Text);
+  const expectedHour12 = hour24 % 12 || 12;
+  const expectedMeridiem = hour24 >= 12 ? "PM" : "AM";
+  if (
+    Number(clockMatch[1]) !== expectedHour12 || clockMatch[2] !== minute24
+  ) return layoutText;
+
+  const meridiems = normalizedLayoutLines.flatMap((line, index) =>
+    Array.from(line.matchAll(/\b(AM|PM)\b/gi), (match) => ({
+      value: match[1].toUpperCase(),
+      index,
+    }))
+  );
+  if (
+    meridiems.length !== 1 || meridiems[0].value !== expectedMeridiem ||
+    meridiems[0].index >= dateRow.index
+  ) return layoutText;
+
+  const markerRow = meridiems[0].index;
+  const referenceWithMarker = normalizedLayoutLines[markerRow].match(
+    /^(Ref(?:erence)?\s*(?:No\.?|Number|#)?\s*[:#.-]?\s*\d{13})\s+(AM|PM)$/i,
+  );
+  if (!referenceWithMarker) return layoutText;
+
+  layoutLines[markerRow] = referenceWithMarker[1];
+  layoutLines[dateRow.index] = `${dateRow.line} ${expectedMeridiem}`;
+  return layoutLines.join("\n");
+}
+
 function validCalendarDate(year: number, month: number, day: number): boolean {
   const date = new Date(Date.UTC(year, month, day));
   return date.getUTCFullYear() === year &&

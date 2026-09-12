@@ -172,6 +172,7 @@ async function dispatchOcr(provider, visionResult, gaps = []) {
     isBankAdaptiveProvider: provider => ['bdopay','maya','bpi','gotyme','maribank','securitybank'].includes(provider),
     bankOcrText: read => read.layoutText || read.nativeLines?.map(line => line.text).join('\n') || read.text,
     recoverGcashReferenceText: layoutText => layoutText,
+    recoverGcashTimestampText: layoutText => layoutText,
     ocrCriticalGaps: text => { observed.push(text); return gaps; },
     errMsg: error => error.message,
     console: { error() {} },

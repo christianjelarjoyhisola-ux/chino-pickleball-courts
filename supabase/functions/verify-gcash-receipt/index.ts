@@ -39,6 +39,7 @@ import {
   type GcashRecipientComparison,
   isGcashRecipientAccepted,
   recoverGcashReferenceText,
+  recoverGcashTimestampText,
 } from "../_shared/gcash-receipt.ts";
 import { gcashApprovalConfidence } from "../_shared/gcash-approval-confidence.ts";
 import { rereadGcashRecipient } from "../_shared/gcash-recipient-ocr.ts";
@@ -94,7 +95,7 @@ const PAYMENT_WINDOW_MINUTES = 15;
 // OCR usually reads only minute-level timestamps. A receipt paid during the
 // same minute as the hold can look a few seconds "before" the booking.
 const PAYMENT_EARLY_TOLERANCE_MINUTES = 2;
-const GCASH_VERIFIER_REVISION = "gcash_adaptive_20260911_v3";
+const GCASH_VERIFIER_REVISION = "gcash_adaptive_20260912_v1";
 const BANK_VERIFIER_REVISION = "bank_name_policy_20260910";
 
 const MAX_BYTES = 5 * 1024 * 1024;
@@ -1151,7 +1152,10 @@ async function runOCR(
       const gcashLayoutText = v.gcashEvidence?.layoutText;
       const layoutText = provider === "gcash"
         ? gcashLayoutText?.trim()
-          ? recoverGcashReferenceText(gcashLayoutText, v.text)
+          ? recoverGcashTimestampText(
+            recoverGcashReferenceText(gcashLayoutText, v.text),
+            v.text,
+          )
           : gcashLayoutText
         : isBankAdaptiveProvider(provider) && (v.layoutText?.trim() || v.nativeLines?.length)
         ? bankOcrText(v)
