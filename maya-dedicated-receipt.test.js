@@ -5,6 +5,7 @@ const test = require('node:test');
 const vm = require('node:vm');
 const read = file => fs.readFileSync(path.join(__dirname, file), 'utf8');
 const edge = read('supabase/functions/verify-gcash-receipt/index.ts');
+const publicPage = read('index.html');
 
 test('Maya dedicated evidence reaches the OCR, audit, and settlement routes', () => {
   const registry = read('supabase/functions/_shared/receipt-providers/index.ts');
@@ -63,4 +64,12 @@ test('Maya database migration extends all three evidence contracts and aborts on
   assert.match(migration, /updated_count <> 3/);
   assert.match(migration, /raise exception 'Could not extend % provider allowlist for Maya'/);
   assert.doesNotMatch(migration, /insert into public\.settings/);
+});
+
+test('Maya selection opens an accessible receipt guide with the expanded-details instruction', () => {
+  assert.match(publicPage, /onclick="pickPay\('maya', \{ showGuide: true \}\)"/);
+  assert.match(publicPage, /id="mayaReceiptGuide"[\s\S]*?role="dialog"[\s\S]*?aria-modal="true"/);
+  assert.match(publicPage, /tap the <strong>green arrow beside Transaction details<\/strong> to expand the section/i);
+  assert.match(publicPage, /src="assets\/maya-receipt-example\.png"/);
+  assert.match(publicPage, /function pickPay\(m\)[\s\S]*?const options = arguments\[1\] \|\| \{\}[\s\S]*?if \(m === 'maya' && options\.showGuide\) openMayaReceiptGuide\(\)/);
 });

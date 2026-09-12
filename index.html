@@ -937,6 +937,24 @@ body.dark .shared-date-display {
 .bk-modal-ft .btn { flex:1; justify-content:center; }
 .bk-modal-ft .btn:disabled { opacity:.62; cursor:wait; transform:none; }
 
+/* MAYA RECEIPT GUIDE */
+.maya-guide-overlay { z-index:1500; }
+.maya-guide-modal { max-width:430px; max-height:min(92vh,860px); overflow:hidden; }
+.maya-guide-modal .bk-modal-hd { padding:16px 18px; }
+.maya-guide-modal .bk-modal-body { padding:16px 18px 18px; overflow-y:auto; }
+.maya-guide-kicker { color:rgb(var(--lime-rgb)); font-size:.7rem; font-weight:900; text-transform:uppercase; letter-spacing:.9px; margin-bottom:4px; }
+.maya-guide-copy { margin:0 0 14px; color:var(--text); font-size:.88rem; line-height:1.55; }
+.maya-guide-copy strong { color:var(--lime-ink); }
+.maya-guide-image-wrap { margin:0; padding:8px; border:1px solid var(--border); border-radius:14px; background:#fff; }
+.maya-guide-image { display:block; width:100%; max-height:56vh; object-fit:contain; border-radius:9px; }
+.maya-guide-caption { margin:10px 2px 0; color:var(--muted); font-size:.74rem; line-height:1.45; text-align:center; }
+.maya-guide-modal .bk-modal-ft { padding:12px 18px; }
+@media(max-width:480px) {
+  .maya-guide-overlay { padding:10px; }
+  .maya-guide-modal .bk-modal-body { padding:12px; }
+  .maya-guide-image { max-height:54vh; }
+}
+
 .qr-zoom-overlay {
   position:fixed; inset:0; z-index:9999; display:none; align-items:center; justify-content:center;
   background:rgba(0,0,0,.78); padding:24px;
@@ -3880,7 +3898,7 @@ try {
                 <div class="pay-lb">BDO Pay</div>
                 <div class="pay-sub">InstaPay to GCash QR</div>
               </div>
-              <div class="pay-opt" id="payOptMaya" data-m="maya" role="button" tabindex="0" aria-pressed="false" onkeydown="paymentOptionKeydown(event)" onclick="pickPay('maya')">
+              <div class="pay-opt" id="payOptMaya" data-m="maya" role="button" tabindex="0" aria-pressed="false" onkeydown="paymentOptionKeydown(event)" onclick="pickPay('maya', { showGuide: true })">
                 <div class="pay-ic pm-brand-mark pm-brand-mark--picker pm-brand-mark--maya" data-payment-method="maya" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/maya.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></div>
                 <div class="pay-lb">Maya</div>
                 <div class="pay-sub">QRPh to GCash</div>
@@ -4134,6 +4152,29 @@ try {
     </div>
 
   </div>
+</div>
+
+<!-- MAYA RECEIPT GUIDE -->
+<div class="bk-modal-overlay maya-guide-overlay" id="mayaReceiptGuide" aria-hidden="true" onclick="mayaReceiptGuideBackdrop(event)">
+  <section class="bk-modal maya-guide-modal" role="dialog" aria-modal="true" aria-labelledby="mayaGuideTitle" aria-describedby="mayaGuideCopy">
+    <div class="bk-modal-hd">
+      <div>
+        <div class="maya-guide-kicker">Receipt example</div>
+        <div class="bk-modal-court" id="mayaGuideTitle">Expand Transaction Details</div>
+      </div>
+      <button class="bk-modal-x" type="button" onclick="closeMayaReceiptGuide()" aria-label="Close Maya receipt example">✕</button>
+    </div>
+    <div class="bk-modal-body">
+      <p class="maya-guide-copy" id="mayaGuideCopy">Before taking or uploading your Maya receipt screenshot, tap the <strong>green arrow beside Transaction details</strong> to expand the section. Make sure the expanded transaction details are visible in the screenshot.</p>
+      <figure class="maya-guide-image-wrap">
+        <img class="maya-guide-image" src="assets/maya-receipt-example.png" alt="Maya receipt example with red arrows pointing to the green arrow beside Transaction details" width="365" height="796" loading="lazy" decoding="async" />
+        <figcaption class="maya-guide-caption">Tap the green arrow highlighted by the red arrows.</figcaption>
+      </figure>
+    </div>
+    <div class="bk-modal-ft">
+      <button class="btn btn-p btn-full" type="button" onclick="closeMayaReceiptGuide()">Got it</button>
+    </div>
+  </section>
 </div>
 
 <!-- HOW IT WORKS -->
@@ -8232,6 +8273,7 @@ function paymentOptionKeydown(event) {
 }
 
 function pickPay(m) {
+  const options = arguments[1] || {};
   if (_bookingSubmissionInFlight) {
     toast('Please wait while your receipt and booking are being finalized.', 'inf');
     return;
@@ -8302,6 +8344,32 @@ function pickPay(m) {
   }
   setBookingReceiptContinueState(_receiptUploadState?.status || 'idle');
   saveGuestBookingResume();
+  if (m === 'maya' && options.showGuide) openMayaReceiptGuide();
+}
+
+let mayaReceiptGuideReturnFocus = null;
+
+function openMayaReceiptGuide() {
+  const guide = $('mayaReceiptGuide');
+  if (!guide) return;
+  mayaReceiptGuideReturnFocus = document.activeElement;
+  guide.classList.add('active');
+  guide.setAttribute('aria-hidden', 'false');
+  requestAnimationFrame(() => guide.querySelector('.bk-modal-x')?.focus({ preventScroll: true }));
+}
+
+function closeMayaReceiptGuide() {
+  const guide = $('mayaReceiptGuide');
+  if (!guide?.classList.contains('active')) return;
+  guide.classList.remove('active');
+  guide.setAttribute('aria-hidden', 'true');
+  const returnFocus = mayaReceiptGuideReturnFocus;
+  mayaReceiptGuideReturnFocus = null;
+  if (returnFocus?.isConnected) requestAnimationFrame(() => returnFocus.focus({ preventScroll: true }));
+}
+
+function mayaReceiptGuideBackdrop(event) {
+  if (event?.target === $('mayaReceiptGuide')) closeMayaReceiptGuide();
 }
 
 function syncGcashSharedPanel(method) {
@@ -11090,7 +11158,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   initOpAnnounceSplash();
   initEasterSplash();
   initGrandSplash();
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeModal(); closeSharedDatePicker(); closeQrZoom(); closeFindTimeModal(); closeBookModal(); closeOpModal(); closeHostApplyModal(); closeHostSessionModal(); closeHostBalancePayment(); } });
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    if ($('mayaReceiptGuide')?.classList.contains('active')) {
+      closeMayaReceiptGuide();
+      return;
+    }
+    closeModal(); closeSharedDatePicker(); closeQrZoom(); closeFindTimeModal(); closeBookModal(); closeOpModal(); closeHostApplyModal(); closeHostSessionModal(); closeHostBalancePayment();
+  });
   initScrollReveal();
 });
 
@@ -11273,7 +11348,7 @@ async function openPlaySignup(courtId, date, h, courtName) {
   const payOptList = [
     paymentMethods.gcash   ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'gcash' ? 'on' : ''}" data-m="gcash" role="button" tabindex="0" aria-pressed="${defaultPayMethod === 'gcash' ? 'true' : 'false'}" onkeydown="paymentOptionKeydown(event)"   onclick="opPickPay('gcash')">${paymentMethodBrandMarkHtml('gcash', 'po-ico pm-brand-mark--compact') || '<span class="po-ico">📱</span>'}<span class="po-lbl">GCash</span><span class="po-sub">Scan QR · send ref #</span></div>` : '',
     paymentMethods.bdopay  ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'bdopay' ? 'on' : ''}" data-m="bdopay" role="button" tabindex="0" aria-pressed="${defaultPayMethod === 'bdopay' ? 'true' : 'false'}" onkeydown="paymentOptionKeydown(event)"  onclick="opPickPay('bdopay')">${paymentMethodBrandMarkHtml('bdopay', 'po-ico pm-brand-mark--compact')}<span class="po-lbl">BDO Pay</span><span class="po-sub">InstaPay to GCash QR</span></div>` : '',
-    paymentMethods.maya    ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'maya' ? 'on' : ''}" data-m="maya" role="button" tabindex="0" aria-pressed="${defaultPayMethod === 'maya' ? 'true' : 'false'}" onkeydown="paymentOptionKeydown(event)"    onclick="opPickPay('maya')">${paymentMethodBrandMarkHtml('maya', 'po-ico pm-brand-mark--compact')}<span class="po-lbl">Maya</span><span class="po-sub">QRPh to GCash</span></div>` : '',
+    paymentMethods.maya    ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'maya' ? 'on' : ''}" data-m="maya" role="button" tabindex="0" aria-pressed="${defaultPayMethod === 'maya' ? 'true' : 'false'}" onkeydown="paymentOptionKeydown(event)"    onclick="opPickPay('maya', { showGuide: true })">${paymentMethodBrandMarkHtml('maya', 'po-ico pm-brand-mark--compact')}<span class="po-lbl">Maya</span><span class="po-sub">QRPh to GCash</span></div>` : '',
     paymentMethods.gotyme  ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'gotyme' ? 'on' : ''}" data-m="gotyme" role="button" tabindex="0" aria-pressed="${defaultPayMethod === 'gotyme' ? 'true' : 'false'}" onkeydown="paymentOptionKeydown(event)"  onclick="opPickPay('gotyme')">${paymentMethodBrandMarkHtml('gotyme', 'po-ico pm-brand-mark--compact') || '<span class="po-ico">GT</span>'}<span class="po-lbl">GoTyme → GCash</span><span class="po-sub">Pay from GoTyme</span></div>` : '',
     paymentMethods.maribank ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'maribank' ? 'on' : ''}" data-m="maribank" role="button" tabindex="0" aria-pressed="${defaultPayMethod === 'maribank' ? 'true' : 'false'}" onkeydown="paymentOptionKeydown(event)" onclick="opPickPay('maribank')">${paymentMethodBrandMarkHtml('maribank', 'po-ico pm-brand-mark--compact') || '<span class="po-ico">MB</span>'}<span class="po-lbl">MariBank → GCash</span><span class="po-sub">Pay from MariBank</span></div>` : '',
     paymentMethods.pnb     ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'pnb' ? 'on' : ''}" data-m="pnb" role="button" tabindex="0" aria-pressed="${defaultPayMethod === 'pnb' ? 'true' : 'false'}" onkeydown="paymentOptionKeydown(event)"     onclick="opPickPay('pnb')">${paymentMethodBrandMarkHtml('pnb', 'po-ico pm-brand-mark--compact')}<span class="po-lbl">PNB</span><span class="po-sub">Scan QR · enter ref #</span></div>` : '',
@@ -11356,9 +11431,10 @@ function openPlayDpControlsHtml(opTotal) {
   return '';
 }
 
-function opPickPay(method) {
+function opPickPay(method, options = {}) {
   if (!paymentMethods[method]) return;
   _opSignupData.payMethod = method;
+  if (method === 'maya' && options.showGuide) openMayaReceiptGuide();
   document.querySelectorAll('#opPayOpts .pay-opt').forEach(el => {
     const selected = el.dataset.m === method;
     el.classList.toggle('on', selected);

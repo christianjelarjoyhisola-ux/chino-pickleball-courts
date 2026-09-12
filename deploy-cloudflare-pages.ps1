@@ -69,6 +69,7 @@ $publicFiles = @(
   "assets/payment-methods/gcash.png",
   "assets/payment-methods/bdo-pay.png",
   "assets/payment-methods/maya.png",
+  "assets/maya-receipt-example.png",
   "assets/payment-methods/bpi.png",
   "assets/payment-methods/gotyme.png",
   "assets/payment-methods/maribank.png",
