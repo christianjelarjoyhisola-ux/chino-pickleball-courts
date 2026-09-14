@@ -245,6 +245,30 @@ Deno.test("one clean field reading can be confirmed by a matching independent na
   eq(calls, 2, "both transformed views are still attempted");
 });
 
+Deno.test("a retry that loses fields is uncertain rather than contradictory", async () => {
+  const missing = read();
+  missing.text = missing.text.replace(/KR\*+E L\*+ C\.\n\+63 9\*+2169\n/, "");
+  missing.gcashEvidence!.layoutText = missing.text;
+  delete missing.gcashEvidence!.fields.recipientName;
+  delete missing.gcashEvidence!.fields.recipientPhone;
+  delete missing.gcashEvidence!.fields.amount;
+  let calls = 0;
+  const result = await recoverGcashReceipt(
+    await bytes(),
+    weak(),
+    context,
+    "test-key",
+    { ocr: async () => ++calls === 1 ? missing : read() },
+  );
+  eq(result.accepted, true, "missing retry fields do not veto matching evidence");
+  eq(result.reason, "original_and_field_reading_agree", "clean evidence still requires an independent match");
+  eq(result.audit.readings[0].outcome, "uncertain", "field loss is retained as uncertainty");
+  assert(
+    !result.audit.readings[0].flags.some((flag) => flag.startsWith("ORIGINAL_")),
+    "missing values are not mislabeled as contradictory values",
+  );
+});
+
 Deno.test("mask-dot variation cannot confirm a receipt when the phone is still masked", async () => {
   const primary = read({ name: "KR....E L. C." });
   primary.confidence = .817149;

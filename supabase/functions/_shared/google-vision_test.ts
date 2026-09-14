@@ -821,6 +821,41 @@ Deno.test("GCash masked recipient confidence excludes mask punctuation but never
   );
 });
 
+Deno.test("GCash Unicode ellipsis masks retain native recipient-name confidence", () => {
+  const fixture = gcashGeometry();
+  const name = fixture.words.find((word) =>
+    word.symbols.map((symbol) => symbol.text).join("") === "KRE L. C."
+  )!;
+  name.symbols = [..."KR……..E L…. C."].map((text) => ({
+    text,
+    confidence: /[A-Z]/i.test(text) ? 0.97 : 0.35,
+  }));
+  name.confidence = 0.71;
+  fixture.text = fixture.words.map((entry) =>
+    entry.symbols.map((symbol) => symbol.text).join("")
+  ).join("\n");
+  fixture.annotation = {
+    text: fixture.text,
+    pages: [{ ...visionPage(fixture.words), confidence: 0.88272464 }],
+  };
+
+  const evidence = googleVisionGcashEvidence(fixture.annotation, fixture.text);
+  assert(evidence, "ellipsis-masked Express Send receipt recognized");
+  assertEquals(
+    evidence.fields.recipientName?.text,
+    "KR……..E L…. C.",
+    "exact masked name remains in audit evidence",
+  );
+  assert(
+    Math.abs(evidence.fields.recipientName!.confidence! - 0.97) < 1e-12,
+    "ellipsis punctuation does not lower visible-letter confidence",
+  );
+  assert(
+    evidence.confidence! >= 0.9,
+    "complete native payment fields can pass without lowering the threshold",
+  );
+});
+
 Deno.test("GCash field confidence uses observed payment words while preserving native page score", async () => {
   const { annotation, text } = gcashGeometry();
   const evidence = googleVisionGcashEvidence(annotation, text);

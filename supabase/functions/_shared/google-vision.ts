@@ -794,7 +794,7 @@ function gcashEvidenceFromLayout(
     const phone = phoneRows[0];
     const nameRows = recipientRows.slice(0, recipientRows.indexOf(phone))
       .filter(
-        (row) => /^[A-Z][A-Z\s*•●·.'’-]*$/i.test(row.text || ""),
+        (row) => /^[A-Z][A-Z\s*•●·.…'’-]*$/i.test(row.text || ""),
       );
     // GCash deliberately masks identity characters with dots/bullets. Those
     // decorative mask symbols are often assigned weak OCR scores even when
@@ -963,7 +963,7 @@ function recipientCropEvidenceFromLayout(
   ) return undefined;
   const [name, phone] = layout.pageRows[0];
   if (
-    !/^[A-Z][A-Z\s•‣●◦∙·*#.'’-]*$/i.test((name.text || "").normalize("NFKC")) ||
+    !/^[A-Z][A-Z\s•‣●◦∙·*#.…'’-]*$/i.test((name.text || "").normalize("NFKC")) ||
     !/^(?:\+?63|0)[\d\s•‣●◦∙·*#xX.()-]{4,}$/i.test(
       (phone.text || "").normalize("NFKC"),
     )

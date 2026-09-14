@@ -147,7 +147,7 @@ export function gcashOriginalRecoveryVeto(
 
 function canonicalName(value: string | null): string {
   return String(value || "").normalize("NFKC").toUpperCase()
-    .replace(/[•‣●◦∙·*#]+|\.{2,}|X{2,}/g, "*")
+    .replace(/[•‣●◦∙·*#…]+|\.{2,}|X{2,}/g, "*")
     .replace(/[^A-Z*\s]/g, "").replace(/\s+/g, " ").trim();
 }
 
@@ -211,25 +211,30 @@ export function gcashRecoveryConservationFlags(
   if (
     nativeScore(fields?.reference?.confidence) && primary.reference.value &&
     primary.reference.source === "ref_label" &&
+    recovered.reference.value &&
     primary.reference.value !== recovered.reference.value
   ) flags.push("ORIGINAL_REFERENCE_CONFLICT");
   if (
     nativeScore(fields?.dateTime?.confidence) &&
     primary.timestamp.completeness === "date_time" &&
+    recovered.timestamp.instant &&
     primary.timestamp.instant !== recovered.timestamp.instant
   ) flags.push("ORIGINAL_TIMESTAMP_CONFLICT");
   for (const key of ["amount", "totalAmount"] as const) {
     const value = observedCents(fields?.[key]?.text);
+    const candidateValue = observedCents(
+      candidate.read.gcashEvidence?.fields[key]?.text,
+    );
     if (
       nativeScore(fields?.[key]?.confidence) && value !== null &&
-      value !== observedCents(candidate.read.gcashEvidence?.fields[key]?.text)
+      candidateValue !== null && value !== candidateValue
     ) flags.push("ORIGINAL_AMOUNT_CONFLICT");
   }
   const trustedRefinement = original.refinement?.accepted &&
     nativeScore(original.refinement.confidence);
   if (
     (trustedRefinement || nativeScore(fields?.recipientPhone?.confidence)) &&
-    primary.receiver.phone.raw
+    primary.receiver.phone.raw && recovered.receiver.phone.raw
   ) {
     const originalPhone = canonicalPhone(primary.receiver.phone.raw);
     const candidatePhone = canonicalPhone(recovered.receiver.phone.raw);
@@ -244,7 +249,7 @@ export function gcashRecoveryConservationFlags(
   }
   if (
     (trustedRefinement || nativeScore(fields?.recipientName?.confidence)) &&
-    primary.receiver.name.raw
+    primary.receiver.name.raw && recovered.receiver.name.raw
   ) {
     const originalName = canonicalName(primary.receiver.name.raw);
     const candidateName = canonicalName(recovered.receiver.name.raw);
