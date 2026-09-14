@@ -2928,6 +2928,34 @@ a, button, input, select, textarea, .nav-item { -webkit-tap-highlight-color: tra
 }
 
 /* Dashboard cards */
+.dashboard-pending-notice {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 18px;
+  padding: 16px 18px;
+  border: 1px solid rgba(var(--yellow-rgb), .42);
+  border-radius: var(--admin-radius);
+  background: linear-gradient(135deg, rgba(var(--yellow-rgb), .16), rgba(var(--yellow-rgb), .055));
+  box-shadow: 0 14px 34px rgba(0, 0, 0, .16);
+}
+.dashboard-pending-notice[hidden] { display: none; }
+.dashboard-pending-mark {
+  display: grid;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border-radius: 14px;
+  background: rgba(var(--yellow-rgb), .2);
+  color: var(--yellow);
+  font-size: 1.25rem;
+  font-weight: 950;
+}
+.dashboard-pending-copy { min-width: 0; flex: 1; }
+.dashboard-pending-copy strong { display: block; color: var(--text); font-size: .96rem; }
+.dashboard-pending-copy p { margin: 3px 0 0; color: var(--muted); font-size: .78rem; line-height: 1.5; }
+.dashboard-pending-notice .btn { flex: 0 0 auto; justify-content: center; }
 .stat-cards {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
@@ -3185,6 +3213,10 @@ tr:hover td { background: rgba(62, 121, 181, .035); }
   .nav-actions .btn-icon, .burger { width: 40px; height: 40px; }
   .nav-actions .btn-d { min-width: 40px; min-height: 40px; padding: 8px 10px; justify-content: center; }
   .topbar h2 { font-size: 1.5rem; }
+  .dashboard-pending-notice { align-items: flex-start; flex-wrap: wrap; gap: 11px; margin-bottom: 12px; padding: 14px; border-radius: 15px; }
+  .dashboard-pending-mark { flex-basis: 38px; width: 38px; height: 38px; border-radius: 12px; }
+  .dashboard-pending-copy { flex-basis: calc(100% - 50px); }
+  .dashboard-pending-notice .btn { width: 100%; }
   .stat-cards { gap: 10px; margin-bottom: 12px; }
   .sc { min-height: 118px; padding: 15px; border-radius: 15px; }
   .sc-lbl { max-width: calc(100% - 38px); margin-bottom: 11px; font-size: .59rem; line-height: 1.4; }
@@ -5063,6 +5095,14 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(45, 62, 79, .1
 
     <!-- DASHBOARD -->
     <div id="sec-dash" class="adm-sec on">
+      <section class="dashboard-pending-notice" id="dashboardPendingNotice" role="status" aria-live="polite" aria-labelledby="dashboardPendingTitle" hidden>
+        <span class="dashboard-pending-mark" aria-hidden="true">!</span>
+        <div class="dashboard-pending-copy">
+          <strong id="dashboardPendingTitle">Pending bookings need manual confirmation</strong>
+          <p id="dashboardPendingMessage">Open the pending list to review and confirm them.</p>
+        </div>
+        <button type="button" class="btn btn-p" data-perm="bookings" onclick="openDashboardPendingBookings()">Review pending bookings <span aria-hidden="true">&#8594;</span></button>
+      </section>
       <div class="stat-cards">
         <div class="sc"><div class="sc-lbl">Total Bookings</div><div class="sc-val" id="dTotal">0</div><div class="sc-ic">📋</div></div>
         <div class="sc"><div class="sc-lbl">Booked Today</div><div class="sc-val" id="dToday">0</div><div id="dScheduledToday" style="font-size:12px;color:var(--text3);margin-top:8px">0 scheduled today</div><div class="sc-ic">📅</div></div>
@@ -10080,6 +10120,28 @@ function dashboardDailyCounts(transactions, now = new Date()) {
     scheduled: transactions.filter(b => (b.items?.length ? b.items : [b]).some(item => item.date === today)).length,
   };
 }
+function dashboardPendingConfirmations(transactions = []) {
+  return transactions.filter(booking => !bookingQuickConfirmIssue(booking));
+}
+function renderDashboardPendingNotice(transactions = []) {
+  const notice = $('dashboardPendingNotice');
+  if (!notice) return;
+  const pending = dashboardPendingConfirmations(transactions);
+  const count = pending.length;
+  notice.hidden = count === 0;
+  if (!count) return;
+  $('dashboardPendingTitle').textContent = count === 1
+    ? '1 pending booking needs manual confirmation'
+    : `${count} pending bookings need manual confirmation`;
+  $('dashboardPendingMessage').textContent = count === 1
+    ? 'Open the pending list to review and confirm this booking.'
+    : 'Open the pending list to review and confirm these bookings.';
+}
+async function openDashboardPendingBookings() {
+  if (!await goto('bookings')) return;
+  setBookingStatusView('pending');
+  requestAnimationFrame(() => $('bookingQuickNav')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+}
 async function renderDash(){
   // The private platform-allocation position comes from the authoritative
   // remittance RPC. It loads alongside the operational dashboard metrics.
@@ -10092,6 +10154,7 @@ async function renderDash(){
   const realBks=bks.filter(isDashboardReportBooking);
   const active=realBks.filter(isDashboardActiveBooking);
   const activeTxns=groupBookings(active);
+  renderDashboardPendingNotice(activeTxns);
   const forfeitedTxns=groupBookings(realBks.filter(b=>b.status==='forfeited' && b.paymentStatus==='deposit_retained'));
   const retainedRevenue=forfeitedTxns.reduce((s,b)=>s+Math.max(0,(window.BookingBalance?.paidAmount?.(b)||0)-platformFeeAmountForBooking(b,feeCfg)),0);
   const rev=activeTxns.reduce((s,b)=>s+netCourtRevenueForBooking(b,feeCfg),0)+retainedRevenue;
