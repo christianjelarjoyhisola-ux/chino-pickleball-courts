@@ -948,7 +948,7 @@ function isOwnerReverificationRequest(
   ]);
   const expectedTime = body.expectedReceiptVerifiedAt;
   return !hasUpload && Object.keys(body).every((key) => allowed.has(key)) &&
-    (body.provider === undefined || body.provider === "gotyme") &&
+    (body.provider === undefined || !!paymentMethodProvider(body.provider)) &&
     /^[0-9a-f]{64}$/.test(String(body.expectedReceiptHash || "")) &&
     typeof body.stagedReceiptPath === "string" &&
     body.stagedReceiptPath.length > 0 &&
@@ -963,9 +963,11 @@ function canReverifyBookingReceipt(
   row: Record<string, unknown>,
   body: Record<string, unknown>,
 ): boolean {
-  return !!caller && ["owner", "court_owner"].includes(
-    activeReceiptRole(caller.account),
-  ) && row.payment_method === "gotyme" && row.status === "pending" &&
+  const requestedProvider = paymentMethodProvider(body.provider || "gotyme");
+  return !!caller && activeReceiptRole(caller.account) === "owner" &&
+    !!requestedProvider &&
+    paymentMethodProvider(row.payment_method) === requestedProvider &&
+    row.status === "pending" &&
     row.payment_status === "for_verification" &&
     row.receipt_status === "manual_review" &&
     row.receipt_image_hash === body.expectedReceiptHash &&
@@ -2122,11 +2124,10 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
     }
     if (
       isReverification &&
-      (!caller ||
-        !["owner", "court_owner"].includes(activeReceiptRole(caller.account)))
+      (!caller || activeReceiptRole(caller.account) !== "owner")
     ) {
       return json({
-        error: "Only an active owner may recheck a stored receipt.",
+        error: "Only the active system owner may re-read a stored receipt.",
         code: "RECEIPT_REVERIFY_FORBIDDEN",
       }, 403);
     }

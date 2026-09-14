@@ -3170,6 +3170,32 @@ window.DB = {
     return _pbNormalizeReceiptOutcome(json);
   },
 
+  // Re-run OCR against the exact stored evidence. The Edge Function independently
+  // enforces the active system-owner role and rejects changed receipt metadata.
+  async reverifyBookingReceipt(payload = {}) {
+    const bookingRef = String(payload.bookingRef || '').trim();
+    const provider = String(payload.provider || '').trim().toLowerCase();
+    const stagedReceiptPath = String(payload.stagedReceiptPath || '').trim();
+    const expectedReceiptHash = String(payload.expectedReceiptHash || '').trim().toLowerCase();
+    if (!bookingRef || !provider || !stagedReceiptPath || !/^[0-9a-f]{64}$/.test(expectedReceiptHash)) {
+      throw new Error('Refresh the booking before re-reading this receipt.');
+    }
+    const { data, error } = await _sb.functions.invoke('verify-gcash-receipt', {
+      body: {
+        action: 'reverify',
+        bookingRef,
+        provider,
+        stagedReceiptPath,
+        expectedReceiptHash,
+        expectedReceiptVerifiedAt: payload.expectedReceiptVerifiedAt || null,
+      },
+    });
+    if (error) throw new Error(_extractFnError(error, 'Could not re-read receipt'));
+    if (!data) throw new Error('Receipt re-read returned an invalid response.');
+    _pbClearFastCache(['bookings', 'receipt_verifications']);
+    return _pbNormalizeReceiptOutcome(data);
+  },
+
   // Request a short-lived signed URL to view a stored receipt (admin only).
   async getReceiptSignedUrl(bookingRef) {
     const { data, error } = await _sb.functions.invoke('verify-gcash-receipt', {
@@ -7489,6 +7515,9 @@ window.DB = {
         receiptVerifiedAt,
         message: 'Local data mode: receipt stored for manual review; OCR is not sent to Supabase.',
       };
+    },
+    async reverifyBookingReceipt() {
+      throw new Error('Receipt re-reading is available only on the live system.');
     },
     async getReceiptSignedUrl() { throw new Error('No stored receipt in local data mode.'); },
     async getOpenPlayReceiptSignedUrl() { throw new Error('No stored receipt in local data mode.'); },

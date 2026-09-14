@@ -269,6 +269,7 @@ function reverifyHelpers() {
     .replace(/function canReverifyBookingReceipt\([\s\S]*?\): boolean/, 'function canReverifyBookingReceipt(caller, row, body)');
   return vm.runInNewContext(source + '\n({ isOwnerReverificationRequest, canReverifyBookingReceipt });', {
     activeReceiptRole: account => account?.status === 'active' ? String(account.role || '').toLowerCase() : '',
+    paymentMethodProvider: value => ['gcash', 'bdopay', 'maya', 'bpi', 'gotyme', 'maribank', 'pnb', 'securitybank'].includes(String(value || '').toLowerCase()) ? String(value).toLowerCase() : null,
   });
 }
 
@@ -297,20 +298,23 @@ test('owner rechecks require an exact stored checkpoint and reject new evidence 
   for (const overrides of [
     { expectedReceiptHash: '' }, { expectedReceiptHash: 'z'.repeat(64) },
     { expectedReceiptVerifiedAt: undefined }, { expectedReceiptVerifiedAt: 'invalid' },
-    { stagedReceiptPath: '' }, { provider: 'gcash' },
+    { stagedReceiptPath: '' }, { provider: 'cash' },
   ]) assert.equal(isOwnerReverificationRequest({ ...reverifyRequest, ...overrides }, false), false);
   const missingTime = { ...reverifyRequest };
   delete missingTime.expectedReceiptVerifiedAt;
   assert.equal(isOwnerReverificationRequest(missingTime, false), false, 'missing timestamp expectation');
 });
 
-test('only active owners can recheck a pending GoTyme receipt', () => {
+test('only the active system owner can recheck a pending stored receipt', () => {
   const { canReverifyBookingReceipt } = reverifyHelpers();
-  for (const role of ['owner', 'court_owner']) {
-    assert.equal(canReverifyBookingReceipt({ account: { role, status: 'active' } }, reviewedBooking, reverifyRequest), true, role);
-    assert.equal(canReverifyBookingReceipt({ account: { role, status: 'inactive' } }, reviewedBooking, reverifyRequest), false, `inactive ${role}`);
-  }
-  for (const role of ['staff', 'host', 'customer', 'anon', 'service_role']) {
+  assert.equal(canReverifyBookingReceipt({ account: { role: 'owner', status: 'active' } }, reviewedBooking, reverifyRequest), true);
+  assert.equal(canReverifyBookingReceipt(
+    { account: { role: 'owner', status: 'active' } },
+    { ...reviewedBooking, payment_method: 'gcash' },
+    { ...reverifyRequest, provider: 'gcash' },
+  ), true, 'system owner may re-read the unchanged stored GCash receipt');
+  assert.equal(canReverifyBookingReceipt({ account: { role: 'owner', status: 'inactive' } }, reviewedBooking, reverifyRequest), false);
+  for (const role of ['court_owner', 'staff', 'host', 'customer', 'anon', 'service_role']) {
     assert.equal(canReverifyBookingReceipt({ account: { role, status: 'active' } }, reviewedBooking, reverifyRequest), false, role);
   }
   assert.equal(canReverifyBookingReceipt(null, reviewedBooking, reverifyRequest), false);

@@ -453,6 +453,7 @@ test('automated uncertainty queues owner review while owners retain both deliber
   const page = read('index.html');
   const admin = read('admin.html');
   const client = read('supabase-config.js');
+  const receiptEdge = read('supabase/functions/verify-gcash-receipt/index.ts');
   const hostSessionVerifier = page.slice(
     page.indexOf('async function verifyHostSessionReceipt'),
     page.indexOf('async function submitHostSessionJoin'),
@@ -470,6 +471,11 @@ test('automated uncertainty queues owner review while owners retain both deliber
   assert.match(admin, /id="vmRejectBtn"[\s\S]*?❌ Not Received/);
   assert.match(admin, /id="vmConfirmBtn"[\s\S]*?✅ Received — Confirm/);
   assert.match(admin, /function canManuallyResolvePayment\(\)[\s\S]*?\['owner', 'court_owner'\]/);
+  assert.match(admin, /id="vmRereadBtn"[\s\S]*?Re-read Receipt/);
+  assert.match(admin, /function canRereadReceipt\(\)[\s\S]*?=== 'owner'/);
+  assert.match(admin, /DB\.reverifyBookingReceipt\(/);
+  assert.match(client, /async reverifyBookingReceipt\(payload = \{\}\)/);
+  assert.match(receiptEdge, /activeReceiptRole\(caller\.account\) !== "owner"/);
   assert.match(admin, /id="bookingPaymentRejectReason"[^>]*required[^>]*minlength="3"[^>]*maxlength="1000"[^>]*aria-describedby/);
   assert.match(admin, /DB\.rejectBookingPaymentTransaction\(canonicalRef, reason\)/);
   assert.match(admin, /DB\.sendBookingStatusEmail\(canonicalRef, 'payment_rejected', reason, \{ allowFailure: true \}\)/);

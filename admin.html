@@ -6888,6 +6888,7 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(45, 62, 79, .1
     <div class="m-foot">
       <button class="btn btn-d" id="vmRejectBtn" onclick="rejectPayment()">❌ Not Received</button>
       <button class="btn booking-duplicate-transfer" id="vmResolveDuplicateBtn" style="display:none" onclick="openDuplicatePaymentTransferFromVerify()">Resolve duplicate</button>
+      <button class="btn btn-g" id="vmRereadBtn" style="display:none" onclick="rereadStoredReceipt()" title="System Owner only">↻ Re-read Receipt</button>
       <button class="btn btn-p" id="vmConfirmBtn" onclick="verifyAndConfirm()">✅ Received — Confirm</button>
       <button class="btn btn-g" id="vmResolvedClose" style="display:none" onclick="closeVerifyModal()">Close</button>
     </div>
@@ -12213,6 +12214,10 @@ function canManuallyResolvePayment() {
   return ['owner', 'court_owner'].includes(String(sess?.role || '').toLowerCase());
 }
 
+function canRereadReceipt() {
+  return String(sess?.role || '').toLowerCase() === 'owner';
+}
+
 async function openVerifyModal(ref, { returnFocus = null } = {}) {
   const openToken = ++_vmOpenToken;
   _verifyModalLastFocus = returnFocus || document.activeElement;
@@ -12240,6 +12245,13 @@ async function openVerifyModal(ref, { returnFocus = null } = {}) {
   const transferSource = !readOnly && canReview ? cancelledDuplicatePaymentSource(b) : null;
   if ($('vmRejectBtn')) $('vmRejectBtn').style.display = !readOnly && canReview ? '' : 'none';
   if ($('vmConfirmBtn')) $('vmConfirmBtn').style.display = !readOnly && canReview ? '' : 'none';
+  const canReread = !readOnly && canRereadReceipt() &&
+    String(b.status || '').toLowerCase() === 'pending' &&
+    String(b.paymentStatus || '').toLowerCase() === 'for_verification' &&
+    String(b.receiptStatus || '').toLowerCase() === 'manual_review' && Boolean(
+    String(b.receiptImageUrl || '').trim() && /^[0-9a-f]{64}$/i.test(String(b.receiptImageHash || '').trim())
+  );
+  if ($('vmRereadBtn')) $('vmRereadBtn').style.display = canReread ? '' : 'none';
   if ($('vmResolveDuplicateBtn')) $('vmResolveDuplicateBtn').style.display = transferSource ? '' : 'none';
   if ($('vmResolvedClose')) $('vmResolvedClose').style.display = readOnly || !canReview ? '' : 'none';
   if ($('vmReviewHint')) {
@@ -12400,6 +12412,41 @@ let _bookingPaymentRejectReceiptToken = 0;
 function bookingPlayerEmail(b){
   const email = String(b?.email || '').trim().toLowerCase();
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : '';
+}
+
+async function rereadStoredReceipt() {
+  if (!canRereadReceipt()) {
+    toast('Only the system owner can re-read a receipt.', 'err');
+    return;
+  }
+  const ref = $('verifyModal')?.dataset.ref;
+  if (!ref) return;
+  const booking = await getBookingGroupByRef(ref);
+  if (!booking?.receiptImageUrl || !booking?.receiptImageHash) {
+    toast('Stored receipt evidence is incomplete. Refresh the booking and try again.', 'err');
+    return;
+  }
+  const trigger = $('vmRereadBtn');
+  if (trigger?.disabled) return;
+  if (trigger) { trigger.disabled = true; trigger.textContent = 'Reading…'; }
+  try {
+    const outcome = await DB.reverifyBookingReceipt({
+      bookingRef: booking.receiptRef || booking.ref,
+      provider: booking.paymentMethod,
+      stagedReceiptPath: booking.receiptImageUrl,
+      expectedReceiptHash: booking.receiptImageHash,
+      expectedReceiptVerifiedAt: booking.receiptVerifiedAt || null,
+    });
+    toast(outcome.status === 'auto_approved'
+      ? 'Receipt verified and booking confirmed.'
+      : 'Receipt re-read completed. Review the updated checks.', outcome.status === 'auto_approved' ? 'ok' : 'inf');
+    await Promise.allSettled([renderBookings(), renderDash(), renderPaymentReview()]);
+    await openVerifyModal(ref, { returnFocus: _verifyModalLastFocus });
+  } catch (error) {
+    toast(error?.message || 'Could not re-read receipt.', 'err');
+  } finally {
+    if (trigger) { trigger.disabled = false; trigger.textContent = '↻ Re-read Receipt'; }
+  }
 }
 
 function clearBookingPaymentRejectReceipt(){
