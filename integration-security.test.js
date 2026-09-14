@@ -839,7 +839,7 @@ test('payment review covers every receipt-backed registration type', () => {
   assert.match(client, /async updateOpenPlayHostSessionRegistration\(id, updates\)/);
 });
 
-test('booking quick confirm is a dedicated responsive row action using the canonical booking ref', () => {
+test('booking quick confirm is a dedicated responsive review action using the canonical booking ref', () => {
   const admin = read('admin.html');
   const quickButton = functionSource(admin, 'bookingQuickConfirmButton');
   const quickButtonClosure = functionClosure(admin, 'bookingQuickConfirmButton');
@@ -850,7 +850,7 @@ test('booking quick confirm is a dedicated responsive row action using the canon
   assert.match(quickButton, /const\s+actionRef\s*=\s*b\.primaryRef\s*\|\|\s*b\.ref/);
   assert.match(quickButton, /type=["']button["']/);
   assert.match(quickButton, /booking-quick-confirm/);
-  assert.match(quickButtonClosure, /confirmBookingTransaction\s*\(/);
+  assert.match(quickButtonClosure, /openVerifyModal\s*\(/);
   assert.match(quickButton, /onclick=[^\n]*\$\{jsArg\(actionRef\)\}/);
 
   const quickAt = mobileCard.indexOf('bookingQuickConfirmButton(');
@@ -1037,7 +1037,7 @@ test('grouped schedules keep each court paired with its actual time without chan
   assert.match(admin, /b\.isGroup \? bookingScheduleHtml\(b\)/);
 });
 
-test('row and verify-modal confirmation reuse one atomic transaction with deliberate owner review', () => {
+test('row confirmation opens deliberate review and the verify modal uses one atomic transaction', () => {
   const admin = read('admin.html');
   const quickButton = functionSource(admin, 'bookingQuickConfirmButton');
   const quickButtonClosure = functionClosure(admin, 'bookingQuickConfirmButton');
@@ -1046,7 +1046,7 @@ test('row and verify-modal confirmation reuse one atomic transaction with delibe
   const verifyAndConfirm = functionSource(admin, 'verifyAndConfirm');
   const updateStatus = functionSource(admin, 'updateStatus');
 
-  assert.match(quickButtonClosure, /confirmBookingTransaction\s*\(/);
+  assert.match(quickButtonClosure, /openVerifyModal\s*\(/);
   assert.match(verifyAndConfirm, /await\s+confirmBookingTransaction\s*\(/);
   assert.doesNotMatch(quickButton, /\bupdateStatus\s*\(/);
   assert.doesNotMatch(transaction, /\bupdateStatus\s*\(/);

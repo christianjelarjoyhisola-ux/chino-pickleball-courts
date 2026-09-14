@@ -1087,13 +1087,26 @@ tr:hover td { background: var(--bg2); }
 #bookingDetailsActions { position:static; flex:0 0 auto; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); width:100%; min-width:0; box-sizing:border-box; gap:10px; justify-content:stretch; }
 #bookingDetailsActions > .btn { width:100%; min-width:0; max-width:100%; min-height:44px; height:auto; box-sizing:border-box; margin:0; padding:10px 12px; white-space:normal; overflow-wrap:anywhere; justify-content:center; text-align:center; }
 @media (max-width:360px) { #bookingDetailsActions { grid-template-columns:minmax(0,1fr); } }
-.verify-payment-modal { max-width: 720px; }
+.verify-payment-modal { max-width: 1020px; display:flex; flex-direction:column; overflow:hidden; }
 .verify-payment-modal .m-hd { z-index: 2; }
 .verify-payment-modal .m-hd h2 { line-height: 1.15; margin: 0; }
-.verify-payment-modal .m-body { overflow-x: hidden; }
+.verify-payment-modal .m-body { min-height:0; overflow-x:hidden; overflow-y:auto; }
 .verify-payment-modal .receipt-detail-grid { max-width: 100%; }
+.payment-review-layout { display:grid; grid-template-columns:minmax(300px,.9fr) minmax(380px,1.1fr); gap:18px; align-items:start; }
+.payment-review-receipt-pane { min-width:0; padding:14px; border:1px solid var(--border); border-radius:14px; background:var(--bg2); }
+.payment-review-pane-label { margin-bottom:10px; color:var(--muted); font-size:.66rem; font-weight:850; letter-spacing:.08em; text-transform:uppercase; }
+.payment-review-receipt-link { display:block; min-height:360px; border-radius:10px; background:#fff; overflow:hidden; }
+.payment-review-receipt-link img { display:block; width:100%; height:clamp(360px,58vh,610px); object-fit:contain; background:#fff; }
+.payment-review-no-receipt { display:grid; min-height:360px; place-items:center; padding:24px; border:1px dashed var(--border); border-radius:10px; color:var(--muted); text-align:center; line-height:1.55; }
+.payment-review-details-pane { min-width:0; }
+.payment-review-booking-rows { color:var(--muted); font-size:.82rem; }
+.payment-review-booking-row { display:flex; justify-content:space-between; gap:18px; padding:8px 0; border-bottom:1px solid var(--border); }
+.payment-review-booking-row:last-child { border-bottom:0; }
+.payment-review-booking-row > :last-child { color:var(--text); text-align:right; overflow-wrap:anywhere; }
+.payment-review-booking-row .amount { color:var(--yellow); font-weight:850; }
+.payment-review-audit { margin-top:14px; padding-top:12px; border-top:1px solid var(--border); }
 .booking-payment-reject-overlay { z-index: 560; }
-.booking-payment-reject-modal { max-width: 560px; display: flex; flex-direction: column; overflow: hidden; }
+.booking-payment-reject-modal { max-width: 1020px; display: flex; flex-direction: column; overflow: hidden; }
 .booking-payment-reject-modal .m-hd,
 .booking-payment-reject-modal .m-foot { flex: 0 0 auto; z-index: 2; }
 .booking-payment-reject-modal .m-body { min-height: 0; overflow-y: auto; }
@@ -1128,6 +1141,13 @@ tr:hover td { background: var(--bg2); }
   font-size: .75rem; line-height: 1.55;
 }
 .booking-payment-reject-warning strong { color: var(--red); }
+.booking-payment-reject-layout { display:grid; grid-template-columns:minmax(300px,.9fr) minmax(380px,1.1fr); gap:18px; align-items:start; }
+.booking-payment-reject-details { min-width:0; }
+.booking-payment-reject-detail-rows { margin-bottom:14px; padding:12px 14px; border:1px solid var(--border); border-radius:12px; background:var(--surface2); }
+.booking-payment-reject-detail-row { display:grid; grid-template-columns:96px minmax(0,1fr); gap:10px; padding:6px 0; border-bottom:1px solid var(--border); font-size:.74rem; line-height:1.4; }
+.booking-payment-reject-detail-row:last-child { border-bottom:0; }
+.booking-payment-reject-detail-row span { color:var(--muted); }
+.booking-payment-reject-detail-row strong { color:var(--text); text-align:right; overflow-wrap:anywhere; }
 .booking-cancel-overlay { z-index: 555; }
 .booking-cancel-modal { max-width: 580px; display:flex; flex-direction:column; overflow:hidden; }
 .booking-cancel-modal .m-body { min-height:0; overflow-y:auto; }
@@ -1206,6 +1226,14 @@ tr:hover td { background: var(--bg2); }
   .booking-payment-transfer-reference code { text-align: left; }
   .booking-payment-transfer-compare { grid-template-columns: 1fr; }
   .booking-payment-transfer-arrow { transform: rotate(90deg); min-height: 20px; }
+}
+@media (max-width: 760px) {
+  .payment-review-layout,
+  .booking-payment-reject-layout { grid-template-columns:1fr; }
+  .payment-review-receipt-link,
+  .payment-review-no-receipt { min-height:240px; }
+  .payment-review-receipt-link img { height:min(56vh,460px); }
+  .booking-payment-reject-detail-row { grid-template-columns:82px minmax(0,1fr); }
 }
 
 /* ── BLOCKED ───────────────────────────────────────────── */
@@ -6821,36 +6849,41 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(45, 62, 79, .1
       <button class="m-x" type="button" aria-label="Close payment verification" onclick="closeVerifyModal()">✕</button>
     </div>
     <div class="m-body">
-      <div style="text-align:center;margin-bottom:16px">
-        <span id="vmMethod" style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;padding:5px 18px;border-radius:20px;background:rgba(var(--green-rgb),.1);color:var(--green);border:1px solid rgba(var(--green-rgb),.25)">GCash</span>
+      <div class="payment-review-layout">
+        <section class="payment-review-receipt-pane" id="vmReceiptWrap" aria-labelledby="vmReceiptPaneLabel">
+          <div class="payment-review-pane-label" id="vmReceiptPaneLabel">Uploaded receipt</div>
+          <a class="payment-review-receipt-link" id="vmReceiptLink" href="#" target="_blank" rel="noopener" style="display:none">
+            <img id="vmReceiptImg" alt="Uploaded payment receipt" />
+          </a>
+          <div class="payment-review-no-receipt" id="vmReceiptNoImg" style="display:none">No receipt image was uploaded for this booking.</div>
+        </section>
+        <section class="payment-review-details-pane" aria-label="Booking and payment details">
+          <div style="text-align:center;margin-bottom:16px">
+            <span id="vmMethod" style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;padding:5px 18px;border-radius:20px;background:rgba(var(--green-rgb),.1);color:var(--green);border:1px solid rgba(var(--green-rgb),.25)">GCash</span>
+          </div>
+          <div style="background:rgba(var(--green-rgb),.07);border:1.5px solid rgba(var(--green-rgb),.28);border-radius:10px;padding:16px;text-align:center;margin-bottom:14px">
+            <div style="font-size:.66rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:6px">Payment Reference #</div>
+            <div id="vmGcashRef" style="font-family:monospace;font-size:1.55rem;font-weight:800;color:var(--green);letter-spacing:2px">—</div>
+            <div style="font-size:.7rem;color:var(--muted);margin-top:5px">Match this reference with the uploaded receipt and receiving account</div>
+          </div>
+          <div class="payment-review-booking-rows">
+            <div class="payment-review-booking-row"><span>Customer</span><strong id="vmName">—</strong></div>
+            <div class="payment-review-booking-row"><span>Contact</span><span id="vmContact">—</span></div>
+            <div class="payment-review-booking-row"><span>Booking Ref</span><code style="color:var(--green)" id="vmRef">—</code></div>
+            <div class="payment-review-booking-row"><span>Court</span><span id="vmCourt">—</span></div>
+            <div class="payment-review-booking-row"><span>Schedule</span><span id="vmDate">—</span></div>
+            <div class="payment-review-booking-row"><span>Payment amount</span><strong class="amount" id="vmAmount">—</strong></div>
+          </div>
+          <div id="vmGroupBreakdown" style="display:none;margin-top:8px;font-size:.76rem;color:var(--muted)"></div>
+          <div class="payment-review-audit" id="vmReceiptAuditWrap" style="display:none">
+            <div class="payment-review-pane-label">Automated receipt checks</div>
+            <div id="vmReceiptStatus" style="font-size:.82rem;font-weight:700;border-radius:8px;padding:8px 10px;margin-bottom:8px"></div>
+            <div id="vmReceiptFlags" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px"></div>
+            <div id="vmReceiptDetails" class="receipt-detail-grid" style="display:none"></div>
+          </div>
+          <p id="vmReviewHint" style="font-size:.78rem;color:var(--muted);text-align:center;margin-top:12px;line-height:1.6">Match the receipt and payment reference, then choose Received or Not Received.</p>
+        </section>
       </div>
-      <div style="background:rgba(var(--green-rgb),.07);border:1.5px solid rgba(var(--green-rgb),.28);border-radius:10px;padding:16px;text-align:center;margin-bottom:14px">
-        <div style="font-size:.66rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:6px">Payment Reference #</div>
-        <div id="vmGcashRef" style="font-family:monospace;font-size:1.55rem;font-weight:800;color:var(--green);letter-spacing:2px">—</div>
-        <div style="font-size:.7rem;color:var(--muted);margin-top:5px">Check this reference in the matching payment app and in the receiving GCash account</div>
-      </div>
-      <div style="font-size:.82rem;color:var(--muted)">
-        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span>Customer</span><strong style="color:var(--text)" id="vmName">—</strong></div>
-        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span>Contact</span><span id="vmContact">—</span></div>
-        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span>Booking Ref</span><code style="color:var(--green)" id="vmRef">—</code></div>
-        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span>Court</span><span id="vmCourt">—</span></div>
-        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span>Schedule</span><span id="vmDate">—</span></div>
-        <div style="display:flex;justify-content:space-between;padding:6px 0"><span>Payment amount</span><strong style="color:var(--yellow)" id="vmAmount">—</strong></div>
-      </div>
-      <div id="vmGroupBreakdown" style="display:none;margin-top:8px;font-size:.76rem;color:var(--muted)"></div>
-      <div id="vmReceiptWrap" style="display:none;margin-top:14px;border-top:1px solid var(--border);padding-top:12px">
-        <div style="font-size:.66rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:8px">Automated receipt checks</div>
-        <div id="vmReceiptStatus" style="font-size:.82rem;font-weight:700;border-radius:8px;padding:8px 10px;margin-bottom:8px"></div>
-        <div id="vmReceiptFlags" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px"></div>
-        <div id="vmReceiptDetails" class="receipt-detail-grid" style="display:none"></div>
-        <a id="vmReceiptLink" href="#" target="_blank" rel="noopener" style="display:none">
-          <img id="vmReceiptImg" alt="Receipt" style="width:100%;max-height:320px;object-fit:contain;border-radius:8px;border:1px solid var(--border);background:#fff"/>
-        </a>
-        <div id="vmReceiptNoImg" style="display:none;font-size:.76rem;color:var(--muted)">No receipt image was uploaded for this booking.</div>
-      </div>
-      <p id="vmReviewHint" style="font-size:.78rem;color:var(--muted);text-align:center;margin-top:12px;line-height:1.6">
-        Open your GCash inbox and match the reference above, then mark as received to confirm the booking and send an email to the customer.
-      </p>
     </div>
     <div class="m-foot">
       <button class="btn btn-d" id="vmRejectBtn" onclick="rejectPayment()">❌ Not Received</button>
@@ -6872,20 +6905,39 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(45, 62, 79, .1
       <button class="m-x" type="button" id="bookingPaymentRejectClose" aria-label="Keep booking and close" onclick="closeBookingPaymentRejectModal()">&#10005;</button>
     </div>
     <div class="m-body">
-      <div class="booking-payment-reject-summary">
-        <div><span>Booking</span><strong id="bookingPaymentRejectRef">—</strong></div>
-        <div><span>Payment submitted</span><strong class="amount" id="bookingPaymentRejectAmount">—</strong></div>
+      <div class="booking-payment-reject-layout">
+        <section class="payment-review-receipt-pane" aria-labelledby="bookingPaymentRejectReceiptLabel">
+          <div class="payment-review-pane-label" id="bookingPaymentRejectReceiptLabel">Uploaded receipt</div>
+          <a class="payment-review-receipt-link" id="bookingPaymentRejectReceiptLink" target="_blank" rel="noopener" style="display:none">
+            <img id="bookingPaymentRejectReceiptImg" alt="Uploaded payment receipt being rejected" />
+          </a>
+          <div class="payment-review-no-receipt" id="bookingPaymentRejectReceiptNoImg" style="display:none">No receipt image is available for this booking.</div>
+        </section>
+        <section class="booking-payment-reject-details" aria-label="Booking details and rejection reason">
+          <div class="booking-payment-reject-summary">
+            <div><span>Booking</span><strong id="bookingPaymentRejectRef">—</strong></div>
+            <div><span>Payment submitted</span><strong class="amount" id="bookingPaymentRejectAmount">—</strong></div>
+          </div>
+          <div class="booking-payment-reject-detail-rows">
+            <div class="booking-payment-reject-detail-row"><span>Customer</span><strong id="bookingPaymentRejectName">—</strong></div>
+            <div class="booking-payment-reject-detail-row"><span>Contact</span><strong id="bookingPaymentRejectContact">—</strong></div>
+            <div class="booking-payment-reject-detail-row"><span>Court</span><strong id="bookingPaymentRejectCourt">—</strong></div>
+            <div class="booking-payment-reject-detail-row"><span>Schedule</span><strong id="bookingPaymentRejectSchedule">—</strong></div>
+            <div class="booking-payment-reject-detail-row"><span>Method</span><strong id="bookingPaymentRejectMethod">—</strong></div>
+            <div class="booking-payment-reject-detail-row"><span>Payment ref</span><strong id="bookingPaymentRejectPaymentRef">—</strong></div>
+          </div>
+          <p class="booking-payment-reject-impact" id="bookingPaymentRejectImpact">Loading booking impact…</p>
+          <div class="fg">
+            <label class="fl" for="bookingPaymentRejectReason">Reason sent to player</label>
+            <textarea class="fi booking-payment-reject-reason" id="bookingPaymentRejectReason" required minlength="3" maxlength="1000" aria-describedby="bookingPaymentRejectReasonHelp bookingPaymentRejectCount" placeholder="Example: The submitted payment reference has already been used and could not be accepted." oninput="syncBookingPaymentRejectReason()"></textarea>
+            <div class="booking-payment-reject-help">
+              <span id="bookingPaymentRejectReasonHelp">Minimum 3 characters. Use a clear customer-facing explanation and do not include another player’s information.</span>
+              <span id="bookingPaymentRejectCount">0 / 1000</span>
+            </div>
+          </div>
+          <div class="booking-payment-reject-warning"><strong>This cannot be undone.</strong> <span id="bookingPaymentRejectWarningText">This booking will be cancelled and its court slots released.</span></div>
+        </section>
       </div>
-      <p class="booking-payment-reject-impact" id="bookingPaymentRejectImpact">Loading booking impact…</p>
-      <div class="fg">
-        <label class="fl" for="bookingPaymentRejectReason">Reason sent to player</label>
-        <textarea class="fi booking-payment-reject-reason" id="bookingPaymentRejectReason" required minlength="3" maxlength="1000" aria-describedby="bookingPaymentRejectReasonHelp bookingPaymentRejectCount" placeholder="Example: The submitted payment reference has already been used and could not be accepted." oninput="syncBookingPaymentRejectReason()"></textarea>
-        <div class="booking-payment-reject-help">
-          <span id="bookingPaymentRejectReasonHelp">Minimum 3 characters. Use a clear customer-facing explanation and do not include another player’s information.</span>
-          <span id="bookingPaymentRejectCount">0 / 1000</span>
-        </div>
-      </div>
-      <div class="booking-payment-reject-warning"><strong>This cannot be undone.</strong> <span id="bookingPaymentRejectWarningText">This booking will be cancelled and its court slots released.</span></div>
     </div>
     <div class="m-foot">
       <button class="btn btn-g" type="button" id="bookingPaymentRejectCancel" onclick="closeBookingPaymentRejectModal()">Keep booking</button>
@@ -9136,8 +9188,12 @@ function clearAdminReceiptPreview(prefix) {
   if (link) { link.removeAttribute('href'); link.style.display = 'none'; }
   if (flags) flags.innerHTML = '';
   if (details) { details.innerHTML = ''; details.style.display = 'none'; }
-  if (noImage) noImage.style.display = 'none';
+  if (noImage) {
+    noImage.style.display = 'none';
+    if (prefix === 'vm') noImage.textContent = 'No receipt image was uploaded for this booking.';
+  }
   if (wrap) wrap.style.display = 'none';
+  if (prefix === 'vm' && $('vmReceiptAuditWrap')) $('vmReceiptAuditWrap').style.display = 'none';
 }
 
 function closeModal(id){
@@ -11960,7 +12016,7 @@ async function confirmBookingTransaction(ref, {
   }
 }
 function quickConfirmBooking(ref, trigger) {
-  return confirmBookingTransaction(ref, { trigger });
+  return openVerifyModal(ref, { returnFocus: trigger });
 }
 
 const BOOKING_CANCELLATION_REASON_LABELS = {
@@ -12253,8 +12309,14 @@ async function vmPopulateReceipt(b){
   const paymentState = String(b.paymentStatus || '').toLowerCase();
   const bookingState = String(b.status || '').toLowerCase();
   const displayFlags = receiptFlagsForDisplay(b);
-  if (s === 'none' && !b.receiptImageUrl) { if (wrap) wrap.style.display = 'none'; return; }
+  const auditWrap = $('vmReceiptAuditWrap');
+  if (s === 'none' && !b.receiptImageUrl) {
+    if (wrap) wrap.style.display = '';
+    if (noImg) noImg.style.display = '';
+    return;
+  }
   if (wrap) wrap.style.display = '';
+  if (auditWrap) auditWrap.style.display = s !== 'none' || displayFlags.length || b.receiptExtracted ? '' : 'none';
   const st = $('vmReceiptStatus');
   const map = {
     auto_approved: ['var(--green)','rgba(var(--green-rgb),.12)','✅ Auto-verified — all checks passed'],
@@ -12333,10 +12395,42 @@ async function resendConfirmationEmail(ref) {
 
 let _bookingPaymentRejectContext = null;
 let _bookingPaymentRejectInFlight = false;
+let _bookingPaymentRejectReceiptToken = 0;
 
 function bookingPlayerEmail(b){
   const email = String(b?.email || '').trim().toLowerCase();
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : '';
+}
+
+function clearBookingPaymentRejectReceipt(){
+  _bookingPaymentRejectReceiptToken++;
+  const link = $('bookingPaymentRejectReceiptLink');
+  const image = $('bookingPaymentRejectReceiptImg');
+  const noImage = $('bookingPaymentRejectReceiptNoImg');
+  image?.removeAttribute('src');
+  if (link) { link.removeAttribute('href'); link.style.display = 'none'; }
+  if (noImage) { noImage.textContent = 'No receipt image is available for this booking.'; noImage.style.display = 'none'; }
+}
+
+async function populateBookingPaymentRejectReceipt(booking){
+  clearBookingPaymentRejectReceipt();
+  const token = _bookingPaymentRejectReceiptToken;
+  const link = $('bookingPaymentRejectReceiptLink');
+  const image = $('bookingPaymentRejectReceiptImg');
+  const noImage = $('bookingPaymentRejectReceiptNoImg');
+  if (!booking?.receiptImageUrl) {
+    if (noImage) noImage.style.display = '';
+    return;
+  }
+  try {
+    const url = await DB.getReceiptSignedUrl(booking.receiptRef || booking.ref);
+    if (token !== _bookingPaymentRejectReceiptToken) return;
+    if (image) image.src = url;
+    if (link) { link.href = url; link.style.display = ''; }
+  } catch (_) {
+    if (token !== _bookingPaymentRejectReceiptToken) return;
+    if (noImage) { noImage.textContent = 'Could not load the receipt image. Close and try again.'; noImage.style.display = ''; }
+  }
 }
 
 function bookingPaymentRejectCourtCount(b){
@@ -12392,6 +12486,7 @@ function closeBookingPaymentRejectModal({ restoreFocus = true, force = false, re
     overlay.hidden = true;
   }
   if ($('bookingPaymentRejectReason')) $('bookingPaymentRejectReason').value = '';
+  clearBookingPaymentRejectReceipt();
   _bookingPaymentRejectContext = null;
   if (resumeParent && context?.suspendedVerify) {
     const verifyOverlay = $('verifyModal');
@@ -12429,6 +12524,12 @@ async function openBookingPaymentRejectModal(ref, trigger = null, { closeVerifyO
     _bookingPaymentRejectContext = { ref: canonicalRef, trigger, closeVerifyOnSuccess, suspendedVerify };
     $('bookingPaymentRejectRef').textContent = booking.displayRef || canonicalRef;
     $('bookingPaymentRejectAmount').textContent = fmt(booking.downpayment || booking.total || 0);
+    $('bookingPaymentRejectName').textContent = booking.fullName || '—';
+    $('bookingPaymentRejectContact').textContent = booking.contactNumber || booking.email || '—';
+    $('bookingPaymentRejectCourt').textContent = booking.courtName || '—';
+    $('bookingPaymentRejectSchedule').textContent = booking.scheduleLabel || `${fmtD(booking.date)} · ${booking.startTime || '—'}–${booking.endTime || '—'}`;
+    $('bookingPaymentRejectMethod').textContent = paymentMethodLabel(booking.paymentMethod);
+    $('bookingPaymentRejectPaymentRef').textContent = booking.gcashRef || '—';
     const reservationImpact = courtCount === 1
       ? 'the court reservation and release its slots'
       : `all ${courtCount} court reservations and release their slots`;
@@ -12446,6 +12547,7 @@ async function openBookingPaymentRejectModal(ref, trigger = null, { closeVerifyO
     overlay.inert = false;
     overlay.setAttribute('aria-hidden', 'false');
     overlay.classList.add('show');
+    void populateBookingPaymentRejectReceipt(booking);
     if (suspendedVerify) {
       verifyOverlay.inert = true;
       verifyOverlay.setAttribute('aria-hidden', 'true');
