@@ -8414,6 +8414,13 @@ function hostInitialPaymentRejectButton(b, mobile = false){
   const displayRef = b.displayRef || actionRef;
   return `<button type="button" class="btn btn-d btn-sm booking-reject-payment${mobile?' booking-reject-payment-mobile':''}" data-booking-ref="${esc(actionRef)}" aria-label="Reject payment for ${esc(displayRef)}" onclick="openBookingPaymentRejectModal('${jsArg(actionRef)}',this)">Reject Payment</button>`;
 }
+function bookingQuickRejectButton(b, mobile = false){
+  if (b?.hostBooking || !bookingPaymentCanBeRejected(b)) return '';
+  const actionRef = b.primaryRef || b.ref;
+  if (!actionRef) return '';
+  const displayRef = b.displayRef || actionRef;
+  return `<button type="button" class="btn btn-d btn-sm booking-quick-reject${mobile?' mb-book-quick-reject':''}" data-booking-ref="${esc(actionRef)}" aria-label="Reject payment for ${esc(displayRef)}" onclick="openBookingPaymentRejectModal('${jsArg(actionRef)}',this)">Reject Payment</button>`;
+}
 function bookingPaymentCanResendRejectionEmail(b){
   if (!b || !['owner','court_owner'].includes(String(sess?.role || '').toLowerCase())) return false;
   const rows = bookingGroupRowsForPaymentGuard(b);
@@ -8815,7 +8822,7 @@ function mobileBookingCard(b, canDelete){
     </div>
     ${b.hostBooking
       ? `<div class="mb-book-primary-actions">${hostBalanceReviewButton(b, true)}${bookingDetailsButton(b)}${hostPaymentHistoryButton(b, true)}${hostInitialPaymentRejectButton(b, true)}${bookingRejectionEmailButton(b, true)}</div><div class="mb-book-primary-actions">${bookingCustomEmailButton(b, true)}${bookingPaymentTransferEmailButton(b, true)}${bookingDuplicateTransferButton(b, true)}</div>`
-      : `<div class="mb-book-primary-actions">${bookingQuickConfirmButton(b, true)}${bookingPaymentTransferEmailButton(b, true)}${bookingDuplicateTransferButton(b, true)}</div>`}
+      : `<div class="mb-book-primary-actions">${bookingQuickConfirmButton(b, true)}${bookingQuickRejectButton(b, true)}${bookingPaymentTransferEmailButton(b, true)}${bookingDuplicateTransferButton(b, true)}</div>`}
     <details class="mb-book-pay">
       <summary>Actions</summary>
       <div class="mb-book-detail-grid">
@@ -10909,7 +10916,7 @@ async function renderBookings(){
         ${duplicatePaymentRefBadge(b)}
         ${b.hostBooking ? hostPaymentEvidenceHtml(b) : receiptBadge(b)}
       </div></td>
-      <td data-label="Reservation"><div class="booking-status-stack">${hostBalanceBookingStatus(b)}${bookingQuickConfirmButton(b)}</div></td>
+      <td data-label="Reservation"><div class="booking-status-stack">${hostBalanceBookingStatus(b)}${bookingQuickConfirmButton(b)}${bookingQuickRejectButton(b)}</div></td>
       <td data-label="Actions"><div style="display:flex;gap:5px;flex-wrap:wrap">${bookingActionsHtml(b, canDelete)}</div></td>
     </tr>`).join('');
   const emptyScope = _bookingType === 'host' ? 'host bookings' : _bookingType === 'court' ? 'court bookings' : 'bookings';
