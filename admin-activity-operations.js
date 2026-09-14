@@ -91,6 +91,11 @@
     grsChooseTime: 'Choose a new time for the selected schedules',
     grsLoadAvailability: 'Retry loading available reschedule hours',
     saveGroupReschedule: 'Save selected schedules and request a player email',
+    openManualRescheduleHistory: 'Open manual reschedule history',
+    openManualRescheduleHistoryForBooking: 'Open a booking in manual reschedule history',
+    closeManualRescheduleHistory: 'Close manual reschedule history',
+    loadManualRescheduleHistory: 'Refresh manual reschedule history',
+    openBookingFromManualReschedule: 'Open booking details from manual reschedule history',
     openBookingRescheduleRequests: 'Open player reschedule requests',
     closeBookingRescheduleRequests: 'Close player reschedule requests',
     selectBookingRescheduleRequest: 'Open a player reschedule request',
@@ -123,6 +128,11 @@
   add('#bookingNext', 'bookings_next_page', 'View the next page of bookings', 'bookings');
   add('#calendarView .cal-nav-btn:first-child', 'bookings_previous_month', 'View the previous calendar month', 'bookings');
   add('#calendarView .cal-nav-btn:last-child', 'bookings_next_month', 'View the next calendar month', 'bookings');
+  add('#manualRescheduleHistoryBtn', 'manual_reschedules_open', 'Open manual reschedule history', 'bookings');
+  change('#mrhSearch', 'manual_reschedules_search', 'Search manual reschedule history', 'bookings');
+  change('#mrhDate', 'manual_reschedules_date', 'Filter manual reschedules by change date', 'bookings');
+  change('#mrhActor', 'manual_reschedules_operator', 'Filter manual reschedules by operator', 'bookings');
+  add('#mrhRefreshBtn', 'manual_reschedules_refresh', 'Refresh manual reschedule history', 'bookings');
   add('.mb-book-pay > summary', 'booking_actions_toggle', 'Show or hide booking actions');
   change('#deletedSrch', 'deleted_bookings_search', 'Search deleted bookings', 'deleted');
   change('#deletedStatus', 'deleted_bookings_status_filter', 'Filter deleted bookings by archive status', 'deleted');
@@ -205,6 +215,7 @@
     getDeletedBookingArchive: 'Load deleted bookings',
     getAdminRescheduleOptions: 'Load available hours for rescheduling',
     getAdminRescheduleHistory: 'Load the booking’s past schedule changes',
+    listAdminRescheduleHistory: 'Load manual reschedule history',
     listBookingRescheduleRequests: 'Load player reschedule requests',
     getBookingRescheduleRequest: 'Load a player reschedule request',
     getReceiptSignedUrl: 'Load the booking receipt',

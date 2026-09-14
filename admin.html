@@ -4802,6 +4802,10 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(45, 62, 79, .1
 .booking-reschedule-queue.has-pending::after{content:'';position:absolute;width:7px;height:7px;right:-2px;top:-2px;border-radius:50%;background:var(--red);box-shadow:0 0 0 3px var(--surface),0 0 14px rgba(229,57,53,.52)}
 .booking-reschedule-note{display:inline-flex;align-items:center;gap:5px;margin-top:6px;padding:4px 7px;border:1px solid rgba(var(--yellow-rgb),.32);border-radius:999px;color:var(--yellow);background:rgba(var(--yellow-rgb),.09);font-size:.63rem;font-weight:900;line-height:1.2;white-space:nowrap}
 .booking-reschedule-note::before{content:'\21C4';font-size:.82rem}
+.booking-manual-reschedule-note{display:inline-flex;align-items:center;gap:5px;margin-top:6px;padding:4px 7px;border:1px solid rgba(var(--green-rgb),.32);border-radius:999px;color:var(--green);background:rgba(var(--green-rgb),.09);font-size:.63rem;font-weight:900;line-height:1.2;white-space:nowrap;cursor:pointer}.booking-manual-reschedule-note::before{content:'\2713';font-size:.72rem}
+.mrh-modal{width:min(1120px,calc(100vw - 32px));max-width:1120px;max-height:min(820px,calc(100dvh - 42px));display:flex;flex-direction:column;overflow:hidden;border-radius:22px}.mrh-head p{margin:5px 0 0;color:var(--text3);font-size:.72rem}.mrh-body{padding:0;overflow:auto}.mrh-tools{position:sticky;top:0;z-index:2;display:grid;grid-template-columns:minmax(220px,1fr) 180px 210px auto;gap:9px;padding:13px 16px;border-bottom:1px solid var(--border);background:var(--surface)}.mrh-tools .fi{min-height:40px}.mrh-summary{padding:11px 16px;color:var(--text3);font-size:.72rem;border-bottom:1px solid var(--border)}.mrh-list{padding:12px 16px 18px}.mrh-item{display:grid;grid-template-columns:minmax(180px,.8fr) minmax(310px,1.35fr) minmax(155px,.65fr) auto;gap:14px;align-items:center;padding:14px;margin-bottom:10px;border:1px solid var(--border);border-radius:14px;background:linear-gradient(145deg,var(--surface),rgba(var(--green-rgb),.025));box-shadow:0 7px 20px rgba(0,0,0,.045)}.mrh-person strong,.mrh-actor strong{display:block;color:var(--text);font-size:.82rem;overflow-wrap:anywhere}.mrh-person code{display:block;margin-top:4px;color:var(--green);font-size:.66rem}.mrh-person span,.mrh-actor span{display:block;margin-top:4px;color:var(--text3);font-size:.67rem;overflow-wrap:anywhere}.mrh-route{display:grid;grid-template-columns:minmax(0,1fr) 24px minmax(0,1fr);gap:7px;align-items:center}.mrh-route>div{min-width:0;padding:9px;border:1px solid var(--border);border-radius:10px;background:var(--bg2)}.mrh-route small{display:block;color:var(--text3);font-size:.56rem;font-weight:900;letter-spacing:.08em;text-transform:uppercase}.mrh-route strong{display:block;margin-top:4px;color:var(--text);font-size:.72rem;line-height:1.4}.mrh-route i{color:var(--yellow);font-style:normal;text-align:center;font-weight:950}.mrh-reason{grid-column:2 / 4;margin-top:-5px;color:var(--text2);font-size:.7rem;line-height:1.45;white-space:pre-wrap}.mrh-empty{padding:55px 20px;text-align:center;color:var(--text3)}.mrh-empty strong{display:block;margin-bottom:6px;color:var(--text)}
+@media(max-width:850px){.mrh-tools{grid-template-columns:1fr 1fr}.mrh-item{grid-template-columns:1fr auto}.mrh-route{grid-column:1 / -1;grid-row:2}.mrh-actor{grid-column:1}.mrh-item>.btn{grid-column:2;grid-row:1}.mrh-reason{grid-column:1 / -1;grid-row:3;margin:0}}
+@media(max-width:520px){.mrh-modal{width:100%;max-height:94dvh;border-radius:22px 22px 0 0}.mrh-tools{grid-template-columns:1fr;padding:11px}.mrh-list{padding:10px}.mrh-item{grid-template-columns:1fr}.mrh-route{grid-column:1;grid-row:auto;grid-template-columns:1fr}.mrh-route i{transform:rotate(90deg)}.mrh-actor,.mrh-item>.btn,.mrh-reason{grid-column:1;grid-row:auto}.mrh-item>.btn{width:100%;justify-content:center}}
 .brq-overlay{z-index:590;background:rgba(3,9,14,.72);backdrop-filter:blur(12px) saturate(120%)}
 .brq-modal{width:min(1080px,calc(100vw - 32px));max-width:1080px;height:min(760px,calc(100dvh - 42px));display:flex;flex-direction:column;overflow:hidden;border-radius:22px;border:1px solid rgba(var(--yellow-rgb),.28);background:linear-gradient(145deg,var(--surface),var(--bg2));box-shadow:0 36px 90px rgba(0,0,0,.38),0 0 0 1px rgba(255,255,255,.035) inset}
 .brq-head{flex:0 0 auto;z-index:3;padding:19px 22px;background:radial-gradient(circle at 78% -50%,rgba(var(--yellow-rgb),.2),transparent 48%),linear-gradient(120deg,rgba(var(--green-rgb),.13),rgba(var(--yellow-rgb),.045),var(--surface))}
@@ -5324,6 +5328,9 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(45, 62, 79, .1
           </div>
           <button class="btn btn-g btn-sm booking-export-btn" data-perm="export" onclick="exportCSV()">Export</button>
           <button class="btn btn-sm availability-post-launch" type="button" data-perm="export" onclick="openAvailabilityGraphic()"><span aria-hidden="true">&#10022;</span><span>Availability Post</span></button>
+          <button class="btn btn-g btn-sm" id="manualRescheduleHistoryBtn" type="button" hidden onclick="openManualRescheduleHistory()">
+            <span aria-hidden="true">&#8634;</span><span>Manual Reschedules</span>
+          </button>
           <button class="btn btn-sm booking-reschedule-queue" id="bookingRescheduleQueueBtn" type="button" hidden onclick="openBookingRescheduleRequests()">
             <span class="booking-reschedule-queue-icon" aria-hidden="true">&#8644;</span>
             <span>Schedule requests</span>
@@ -7071,6 +7078,29 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(45, 62, 79, .1
   </section>
 </div>
 
+<!-- MANUAL RESCHEDULE HISTORY -->
+<div class="overlay brq-overlay" id="manualRescheduleHistoryModal" aria-hidden="true" hidden inert onclick="if(event.target===this)closeManualRescheduleHistory()">
+  <section class="modal mrh-modal" role="dialog" aria-modal="true" aria-labelledby="mrhTitle" tabindex="-1" onkeydown="manualRescheduleHistoryKeydown(event)">
+    <header class="m-hd brq-head mrh-head">
+      <div class="brq-heading">
+        <span class="brq-mark" aria-hidden="true">&#8634;</span>
+        <div><div class="brq-kicker">Owner audit trail</div><h2 id="mrhTitle">MANUAL RESCHEDULES</h2><p>See every booking moved directly by an owner or staff account.</p></div>
+      </div>
+      <button class="m-x" type="button" aria-label="Close manual reschedules" onclick="closeManualRescheduleHistory()">&#10005;</button>
+    </header>
+    <div class="m-body mrh-body">
+      <div class="mrh-tools">
+        <input class="fi" id="mrhSearch" type="search" aria-label="Search manual reschedules" placeholder="Search customer, reference, court..." oninput="renderManualRescheduleHistory()">
+        <input class="fi" id="mrhDate" type="date" aria-label="Filter by date changed" onchange="renderManualRescheduleHistory()">
+        <select class="fi" id="mrhActor" aria-label="Filter by staff member" onchange="renderManualRescheduleHistory()"><option value="">All owners and staff</option></select>
+        <button class="btn btn-g btn-sm" id="mrhRefreshBtn" type="button" onclick="loadManualRescheduleHistory({force:true})">Refresh</button>
+      </div>
+      <div class="mrh-summary" id="mrhSummary" role="status">Loading manual reschedules...</div>
+      <div class="mrh-list" id="mrhList" aria-live="polite"><div class="mrh-empty"><strong>Loading history</strong><span>Checking the permanent reschedule records...</span></div></div>
+    </div>
+  </section>
+</div>
+
 <!-- CUSTOMER RESCHEDULE REQUEST REVIEW -->
 <div class="overlay brq-overlay" id="bookingRescheduleRequestsModal" aria-hidden="true" hidden inert>
   <section class="modal brq-modal" role="dialog" aria-modal="true" aria-labelledby="brqTitle" tabindex="-1" onkeydown="bookingRescheduleRequestKeydown(event)">
@@ -8741,6 +8771,7 @@ function mobileBookingCard(b, canDelete){
         ${!pendingBalance && deadlineState.label ? `<span class="mb-book-chip warn">${esc(deadlineState.label)}</span>` : ''}
         ${bookingSourceBadge(b)}
         ${bookingRescheduleRequestBadge(b)}
+        ${manualRescheduleBadge(b)}
       </div>
       ${duplicatePaymentRefBadge(b)}
     </div>
@@ -10639,6 +10670,8 @@ async function renderBookings(){
   const skipRequestRefresh = arguments[0]?.skipRequestRefresh === true;
   const seq = ++_bookingRenderSeq;
   const canDelete=Auth.can('booking_delete', sess.role);
+  const manualHistoryButton = $('manualRescheduleHistoryBtn');
+  if (manualHistoryButton) manualHistoryButton.hidden = !canViewManualRescheduleHistory();
   const body = $('bookBody');
   const quickNav = $('bookingQuickNav');
   if (quickNav) quickNav.setAttribute('aria-busy', 'true');
@@ -10654,7 +10687,10 @@ async function renderBookings(){
     const scheduleRequests = canReviewBookingRescheduleRequests() && !skipRequestRefresh
       ? refreshBookingRescheduleRequests({ silent:true })
       : Promise.resolve([]);
-    [bks] = await Promise.all([DB.getBookings(), pendingBalances, scheduleRequests]);
+    const manualReschedules = canViewManualRescheduleHistory() && typeof DB.listAdminRescheduleHistory === 'function'
+      ? DB.listAdminRescheduleHistory().catch(error => { console.warn('Manual reschedule indicators unavailable:', error); return _manualRescheduleRows; })
+      : Promise.resolve([]);
+    [bks,,, _manualRescheduleRows] = await Promise.all([DB.getBookings(), pendingBalances, scheduleRequests, manualReschedules]);
   } catch (e) {
     console.error('renderBookings getBookings failed:', e);
     updateBookingFilterMeta(0, 0, bookingFilters());
@@ -10741,7 +10777,7 @@ async function renderBookings(){
       <td data-label="Ref"><code style="color:var(--green);font-size:.76rem">${esc(b.displayRef || b.ref)}</code>${b.isGroup?`<div style="font-size:.68rem;color:var(--muted);margin-top:3px">${b.items.length} courts</div>`:''}</td>
       <td data-label="Customer"><div style="font-weight:600">${esc(b.fullName)}</div><div style="font-size:.75rem;color:var(--text)">${esc(b.email)}</div><div style="margin-top:4px">${bookingSourceBadge(b)}</div></td>
       <td data-label="Court">${esc(b.courtName)}</td>
-      <td data-label="Schedule">${bookingScheduleHtml(b)}${bookingRescheduleRequestBadge(b)}</td>
+      <td data-label="Schedule">${bookingScheduleHtml(b)}${bookingRescheduleRequestBadge(b)}${manualRescheduleBadge(b)}</td>
       <td data-label="Booked On">${b.createdAt ? (() => { const d=new Date(b.createdAt); return d.toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'}) + '<div style="font-size:.75rem;color:var(--muted);font-weight:600">' + d.toLocaleTimeString('en-PH',{hour:'numeric',minute:'2-digit',hour12:true}) + '</div>'; })() : '<span style="color:var(--muted)">—</span>'}</td>
       <td data-label="Amount">${bookingAmountSummaryHtml(b)}<div class="amount-stack" style="display:none">
         <div class="amount-main">${fmt(b.total)}</div>
@@ -13553,6 +13589,151 @@ async function calOpenBookingSlot(dateStr, courtId, hour) {
   await nbRenderSlots();
   const key = nbCellKey(courtId, hour);
   if (!_nbSelectedCells.has(key)) nbToggleSlot(courtId, hour);
+}
+
+/* ==============================================
+   MANUAL RESCHEDULE HISTORY
+   ============================================== */
+let _manualRescheduleRows = [];
+let _manualRescheduleLastFocus = null;
+
+function canViewManualRescheduleHistory() {
+  return ['owner','court_owner'].includes(String(sess?.role || '').toLowerCase());
+}
+
+function manualRescheduleBookingRefs(booking) {
+  return new Set([
+    booking?.ref, booking?.primaryRef, booking?.displayRef, booking?.groupRef,
+    ...(Array.isArray(booking?.refs) ? booking.refs : []),
+    ...(Array.isArray(booking?.items) ? booking.items.map(item => item?.ref) : []),
+    ...(Array.isArray(booking?.allItems) ? booking.allItems.map(item => item?.ref) : []),
+  ].map(value => String(value || '').trim()).filter(Boolean));
+}
+
+function manualRescheduleBadge(booking) {
+  const refs = manualRescheduleBookingRefs(booking);
+  const changed = _manualRescheduleRows.some(row => refs.has(String(row?.bookingRef || '')));
+  return changed ? '<button class="booking-manual-reschedule-note" type="button" onclick="event.stopPropagation();openManualRescheduleHistoryForBooking(\''+jsArg(booking.primaryRef || booking.ref)+'\')">Manually rescheduled</button>' : '';
+}
+
+function manualRescheduleScheduleLabel(schedule) {
+  const slots = (schedule?.slots || []).map(Number).filter(Number.isFinite).sort((a,b) => a-b);
+  const date = schedule?.date ? fmtD(schedule.date) : 'Date unavailable';
+  return `${date}${slots.length ? ` · ${fmtHour(slots[0])} – ${fmtHour(slots[slots.length - 1] + 1)}` : ''}`;
+}
+
+function manualRescheduleChangedDate(value) {
+  const date = new Date(value || '');
+  if (Number.isNaN(date.getTime())) return '';
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+    timeZone:'Asia/Manila', year:'numeric', month:'2-digit', day:'2-digit',
+  }).formatToParts(date).filter(part => part.type !== 'literal').map(part => [part.type, part.value]));
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+function manualRescheduleActorLabel(row) {
+  const role = String(row?.actorRole || '').replaceAll('_',' ');
+  return role ? `${row.actorName} · ${role}` : String(row?.actorName || 'Dashboard account');
+}
+
+function manualRescheduleFilteredRows() {
+  const query = String($('mrhSearch')?.value || '').trim().toLowerCase();
+  const changedDate = String($('mrhDate')?.value || '');
+  const actorId = String($('mrhActor')?.value || '');
+  return _manualRescheduleRows.filter(row => {
+    if (changedDate && manualRescheduleChangedDate(row.createdAt) !== changedDate) return false;
+    if (actorId && String(row.actorId || '') !== actorId) return false;
+    if (!query) return true;
+    return [row.customerName,row.customerEmail,row.bookingRef,row.bookingGroupRef,row.courtName,row.actorName,row.reason]
+      .some(value => String(value || '').toLowerCase().includes(query));
+  });
+}
+
+function renderManualRescheduleHistory() {
+  const list = $('mrhList');
+  const summary = $('mrhSummary');
+  if (!list || !summary) return;
+  const rows = manualRescheduleFilteredRows();
+  const filtered = rows.length !== _manualRescheduleRows.length;
+  summary.textContent = `${rows.length} manual reschedule${rows.length === 1 ? '' : 's'}${filtered ? ` shown from ${_manualRescheduleRows.length}` : ''} · newest first · Philippine time`;
+  if (!rows.length) {
+    list.innerHTML = `<div class="mrh-empty"><strong>${_manualRescheduleRows.length ? 'No reschedules match these filters' : 'No manual reschedules yet'}</strong><span>${_manualRescheduleRows.length ? 'Try another customer, date, or staff member.' : 'Bookings moved by an owner or staff member will appear here.'}</span></div>`;
+    return;
+  }
+  list.innerHTML = rows.map(row => {
+    const changed = new Date(row.createdAt || '');
+    const when = Number.isNaN(changed.getTime()) ? 'Time unavailable' : changed.toLocaleString('en-PH',{timeZone:'Asia/Manila',month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'});
+    return `<article class="mrh-item">
+      <div class="mrh-person"><strong>${esc(row.customerName || 'Customer')}</strong><code>${esc(row.bookingGroupRef || row.bookingRef || '')}</code><span>${esc(row.courtName || 'Court')}${row.customerEmail ? ` · ${esc(row.customerEmail)}` : ''}</span></div>
+      <div class="mrh-route"><div><small>Original</small><strong>${esc(manualRescheduleScheduleLabel(row.oldSchedule))}</strong></div><i aria-hidden="true">&#8594;</i><div><small>Moved to</small><strong>${esc(manualRescheduleScheduleLabel(row.newSchedule))}</strong></div></div>
+      <div class="mrh-actor"><strong>${esc(manualRescheduleActorLabel(row))}</strong><span>${esc(when)} · PHT</span></div>
+      <button class="btn btn-g btn-sm" type="button" onclick="openBookingFromManualReschedule('${jsArg(row.bookingRef)}')">Open Booking</button>
+      <div class="mrh-reason"><strong>Reason:</strong> ${esc(row.reason || 'No reason recorded.')}</div>
+    </article>`;
+  }).join('');
+}
+
+function syncManualRescheduleActorFilter() {
+  const select = $('mrhActor');
+  if (!select) return;
+  const current = select.value;
+  const actors = [...new Map(_manualRescheduleRows.filter(row => row.actorId).map(row => [String(row.actorId), row])).values()]
+    .sort((a,b) => String(a.actorName || '').localeCompare(String(b.actorName || '')));
+  select.innerHTML = '<option value="">All owners and staff</option>' + actors.map(row => `<option value="${esc(row.actorId)}">${esc(manualRescheduleActorLabel(row))}</option>`).join('');
+  select.value = actors.some(row => String(row.actorId) === current) ? current : '';
+}
+
+async function loadManualRescheduleHistory({ force = false } = {}) {
+  const refresh = $('mrhRefreshBtn');
+  if (refresh) { refresh.disabled = true; refresh.setAttribute('aria-busy','true'); }
+  try {
+    _manualRescheduleRows = typeof DB.listAdminRescheduleHistory === 'function' ? await DB.listAdminRescheduleHistory(500, { force }) : [];
+    syncManualRescheduleActorFilter();
+    renderManualRescheduleHistory();
+    return _manualRescheduleRows;
+  } catch (error) {
+    console.error('loadManualRescheduleHistory:', error);
+    if ($('mrhSummary')) $('mrhSummary').textContent = 'Manual reschedule history is unavailable.';
+    if ($('mrhList')) $('mrhList').innerHTML = '<div class="mrh-empty"><strong>Could not load manual reschedules</strong><span>Check your connection and try Refresh.</span></div>';
+    toast(error?.message || 'Could not load manual reschedules.', 'err');
+    return _manualRescheduleRows;
+  } finally {
+    if (refresh) { refresh.disabled = false; refresh.removeAttribute('aria-busy'); }
+  }
+}
+
+async function openManualRescheduleHistory() {
+  if (!canViewManualRescheduleHistory()) { toast('Only an owner can view manual reschedule history.', 'err'); return; }
+  _manualRescheduleLastFocus = document.activeElement;
+  const modal = $('manualRescheduleHistoryModal');
+  modal.hidden = false; modal.inert = false; modal.classList.add('show'); modal.setAttribute('aria-hidden','false');
+  document.body.style.overflow = 'hidden';
+  await loadManualRescheduleHistory({ force:true });
+  requestAnimationFrame(() => modal.querySelector('.mrh-modal')?.focus());
+}
+
+async function openManualRescheduleHistoryForBooking(ref) {
+  await openManualRescheduleHistory();
+  const search = $('mrhSearch');
+  if (search) { search.value = String(ref || ''); renderManualRescheduleHistory(); }
+}
+
+function closeManualRescheduleHistory() {
+  const modal = $('manualRescheduleHistoryModal');
+  if (!modal) return;
+  modal.classList.remove('show'); modal.setAttribute('aria-hidden','true'); modal.inert = true; modal.hidden = true;
+  document.body.style.overflow = '';
+  if (_manualRescheduleLastFocus?.isConnected) _manualRescheduleLastFocus.focus();
+  _manualRescheduleLastFocus = null;
+}
+
+async function openBookingFromManualReschedule(ref) {
+  closeManualRescheduleHistory();
+  await openBookingDetails(ref);
+}
+
+function manualRescheduleHistoryKeydown(event) {
+  if (event.key === 'Escape') { event.preventDefault(); closeManualRescheduleHistory(); }
 }
 
 /* ==============================================

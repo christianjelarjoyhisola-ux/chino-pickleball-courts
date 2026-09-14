@@ -1717,6 +1717,52 @@ window.DB = {
     return data || [];
   },
 
+  async listAdminRescheduleHistory(limit = 500, { force = false } = {}) {
+    const safeLimit = Math.min(1000, Math.max(1, Number(limit) || 500));
+    if (force) _pbClearFastCache(['adminRescheduleHistory']);
+    return _pbCached('adminRescheduleHistory', { limit: safeLimit }, 30000, async () => {
+      const { data: history, error } = await _sb.from('admin_booking_reschedule_history')
+        .select('id,booking_ref,actor_id,created_at,reason,old_schedule,new_schedule')
+        .order('created_at', { ascending: false })
+        .limit(safeLimit);
+      if (error) throw new Error('Manual reschedule history could not be loaded.');
+      const rows = history || [];
+      if (!rows.length) return [];
+      const bookingRefs = [...new Set(rows.map(row => row.booking_ref).filter(Boolean))];
+      const actorIds = [...new Set(rows.map(row => row.actor_id).filter(Boolean))];
+      const [{ data: bookings, error: bookingsError }, { data: accounts, error: accountsError }] = await Promise.all([
+        _sb.from('bookings').select('ref,booking_group_ref,full_name,email,court_id,court_name').in('ref', bookingRefs),
+        actorIds.length
+          ? _sb.from('accounts').select('id,full_name,username,email,role').in('id', actorIds)
+          : Promise.resolve({ data: [], error: null }),
+      ]);
+      if (bookingsError) throw new Error('Rescheduled booking details could not be loaded.');
+      if (accountsError) throw new Error('Reschedule operator details could not be loaded.');
+      const bookingByRef = new Map((bookings || []).map(row => [String(row.ref), row]));
+      const accountById = new Map((accounts || []).map(row => [String(row.id), row]));
+      return rows.map(row => {
+        const booking = bookingByRef.get(String(row.booking_ref)) || {};
+        const actor = accountById.get(String(row.actor_id)) || {};
+        return {
+          id: row.id,
+          bookingRef: row.booking_ref,
+          bookingGroupRef: booking.booking_group_ref || null,
+          customerName: booking.full_name || 'Customer',
+          customerEmail: booking.email || '',
+          courtId: booking.court_id || '',
+          courtName: booking.court_name || 'Court',
+          actorId: row.actor_id,
+          actorName: actor.full_name || actor.username || actor.email || 'Former account',
+          actorRole: actor.role || '',
+          createdAt: row.created_at,
+          reason: row.reason || '',
+          oldSchedule: row.old_schedule || {},
+          newSchedule: row.new_schedule || {},
+        };
+      });
+    });
+  },
+
   async getBookingRescheduleOptions(ref, email, itemRefs, date) {
     const bookingRef = String(ref || '').trim().toUpperCase();
     const bookingEmail = String(email || '').trim().toLowerCase();
@@ -4738,6 +4784,32 @@ window.DB = {
     async getAdminRescheduleHistory(refs) {
       return (readDb().adminRescheduleHistory || []).filter(row=>refs.includes(row.bookingRef)).reverse().slice(0,100)
         .map(row=>({booking_ref:row.bookingRef,created_at:row.createdAt,reason:row.reason,old_schedule:row.oldSchedule,new_schedule:row.newSchedule}));
+    },
+    async listAdminRescheduleHistory(limit = 500) {
+      const db = readDb();
+      const bookings = db.bookings || [];
+      const accounts = db.accounts || [];
+      return (db.adminRescheduleHistory || []).slice().reverse().slice(0, Math.min(1000, Math.max(1, Number(limit) || 500))).map(row => {
+        const booking = bookings.find(item => String(item.ref) === String(row.bookingRef)) || {};
+        const actorId = row.actorId || row.actor_id || '';
+        const actor = accounts.find(item => String(item.id) === String(actorId)) || {};
+        return {
+          id: row.id || `${row.bookingRef}-${row.createdAt}`,
+          bookingRef: row.bookingRef,
+          bookingGroupRef: booking.groupRef || booking.booking_group_ref || null,
+          customerName: booking.fullName || booking.full_name || 'Customer',
+          customerEmail: booking.email || '',
+          courtId: booking.courtId || booking.court_id || '',
+          courtName: booking.courtName || booking.court_name || 'Court',
+          actorId,
+          actorName: actor.fullName || actor.full_name || actor.username || actor.email || row.actorName || 'Dashboard account',
+          actorRole: actor.role || row.actorRole || '',
+          createdAt: row.createdAt,
+          reason: row.reason || '',
+          oldSchedule: row.oldSchedule || {},
+          newSchedule: row.newSchedule || {},
+        };
+      });
     },
     async rescheduleBookingTransaction(ref, schedule) {
       const options = buildLocalAdminRescheduleOptions(ref,schedule?.date);
