@@ -6702,6 +6702,36 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(45, 62, 79, .1
   </div>
 </div>
 
+<!-- OWNER CUSTOM BOOKING EMAIL -->
+<div class="overlay" id="customBookingEmailModal" aria-hidden="true" inert hidden>
+  <div class="modal" id="customBookingEmailDialog" role="dialog" aria-modal="true" aria-labelledby="customBookingEmailTitle" aria-describedby="customBookingEmailHelp" aria-busy="false" tabindex="-1" onkeydown="customBookingEmailKeydown(event)">
+    <div class="m-hd">
+      <div><h2 id="customBookingEmailTitle">EMAIL CUSTOMER</h2><p style="margin:4px 0 0;color:var(--muted);font-size:.75rem">Send a message about this booking from CHINO.</p></div>
+      <button class="m-x" type="button" id="customBookingEmailClose" aria-label="Close without sending" onclick="closeCustomBookingEmail()">&#10005;</button>
+    </div>
+    <div class="m-body">
+      <div style="padding:12px 14px;border:1px solid var(--border);border-radius:10px;background:var(--input);margin-bottom:15px">
+        <div style="display:flex;justify-content:space-between;gap:12px;font-size:.76rem"><span style="color:var(--muted)">Booking</span><strong id="customBookingEmailRef">—</strong></div>
+        <div style="display:flex;justify-content:space-between;gap:12px;font-size:.76rem;margin-top:7px"><span style="color:var(--muted)">Recipient</span><strong id="customBookingEmailRecipient" style="overflow-wrap:anywhere;text-align:right">—</strong></div>
+      </div>
+      <div class="fg">
+        <label class="fl" for="customBookingEmailSubject">Subject</label>
+        <input class="fi" id="customBookingEmailSubject" type="text" required minlength="3" maxlength="120" placeholder="Example: Action needed for your booking" oninput="syncCustomBookingEmailForm()" />
+      </div>
+      <div class="fg" style="margin-top:12px">
+        <label class="fl" for="customBookingEmailMessage">Message</label>
+        <textarea class="fi" id="customBookingEmailMessage" required minlength="10" maxlength="4000" rows="9" aria-describedby="customBookingEmailHelp customBookingEmailCount" placeholder="Explain the issue and what the customer should do next." oninput="syncCustomBookingEmailForm()"></textarea>
+        <div class="booking-payment-reject-help"><span id="customBookingEmailHelp">The booking summary is added automatically. Do not include another customer’s information or payment secrets.</span><span id="customBookingEmailCount">0 / 4000</span></div>
+      </div>
+      <div style="margin-top:13px;padding:12px 14px;border-left:4px solid var(--yellow);background:rgba(var(--yellow-rgb),.09);border-radius:8px;font-size:.76rem;line-height:1.55;color:var(--text)"><strong>Check before sending.</strong> The message is emailed immediately to the address saved on this booking and the send attempt is recorded in Activity History.</div>
+    </div>
+    <div class="m-foot">
+      <button class="btn btn-g" type="button" id="customBookingEmailCancel" onclick="closeCustomBookingEmail()">Cancel</button>
+      <button class="btn btn-p" type="button" id="customBookingEmailSend" disabled onclick="sendCustomBookingEmail()">Send email</button>
+    </div>
+  </div>
+</div>
+
 <!-- BOOKING CANCELLATION RECORD -->
 <div class="overlay booking-cancel-overlay" id="bookingCancelModal" aria-hidden="true" inert hidden>
   <div class="modal booking-cancel-modal" id="bookingCancelDialog" role="dialog" aria-modal="true" aria-labelledby="bookingCancelTitle" aria-describedby="bookingCancelImpact" aria-busy="false" tabindex="-1" onkeydown="bookingCancelModalKeydown(event)">
@@ -8581,6 +8611,13 @@ function bookingPaymentTransferEmailButton(b, mobile = false){
   const displayRef = b.displayRef || actionRef;
   return `<button type="button" class="btn btn-g btn-sm booking-payment-transfer-email${mobile?' booking-payment-transfer-email-mobile':''}" data-booking-ref="${esc(actionRef)}" aria-label="Resend payment move email for ${esc(displayRef)}" onclick="resendBookingPaymentTransferEmail('${jsArg(actionRef)}',this)">Resend Payment Move Email</button>`;
 }
+function bookingCustomEmailButton(b, mobile = false){
+  if (!canSendCustomBookingEmail() || !bookingPlayerEmail(b)) return '';
+  const actionRef = b.primaryRef || b.ref;
+  if (!actionRef) return '';
+  const displayRef = b.displayRef || actionRef;
+  return `<button type="button" class="btn btn-g btn-sm${mobile?' booking-custom-email-mobile':''}" aria-label="Email customer about booking ${esc(displayRef)}" onclick="openCustomBookingEmail('${jsArg(actionRef)}',this)">Email Customer</button>`;
+}
 async function openHostPaymentHistory(ref, trigger){
   try {
     if (!window.HostBalanceAdmin?.openHistoryForBooking) throw new Error('Payment history is unavailable. Refresh and try again.');
@@ -8617,6 +8654,7 @@ function bookingActionsHtml(b, canDelete, includePrimaryActions = true, includeD
       ${canDelete && !transferLocked ? `<button class="btn btn-d btn-sm" onclick="delBooking('${jsArg(actionRef)}')">Delete</button>` : ''}`;
   }
   return `${includePrimaryActions ? `${bookingDetailsButton(b)} ${hostInitialPaymentRejectButton(b)} ${bookingRejectionEmailButton(b)} ${hostBalanceReviewButton(b)} ${hostPaymentHistoryButton(b)}` : ''}
+    ${includePrimaryActions ? bookingCustomEmailButton(b) : ''}
     ${includePrimaryActions && includePaymentTransferActions ? bookingPaymentTransferEmailButton(b) : ''}
     ${includePaymentTransferActions ? bookingDuplicateTransferButton(b) : ''}
     ${includePrimaryActions ? bookingRescheduleRequestAction(b) : ''}
@@ -8776,7 +8814,7 @@ function mobileBookingCard(b, canDelete){
       ${duplicatePaymentRefBadge(b)}
     </div>
     ${b.hostBooking
-      ? `<div class="mb-book-primary-actions">${hostBalanceReviewButton(b, true)}${bookingDetailsButton(b)}${hostPaymentHistoryButton(b, true)}${hostInitialPaymentRejectButton(b, true)}${bookingRejectionEmailButton(b, true)}</div><div class="mb-book-primary-actions">${bookingPaymentTransferEmailButton(b, true)}${bookingDuplicateTransferButton(b, true)}</div>`
+      ? `<div class="mb-book-primary-actions">${hostBalanceReviewButton(b, true)}${bookingDetailsButton(b)}${hostPaymentHistoryButton(b, true)}${hostInitialPaymentRejectButton(b, true)}${bookingRejectionEmailButton(b, true)}</div><div class="mb-book-primary-actions">${bookingCustomEmailButton(b, true)}${bookingPaymentTransferEmailButton(b, true)}${bookingDuplicateTransferButton(b, true)}</div>`
       : `<div class="mb-book-primary-actions">${bookingQuickConfirmButton(b, true)}${bookingPaymentTransferEmailButton(b, true)}${bookingDuplicateTransferButton(b, true)}</div>`}
     <details class="mb-book-pay">
       <summary>Actions</summary>
@@ -8805,6 +8843,78 @@ function closeBookingDetails() {
   modal.setAttribute('aria-hidden','true');
   modal.inert = true;
   modal.hidden = true;
+}
+let _customBookingEmailContext = null;
+let _customBookingEmailSending = false;
+function canSendCustomBookingEmail() {
+  return ['owner','court_owner'].includes(String(sess?.role || '').toLowerCase());
+}
+function syncCustomBookingEmailForm() {
+  const subject = String($('customBookingEmailSubject')?.value || '').trim();
+  const message = String($('customBookingEmailMessage')?.value || '').trim();
+  if ($('customBookingEmailCount')) $('customBookingEmailCount').textContent = `${String($('customBookingEmailMessage')?.value || '').length} / 4000`;
+  const button = $('customBookingEmailSend');
+  if (button) button.disabled = _customBookingEmailSending || !_customBookingEmailContext || subject.length < 3 || subject.length > 120 || message.length < 10 || message.length > 4000;
+}
+async function openCustomBookingEmail(ref, trigger = null) {
+  if (!canSendCustomBookingEmail()) { toast('Only the System Owner or Court Owner can email booking customers.', 'err'); return; }
+  try {
+    const booking = await getBookingGroupByRef(ref);
+    if (!booking) throw new Error('Booking not found.');
+    const email = bookingPlayerEmail(booking);
+    if (!email) throw new Error('This booking does not have a valid customer email address.');
+    const actionRef = booking.primaryRef || booking.ref || ref;
+    _customBookingEmailContext = { ref: actionRef, trigger };
+    $('customBookingEmailRef').textContent = booking.displayRef || actionRef;
+    $('customBookingEmailRecipient').textContent = email;
+    $('customBookingEmailSubject').value = '';
+    $('customBookingEmailMessage').value = '';
+    const modal = $('customBookingEmailModal');
+    modal.hidden = false; modal.inert = false; modal.setAttribute('aria-hidden','false'); modal.classList.add('show');
+    syncCustomBookingEmailForm();
+    requestAnimationFrame(() => $('customBookingEmailSubject')?.focus());
+  } catch (error) {
+    toast(error?.message || 'Could not prepare the customer email.', 'err');
+  }
+}
+function closeCustomBookingEmail({ restoreFocus = true } = {}) {
+  if (_customBookingEmailSending) return;
+  const context = _customBookingEmailContext;
+  const modal = $('customBookingEmailModal');
+  if (modal) { modal.classList.remove('show'); modal.setAttribute('aria-hidden','true'); modal.inert = true; modal.hidden = true; }
+  _customBookingEmailContext = null;
+  if (restoreFocus) requestAnimationFrame(() => context?.trigger?.isConnected && context.trigger.focus());
+}
+function customBookingEmailKeydown(event) {
+  if (event.key === 'Escape') { event.preventDefault(); closeCustomBookingEmail(); }
+}
+async function sendCustomBookingEmail() {
+  if (!canSendCustomBookingEmail() || !_customBookingEmailContext || _customBookingEmailSending) return;
+  const subject = String($('customBookingEmailSubject')?.value || '').trim();
+  const message = String($('customBookingEmailMessage')?.value || '').trim();
+  syncCustomBookingEmailForm();
+  if (subject.length < 3 || subject.length > 120 || message.length < 10 || message.length > 4000) return;
+  _customBookingEmailSending = true;
+  $('customBookingEmailDialog')?.setAttribute('aria-busy','true');
+  const button = $('customBookingEmailSend');
+  if (button) button.textContent = 'Sending…';
+  ['customBookingEmailClose','customBookingEmailCancel'].forEach(id => { if ($(id)) $(id).disabled = true; });
+  syncCustomBookingEmailForm();
+  try {
+    const result = await DB.sendCustomBookingEmail(_customBookingEmailContext.ref, subject, message);
+    if (!result?.ok) throw new Error(result?.error || 'Email could not be sent.');
+    _customBookingEmailSending = false;
+    closeCustomBookingEmail({ restoreFocus: false });
+    toast('Customer email sent.');
+  } catch (error) {
+    toast(error?.message || 'Could not send the customer email.', 'err');
+  } finally {
+    _customBookingEmailSending = false;
+    $('customBookingEmailDialog')?.setAttribute('aria-busy','false');
+    if (button) button.textContent = 'Send email';
+    ['customBookingEmailClose','customBookingEmailCancel'].forEach(id => { if ($(id)) $(id).disabled = false; });
+    syncCustomBookingEmailForm();
+  }
 }
 function bookingSlotLabel(b) {
   if (b.status === 'forfeited' || b.status === 'cancelled') return 'Released';
@@ -8927,6 +9037,7 @@ async function openBookingDetails(ref) {
     const hasReceipt = (b.gcashRef || (b.receiptStatus && b.receiptStatus !== 'none')) && isDigitalPayment(b.paymentMethod);
     $('bookingDetailsActions').innerHTML = `
       <button class="btn btn-g" onclick="closeBookingDetails()">Close</button>
+      ${canSendCustomBookingEmail() && bookingPlayerEmail(b) ? `<button type="button" class="btn btn-p" onclick="closeBookingDetails();openCustomBookingEmail('${jsArg(actionRef)}',this)">Email Customer</button>` : ''}
       ${bookingRescheduleActionButton(b)}
       ${sess?.role === 'owner' ? `<button type="button" class="btn btn-g" onclick="openOwnerBookingPreview('${jsArg(b.displayRef || actionRef)}')">Preview guest view ↗</button>` : ''}
       ${b.hostBooking && canViewHostPaymentHistory() ? `<button type="button" class="btn btn-g" onclick="openHostPaymentHistoryFromDetails('${jsArg(actionRef)}')">Payment History</button>` : ''}

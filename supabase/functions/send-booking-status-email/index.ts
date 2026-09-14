@@ -4,12 +4,14 @@ import {
   isAllowedEmailOrigin,
   jsonResponse,
   requireAdminEmailRequest,
+  requireOwnerEmailRequest,
 } from "../_shared/email-request.ts";
 import { confirmedBookingPaidAmount } from "../_shared/booking-email-payment.ts";
 import { isEmailAddress, sendMailerooEmail } from "../_shared/maileroo.ts";
 import {
   renderBookingCancellationEmail,
   renderBookingPaymentTransferEmail,
+  renderCustomBookingMessageEmail,
 } from "../_shared/paddle-rage-email.ts";
 
 type BookingRow = {
@@ -160,6 +162,8 @@ Deno.serve(withAdminActivity("send-booking-status-email", async (req) => {
       bookingRef?: unknown;
       event?: unknown;
       reason?: unknown;
+      subject?: unknown;
+      message?: unknown;
     } | null;
     const bookingRef = validBookingRef(body?.bookingRef);
     const event = String(body?.event || "").trim();
@@ -167,13 +171,27 @@ Deno.serve(withAdminActivity("send-booking-status-email", async (req) => {
       "booking_cancelled",
       "payment_rejected",
       "payment_reassigned",
+      "custom_message",
     ]).has(event)) {
       throw new Error("Invalid booking email event");
+    }
+    const customMessage = event === "custom_message";
+    if (customMessage) await requireOwnerEmailRequest(req, db);
+    const customSubject = String(body?.subject || "").replace(/[\r\n]+/g, " ")
+      .replace(/\s+/g, " ").trim();
+    const customBody = String(body?.message || "").trim();
+    if (customMessage && (customSubject.length < 3 || customSubject.length > 120)) {
+      throw new Error("Invalid custom email subject");
+    }
+    if (customMessage && (customBody.length < 10 || customBody.length > 4000)) {
+      throw new Error("Invalid custom email message");
     }
     setAdminActivityContext(req, { action: event, targetType: "booking", targetId: bookingRef });
     const rows = await loadRows(db, bookingRef);
     const paymentReassigned = event === "payment_reassigned";
-    const validState = paymentReassigned
+    const validState = customMessage
+      ? rows.length > 0
+      : paymentReassigned
       ? rows.length > 0 && rows.every((row) =>
         row.status === "confirmed" &&
         new Set(["paid", "downpayment_paid"]).has(row.payment_status)
@@ -182,7 +200,9 @@ Deno.serve(withAdminActivity("send-booking-status-email", async (req) => {
     if (!validState) {
       return jsonResponse(req, {
         ok: false,
-        error: paymentReassigned
+        error: customMessage
+          ? "Booking could not be verified"
+          : paymentReassigned
           ? "Reassigned booking could not be verified"
           : "Cancelled booking could not be verified",
       }, 409);
@@ -259,7 +279,18 @@ Deno.serve(withAdminActivity("send-booking-status-email", async (req) => {
     const courtName = [
       ...new Set(rows.map((row) => row.court_name).filter(Boolean)),
     ].join(", ") || "Court";
-    const content = transfer
+    const content = customMessage
+      ? renderCustomBookingMessageEmail({
+        bookingRef: displayRef,
+        fullName: first.full_name || "Player",
+        courtName,
+        date: first.date,
+        startTime: first.start_time || "",
+        endTime: first.end_time || "",
+        subject: customSubject,
+        message: customBody,
+      })
+      : transfer
       ? renderBookingPaymentTransferEmail({
         sourceBookingRef: transfer.source_booking_group_ref
           ? transfer.source_booking_group_ref.replace(/-G$/, "")
@@ -288,13 +319,15 @@ Deno.serve(withAdminActivity("send-booking-status-email", async (req) => {
     const sent = await sendMailerooEmail({
       to: email,
       toName: first.full_name || "Player",
-      subject: `${
-        event === "payment_rejected"
+      subject: customMessage
+        ? `${customSubject} | CHINO Pickleball Courts`
+        : `${
+          event === "payment_rejected"
           ? "Payment rejected"
           : event === "payment_reassigned"
           ? "Payment moved to your new booking"
           : "Booking cancelled"
-      }: ${displayRef} | CHINO Pickleball Courts`,
+        }: ${displayRef} | CHINO Pickleball Courts`,
       html: content.html,
       plain: content.plain,
       tags: {
@@ -308,6 +341,8 @@ Deno.serve(withAdminActivity("send-booking-status-email", async (req) => {
       ? error.message
       : "Unable to send booking status email";
     const status = message === "Admin access required"
+      ? 403
+      : message === "Owner access required"
       ? 403
       : message === "Rejected payment reason could not be verified" ||
           message === "Payment transfer audit could not be verified"

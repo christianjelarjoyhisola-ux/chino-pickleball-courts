@@ -90,3 +90,32 @@ export async function requireAdminEmailRequest(
     throw new Error("Admin access required");
   }
 }
+
+export async function isOwnerEmailRequest(
+  req: Request,
+  db: any,
+): Promise<boolean> {
+  const token = (req.headers.get("authorization") || "").replace(
+    /^Bearer\s+/i,
+    "",
+  ).trim();
+  if (!token) return false;
+  const { data: userData, error: userError } = await db.auth.getUser(token);
+  const userId = userData?.user?.id;
+  if (userError || !userId) return false;
+  const { data: account, error: accountError } = await db.from("accounts")
+    .select("role,status")
+    .eq("id", userId)
+    .maybeSingle();
+  return !accountError && account?.status === "active" &&
+    ["owner", "court_owner"].includes(String(account.role || ""));
+}
+
+export async function requireOwnerEmailRequest(
+  req: Request,
+  db: any,
+): Promise<void> {
+  if (!await isOwnerEmailRequest(req, db)) {
+    throw new Error("Owner access required");
+  }
+}

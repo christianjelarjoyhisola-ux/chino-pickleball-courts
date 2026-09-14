@@ -2962,6 +2962,19 @@ window.DB = {
     });
   },
 
+  async sendCustomBookingEmail(bookingRef, subject, message, options = {}) {
+    if (!bookingRef) return { ok: false, skipped: true, reason: 'No booking reference' };
+    return _invokeEdgeFunction('send-booking-status-email', {
+      bookingRef,
+      event: 'custom_message',
+      subject,
+      message,
+    }, {
+      allowFailure: !!options.allowFailure,
+      retryDirect: false,
+    });
+  },
+
   async notifyBookingUpdate(booking, event, note = '') {
     if (window.PB_USE_LOCAL_DATA) return { ok: true, skipped: true, reason: 'Local data mode' };
     if (!(await _pbHasActiveAccount())) {
@@ -7258,6 +7271,7 @@ window.DB = {
     async sendRescheduleEmail() { return { ok: true, skipped: true, reason: 'Local data mode' }; },
     async sendGroupedRescheduleEmail() { return { ok: true, skipped: true, reason: 'Local data mode' }; },
     async sendBookingStatusEmail() { return { ok: true, skipped: true, reason: 'Local data mode' }; },
+    async sendCustomBookingEmail() { return { ok: true, skipped: true, reason: 'Local data mode' }; },
     async sendTelegramNotification() { return { ok: true, skipped: true, reason: 'Local data mode' }; },
     async confirmOpenPlayHostVerification() { return { ok: true, reviewable: true, skipped: true, reason: 'Local data mode' }; },
     async dispatchOpenPlayHostReviewNotifications() { return { ok: true, skipped: true, reason: 'Local data mode' }; },

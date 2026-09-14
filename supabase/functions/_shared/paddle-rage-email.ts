@@ -94,6 +94,17 @@ export type BookingPaymentTransferPayload = {
   reason: string;
 };
 
+export type CustomBookingMessagePayload = {
+  bookingRef: string;
+  fullName: string;
+  courtName: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  subject: string;
+  message: string;
+};
+
 export type BalanceNoticePayload = {
   eventType:
     | "reminder_3d"
@@ -747,6 +758,51 @@ export function renderBookingCancellationEmail(
       }\nThe court slot has been released. Create a new booking if you still want to play.\n\nCHINO Pickleball Courts\n${
         plain(venueLocation())
       }\n${publicUrl()}`,
+  };
+}
+
+export function renderCustomBookingMessageEmail(
+  payload: CustomBookingMessagePayload,
+): { html: string; plain: string } {
+  const name = plain(payload.fullName) || "Player";
+  const subject = plain(payload.subject);
+  const message = String(payload.message || "").trim().replace(/\r\n?/g, "\n");
+  const messageHtml = message.split("\n").map((line) =>
+    line ? escapeHtml(line) : "&nbsp;"
+  ).join("<br>");
+  const schedule = `${formatDate(payload.date)}, ${plain(payload.startTime)} - ${plain(payload.endTime)}`;
+  const manageUrl = `${publicUrl()}/manage-booking.html#ref=${
+    encodeURIComponent(plain(payload.bookingRef).replace(/-G$/i, ""))
+  }`;
+  const bodyHtml = `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:20px;background:${BRAND.surfaceRaised};border-left:4px solid ${BRAND.neon};border-radius:10px;">
+      <tr><td style="padding:19px 21px;font-size:15px;line-height:1.72;color:${BRAND.text};overflow-wrap:anywhere;">${messageHtml}</td></tr>
+    </table>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:20px;border:1px solid ${BRAND.border};border-radius:13px;">
+      <tr><td style="padding:16px 19px;border-bottom:1px solid ${BRAND.border};">
+        <div style="font-size:10px;line-height:1.3;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:${BRAND.muted};">Booking reference</div>
+        <div style="margin-top:4px;font-family:Consolas,'Courier New',monospace;font-size:16px;line-height:1.4;font-weight:900;color:${BRAND.neon};overflow-wrap:anywhere;">${escapeHtml(payload.bookingRef)}</div>
+      </td></tr>
+      <tr><td style="padding:16px 19px;">
+        <div style="font-size:10px;line-height:1.3;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:${BRAND.muted};">Reservation</div>
+        <div style="margin-top:5px;font-size:14px;line-height:1.65;font-weight:800;color:${BRAND.text};">${escapeHtml(payload.courtName)}<br>${escapeHtml(schedule)}</div>
+      </td></tr>
+    </table>
+    <a href="${escapeHtml(manageUrl)}" style="display:inline-block;padding:13px 20px;border-radius:10px;background:${BRAND.neon};color:${BRAND.black};font-size:14px;line-height:1.3;font-weight:900;text-decoration:none;">View booking</a>`;
+
+  return {
+    html: layout({
+      preheader: `${subject} · Booking ${plain(payload.bookingRef)}`,
+      status: "MESSAGE ABOUT YOUR BOOKING",
+      statusBackground: BRAND.neonTint,
+      statusColor: BRAND.neon,
+      title: subject,
+      introHtml: `<p style="margin:0;">Hi <strong>${escapeHtml(name)}</strong>,</p>`,
+      bodyHtml,
+      footerText:
+        "Questions about this message? Reply to this email and include your booking reference.",
+    }),
+    plain: `CHINO PICKLEBALL COURTS\nMESSAGE ABOUT YOUR BOOKING\n\nHi ${name},\n\n${message}\n\nBooking reference: ${plain(payload.bookingRef)}\nCourt: ${plain(payload.courtName)}\nSchedule: ${schedule}\n\nView booking: ${manageUrl}\n\nCHINO Pickleball Courts\n${plain(venueLocation())}\n${publicUrl()}`,
   };
 }
 
