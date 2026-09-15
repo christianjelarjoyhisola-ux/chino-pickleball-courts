@@ -337,6 +337,9 @@ test('poster layouts keep branded content inside feed and story safe areas', () 
   assert.ok(story.brandY >= story.safeTop);
   assert.ok(story.footerContentBottom <= story.safeBottom);
   assert.ok(story.cardsEnd < story.footerY);
+  assert.ok(story.brandY <= 120, 'story branding uses the upper canvas instead of leaving a large blank band');
+  assert.ok(story.cardsEnd - story.cardsStart >= 800, 'story schedule expands into the available vertical space');
+  assert.ok(graphic.formats.story.height - story.footerContentBottom <= 100, 'story footer uses the lower canvas without clipping');
 });
 
 test('footer keeps a large crisp QR and readable booking copy inside safe bounds', () => {
