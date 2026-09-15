@@ -224,7 +224,7 @@ test('TV keeps an overnight active session but excludes future days and invalid 
   assert.equal(tv.courts.flatMap(court => court.upcoming).length, 0);
 });
 
-test('TV tomorrow promotion preserves individual available hours without prices or customer data', () => {
+test('TV tomorrow promotion preserves every operating hour and its public availability state', () => {
   const raw = {
     date: '2026-09-10', timezone: 'Asia/Manila', asOf: '2026-09-09T09:00:00+08:00',
     courts: [{
@@ -239,9 +239,11 @@ test('TV tomorrow promotion preserves individual available hours without prices 
   const snapshot = buildTvAvailabilitySnapshot(raw, { now });
   assert.equal(snapshot.date, '2026-09-10');
   assert.equal(snapshot.totalAvailable, 2);
-  assert.deepEqual(snapshot.courts[0].slots.map(slot => slot.label), [
-    '4:00 PM – 5:00 PM', '5:00 PM – 6:00 PM',
-  ], 'adjacent available hours stay as separate TV tiles');
+  assert.deepEqual(snapshot.courts[0].slots.map(slot => [slot.label, slot.availability]), [
+    ['4:00 PM – 5:00 PM', 'available'],
+    ['5:00 PM – 6:00 PM', 'available'],
+    ['6:00 PM – 7:00 PM', 'booked'],
+  ], 'available and booked hours stay as separate TV tiles');
   assert.equal(snapshot.courts[0].availableCount, 2);
   for (const privateKey of ['price', 'customer', 'reason']) {
     assert.equal(JSON.stringify(snapshot).includes(privateKey), false, `${privateKey} stays off the TV model`);

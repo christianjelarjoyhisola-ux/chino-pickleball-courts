@@ -206,6 +206,7 @@
       if (!id || !Array.isArray(court?.slots)) throw new TypeError('Court availability is incomplete.');
       const slots = court.slots.map(slot => {
         const state = text(slot?.state);
+        const reason = text(slot?.reason);
         const startHour = Number(slot?.startHour ?? slot?.hour);
         const endHour = Number(slot?.endHour);
         const startLabel = text(slot?.startLabel);
@@ -214,15 +215,25 @@
             !Number.isInteger(endHour) || endHour !== startHour + 1 || !startLabel || !endLabel) {
           throw new TypeError('Court availability contains an invalid time slot.');
         }
-        return state === 'free' ? {
+        const availability = state === 'free' ? 'available'
+          : reason === 'booked' ? 'booked'
+          : ['blocked_date', 'pre_opening'].includes(reason) ? 'closed'
+          : 'unavailable';
+        return {
           startHour,
           endHour,
           startLabel,
           endLabel,
           label: `${startLabel} – ${endLabel}`,
-        } : null;
-      }).filter(Boolean);
-      return { id, name, slots, availableCount: slots.length };
+          availability,
+        };
+      });
+      return {
+        id,
+        name,
+        slots,
+        availableCount: slots.filter(slot => slot.availability === 'available').length,
+      };
     }).sort((left, right) => {
       const leftNumber = courtNumber({ courtId: left.id, courtName: left.name });
       const rightNumber = courtNumber({ courtId: right.id, courtName: right.name });

@@ -7,8 +7,8 @@
 <link rel="icon" type="image/jpeg" href="logochino.jpg">
 <link rel="stylesheet" href="payment-method-brand.css?v=20260901-payment-icons-v2" />
 <link rel="stylesheet" href="availability-graphic.css?v=20260909-official-logo-v1" />
-<link rel="stylesheet" href="dashboard-court-activity.css?v=20260911-tomorrow-qr-place-v9" />
-<script src="dashboard-court-activity.js?v=20260911-tomorrow-slots-v1"></script>
+<link rel="stylesheet" href="dashboard-court-activity.css?v=20260915-tomorrow-all-slots-v1" />
+<script src="dashboard-court-activity.js?v=20260915-tomorrow-all-slots-v1"></script>
 <script src="payment-method-brand.js?v=20260909-security-bank"></script>
 <script src="chart.min.js"></script>
 <script src="booking-balance.js?v=20260831-payment-state-v7"></script>
@@ -9913,12 +9913,16 @@ function courtActivityTvPromoCard(court, cardIndex) {
   const start = _courtActivityTvPromoPage * COURT_ACTIVITY_TV_PROMO_PAGE_SIZE;
   const slots = court.slots.slice(start, start + COURT_ACTIVITY_TV_PROMO_PAGE_SIZE);
   const total = court.availableCount;
-  const empty = total === 0
-    ? '<div class="ca-tv-promo-empty"><strong>Fully booked tomorrow</strong><span>Explore another day online</span></div>'
-    : '<div class="ca-tv-promo-empty is-page"><strong>All openings shown</strong><span>More times appear on another panel</span></div>';
+  const empty = '<div class="ca-tv-promo-empty is-page"><strong>Schedule complete</strong><span>All operating hours are shown</span></div>';
   return `<article class="ca-tv-promo-court" style="--court-delay:${cardIndex * 80}ms">
     <header><div><span>Tomorrow</span><h3>${esc(court.name)}</h3></div><b>${total} open ${total === 1 ? 'slot' : 'slots'}</b></header>
-    <div class="ca-tv-promo-slots">${slots.length ? slots.map((slot,index) => `<div class="ca-tv-promo-slot" style="--slot-delay:${cardIndex * 80 + index * 45}ms"><time>${esc(slot.label)}</time><span><i></i>Available</span></div>`).join('') : empty}</div>
+    <div class="ca-tv-promo-slots">${slots.length ? slots.map((slot,index) => {
+      const status = slot.availability === 'available' ? 'Available'
+        : slot.availability === 'booked' ? 'Booked'
+        : slot.availability === 'closed' ? 'Closed'
+        : 'Unavailable';
+      return `<div class="ca-tv-promo-slot is-${esc(slot.availability)}" style="--slot-delay:${cardIndex * 80 + index * 45}ms"><time>${esc(slot.label)}</time><span><i></i>${status}</span></div>`;
+    }).join('') : empty}</div>
   </article>`;
 }
 
@@ -9948,7 +9952,7 @@ function renderCourtActivityTvPromo() {
   body.classList.add('is-promo');
   $('courtActivityTvDate').textContent = snapshot.dateLabel;
   $('courtActivityTvTitle').textContent = 'Tomorrow’s Court Availability';
-  body.innerHTML = `<section class="ca-tv-promo" aria-label="Tomorrow’s available court times">
+  body.innerHTML = `<section class="ca-tv-promo" aria-label="Tomorrow’s court availability by time">
     <header class="ca-tv-promo-hero">
       <div class="ca-tv-promo-copy"><span class="ca-tv-promo-kicker">Tomorrow at CHINO</span><strong class="ca-tv-promo-date-line">${esc(snapshot.dateLabel)}</strong><h2>${hasOpenings ? 'Your next game is waiting.' : 'Tomorrow is fully booked.'}</h2><p>${hasOpenings ? 'Book your court for tomorrow.' : 'Explore the next available play date online.'}</p></div>
       <div class="ca-tv-promo-live"><i></i><span>Live availability</span><small>Updated ${esc(new Date(snapshot.generatedAt).toLocaleTimeString('en-PH',{timeZone:'Asia/Manila',hour:'numeric',minute:'2-digit'}))} PH</small></div>
