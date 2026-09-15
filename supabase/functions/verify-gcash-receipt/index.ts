@@ -41,7 +41,10 @@ import {
   recoverGcashReferenceText,
   recoverGcashTimestampText,
 } from "../_shared/gcash-receipt.ts";
-import { gcashApprovalConfidence } from "../_shared/gcash-approval-confidence.ts";
+import {
+  confirmGcashAmountDisplays,
+  gcashApprovalConfidence,
+} from "../_shared/gcash-approval-confidence.ts";
 import { rereadGcashRecipient } from "../_shared/gcash-recipient-ocr.ts";
 import { recoverGcashReceipt, gcashReceiptHasIncompleteStatus } from "../_shared/gcash-adaptive-ocr.ts";
 import { recoverBankReceipt } from "../_shared/bank-adaptive-ocr.ts";
@@ -95,7 +98,7 @@ const PAYMENT_WINDOW_MINUTES = 15;
 // OCR usually reads only minute-level timestamps. A receipt paid during the
 // same minute as the hold can look a few seconds "before" the booking.
 const PAYMENT_EARLY_TOLERANCE_MINUTES = 2;
-const GCASH_VERIFIER_REVISION = "gcash_adaptive_20260912_v1";
+const GCASH_VERIFIER_REVISION = "gcash_amount_pair_20260915_v1";
 const BANK_VERIFIER_REVISION = "bank_name_policy_20260910";
 
 const MAX_BYTES = 5 * 1024 * 1024;
@@ -1110,13 +1113,17 @@ function ocrCriticalGaps(
   text: string,
   provider: PaymentProvider,
   typedRef: string,
+  gcashEvidence?: GoogleVisionGcashEvidence,
+  ocrSource: OcrResult["confidenceSource"] = "none",
 ): string[] {
   if (!text) return ["text"];
   if (isDedicatedReceiptProvider(provider)) {
     const parsed = parseProviderReceipt(provider, text, {
       typedReference: typedRef,
     });
-    const receipt = parsed.receipt;
+    const receipt = parsed.provider === "gcash"
+      ? confirmGcashAmountDisplays(parsed.receipt, gcashEvidence, ocrSource)
+      : parsed.receipt;
     const gaps: string[] = [];
     if (
       !receipt.reference.value ||
@@ -1165,7 +1172,13 @@ async function runOCR(
       const layoutApplied = !!layoutText?.trim();
       const text = layoutApplied && layoutText ? layoutText : v.text;
       const result = { ...v, text, originalText: v.text, layoutApplied };
-      const gaps = ocrCriticalGaps(text, provider, typedRef);
+      const gaps = ocrCriticalGaps(
+        text,
+        provider,
+        typedRef,
+        v.gcashEvidence,
+        v.confidenceSource,
+      );
       if (text && gaps.length === 0) {
         return {
           ...result,
@@ -2851,6 +2864,21 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
           typedReference: typedRef,
         })
         : null;
+    if (providerParse?.provider === "gcash") {
+      providerParse = {
+        ...providerParse,
+        receipt: confirmGcashAmountDisplays(
+          providerParse.receipt,
+          gcashOcrEvidence,
+          ocrConfidenceSource,
+        ),
+      };
+      if (
+        providerParse.receipt.amount.confirmationSource ===
+          "google_vision_fields" &&
+        ocrFallbackReason === "google_missing_amount"
+      ) ocrFallbackReason = null;
+    }
     let recipientRefinement:
       | Awaited<ReturnType<typeof rereadGotymeRecipient>>
       | null = null;
@@ -3690,6 +3718,7 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
               gcashParse.amount.conflictingPrimaryAmounts,
             matchingPrimaryAmountDisplays:
               gcashParse.amount.matchingPrimaryAmountDisplays,
+            confirmationSource: gcashParse.amount.confirmationSource || null,
           },
           timestamp: gcashParse.timestamp,
           receiver: gcashParse.receiver,

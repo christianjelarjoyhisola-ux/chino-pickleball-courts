@@ -1174,7 +1174,7 @@ test('receipt review displays missing amounts and parser diagnostics honestly', 
   assert.equal(receiptAmountValue('0'), '₱0.00');
   assert.match(
     admin,
-    /AMOUNT_CONFIRMATION_UNREADABLE:'Amount confirmation incomplete'/,
+    /AMOUNT_CONFIRMATION_UNREADABLE:'Second amount display could not be confirmed'/,
   );
 
   const receiptDetails = functionSource(admin, 'receiptDetailsHtml');

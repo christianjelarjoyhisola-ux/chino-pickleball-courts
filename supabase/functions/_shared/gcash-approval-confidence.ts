@@ -1,5 +1,6 @@
 import type { GoogleVisionGcashEvidence } from "./google-vision.ts";
 import type { GcashRecipientOcrResult } from "./gcash-recipient-ocr.ts";
+import type { GcashReceiptParse } from "./gcash-receipt.ts";
 
 type NativeConfidenceSource = "native" | "heuristic" | "none";
 
@@ -20,6 +21,63 @@ const PAYMENT_FIELDS = [
 function validConfidence(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0 &&
     value <= 1;
+}
+
+function observedAmountCents(value: unknown): number | null {
+  const compact = String(value || "").normalize("NFKC")
+    .replace(/^(?:PHP|P|₱)\s*/i, "")
+    .replace(/[\s,]/g, "");
+  if (!/^\d+\.\d{2}$/.test(compact)) return null;
+  const amount = Number(compact);
+  return Number.isFinite(amount) && amount >= 0
+    ? Math.round(amount * 100)
+    : null;
+}
+
+/**
+ * Preserve the parser's two-display rule when flattened OCR loses the
+ * label/value association. Google Vision may still locate the Amount and
+ * Total Amount Sent fields independently from word geometry. Those two native
+ * observations can confirm the parser's reliable amount only when all three
+ * values agree; booking pricing is deliberately not an input.
+ */
+export function confirmGcashAmountDisplays(
+  receipt: GcashReceiptParse,
+  evidence: GoogleVisionGcashEvidence | undefined,
+  ocrSource: NativeConfidenceSource,
+): GcashReceiptParse {
+  const amount = receipt.amount;
+  if (
+    amount.matchingPrimaryAmountDisplays ||
+    amount.conflictingPrimaryAmounts ||
+    amount.amount == null || !amount.reliable || amount.ambiguous ||
+    ocrSource !== "native"
+  ) return receipt;
+
+  const first = evidence?.fields.amount;
+  const total = evidence?.fields.totalAmount;
+  if (
+    !first?.text.trim() || !total?.text.trim() ||
+    !validConfidence(first.confidence) || first.confidence < 0.9 ||
+    !validConfidence(total.confidence) || total.confidence < 0.9
+  ) return receipt;
+
+  const firstCents = observedAmountCents(first.text);
+  const totalCents = observedAmountCents(total.text);
+  const parsedCents = Math.round(amount.amount * 100);
+  if (
+    firstCents === null || totalCents === null ||
+    firstCents !== totalCents || firstCents !== parsedCents
+  ) return receipt;
+
+  return {
+    ...receipt,
+    amount: {
+      ...amount,
+      matchingPrimaryAmountDisplays: true,
+      confirmationSource: "google_vision_fields",
+    },
+  };
 }
 
 /** Use observed payment fields only; parsed matches never create confidence. */

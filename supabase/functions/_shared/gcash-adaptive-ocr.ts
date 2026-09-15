@@ -1,5 +1,6 @@
 import { Image } from "https://deno.land/x/imagescript@1.2.17/mod.ts";
 import {
+  confirmGcashAmountDisplays,
   type GcashApprovalConfidence,
   gcashApprovalConfidence,
 } from "./gcash-approval-confidence.ts";
@@ -278,6 +279,11 @@ export function evaluateGcashRecoveryRead(
     parseText,
     { typedReference: context.typedReference },
   ) as GcashProviderReceiptParse;
+  parsed.receipt = confirmGcashAmountDisplays(
+    parsed.receipt,
+    read.gcashEvidence,
+    read.confidenceSource,
+  );
   let refinement: GcashRecipientOcrResult | null = null;
   const native = originalRefinement?.observations.find((item) =>
     item.view === "native"

@@ -1,4 +1,7 @@
-import { gcashApprovalConfidence } from "./gcash-approval-confidence.ts";
+import {
+  confirmGcashAmountDisplays,
+  gcashApprovalConfidence,
+} from "./gcash-approval-confidence.ts";
 import { parseGcashReceipt } from "./gcash-receipt.ts";
 import type { GoogleVisionGcashEvidence } from "./google-vision.ts";
 import type { GcashRecipientOcrResult } from "./gcash-recipient-ocr.ts";
@@ -55,6 +58,66 @@ function crop(confidence = 0.96): GcashRecipientOcrResult {
     region: { x: 30, y: 100, width: 300, height: 120 },
   };
 }
+
+Deno.test("GCash native Amount and Total fields restore only an agreeing second display", () => {
+  const receipt = parseGcashReceipt(
+    "Express Send\nKR••••E L•• C.\n+63 9•••••2169\nSent via GCash\n" +
+      "Total Amount Sent ₱265.00\nRef No. 9045088203104\n" +
+      "Sep 15, 2026 8:28 PM",
+  );
+  assertEquals(receipt.amount.amount, 265);
+  assertEquals(receipt.amount.matchingPrimaryAmountDisplays, false);
+  const observed = evidence();
+  observed.fields.amount = { text: "265.00", confidence: 0.94 };
+  observed.fields.totalAmount = { text: "₱265.00", confidence: 0.93 };
+  const original = structuredClone(receipt);
+  const confirmed = confirmGcashAmountDisplays(receipt, observed, "native");
+  assertEquals(confirmed.amount.matchingPrimaryAmountDisplays, true);
+  assertEquals(confirmed.amount.confirmationSource, "google_vision_fields");
+  assertEquals(receipt, original);
+});
+
+Deno.test("GCash vision amount confirmation fails closed on weak or conflicting evidence", () => {
+  const single = parseGcashReceipt(
+    "Express Send\nSent via GCash\nTotal Amount Sent ₱265.00\n" +
+      "Ref No. 9045088203104\nSep 15, 2026 8:28 PM",
+  );
+  const cases: Array<{
+    observed: GoogleVisionGcashEvidence;
+    source: "native" | "heuristic" | "none";
+  }> = [];
+  const mismatch = evidence();
+  mismatch.fields.amount = { text: "265.00", confidence: 0.99 };
+  mismatch.fields.totalAmount = { text: "₱365.00", confidence: 0.99 };
+  cases.push({ observed: mismatch, source: "native" });
+  const weak = evidence();
+  weak.fields.amount = { text: "265.00", confidence: 0.8999 };
+  weak.fields.totalAmount = { text: "₱265.00", confidence: 0.99 };
+  cases.push({ observed: weak, source: "native" });
+  const nonnative = evidence();
+  nonnative.fields.amount = { text: "265.00", confidence: 0.99 };
+  nonnative.fields.totalAmount = { text: "₱265.00", confidence: 0.99 };
+  cases.push({ observed: nonnative, source: "heuristic" });
+  for (const item of cases) {
+    assertEquals(
+      confirmGcashAmountDisplays(single, item.observed, item.source),
+      single,
+    );
+  }
+
+  const conflicting = parseGcashReceipt(
+    "Express Send\nSent via GCash\nAmount 260.00\n" +
+      "Total Amount Sent ₱265.00\nRef No. 9045088203104\n" +
+      "Sep 15, 2026 8:28 PM",
+  );
+  const matchingVision = evidence();
+  matchingVision.fields.amount = { text: "265.00", confidence: 0.99 };
+  matchingVision.fields.totalAmount = { text: "₱265.00", confidence: 0.99 };
+  assertEquals(
+    confirmGcashAmountDisplays(conflicting, matchingVision, "native"),
+    conflicting,
+  );
+});
 
 Deno.test("GCash uses the weakest complete native payment field despite low page confidence", () => {
   const observed = evidence();

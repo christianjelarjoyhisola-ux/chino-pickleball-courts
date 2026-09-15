@@ -89,6 +89,7 @@ export type GcashReceiptParse = {
   amount: ReceiptAmountExtraction & {
     conflictingPrimaryAmounts: boolean;
     matchingPrimaryAmountDisplays: boolean;
+    confirmationSource?: "google_vision_fields";
   };
   timestamp: GcashTimestamp;
   receiver: GcashReceiver;
