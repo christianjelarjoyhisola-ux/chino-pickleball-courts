@@ -818,7 +818,16 @@ function recoverDetachedAmountDisplay(
     (index) => /^Amount\s*[:=]?$/i.test(lines[index]),
   );
   if (amountLabels.length !== 1) return amount;
-  const displayIndex = nextNonEmptyLineIndex(lines, sentIndex);
+  let displayIndex = nextNonEmptyLineIndex(lines, sentIndex);
+  // A photographed phone can place one observed network-status token between
+  // the receipt's Sent via GCash row and its first amount display. Ignore only
+  // this narrow device-chrome grammar; arbitrary text still ends recovery.
+  if (
+    displayIndex != null &&
+    /^(?:[2345]G\+?|LTE|VoLTE|Wi-?Fi)$/i.test(lines[displayIndex].trim())
+  ) {
+    displayIndex = nextNonEmptyLineIndex(lines, displayIndex);
+  }
   if (
     displayIndex == null ||
     nextNonEmptyLineIndex(lines, displayIndex) !== totalIndex

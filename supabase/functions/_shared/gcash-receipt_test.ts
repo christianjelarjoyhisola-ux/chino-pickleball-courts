@@ -582,6 +582,41 @@ Deno.test("reported detached amount layout preserves both amount observations", 
   );
 });
 
+Deno.test("photographed GCash receipt ignores one network token between source and amount", () => {
+  const photographed = `Amount
+Express Send
+KR••••E L•• C.
++63 9•••••2169
+Sent via GCash
+4G+
+265.00
+Total Amount Sent
+P265.00
+Ref No. 9045 088 203104
+Sep 15, 2026 8:28 PM`;
+  const parsed = parseGcashReceipt(photographed);
+  assertEquals(parsed.amount.amount, 265, "principal amount");
+  assertEquals(parsed.amount.reliable, true, "amount remains reliable");
+  assertEquals(
+    parsed.amount.matchingPrimaryAmountDisplays,
+    true,
+    "two observed displays agree despite photographed phone chrome",
+  );
+  assertEquals(parsed.amount.conflictingPrimaryAmounts, false, "no conflict");
+
+  for (const unsafe of [
+    photographed.replace("4G+", "Advertisement"),
+    photographed.replace("P265.00", "P365.00"),
+    photographed.replace("4G+", "4G+\nLTE"),
+  ]) {
+    assertEquals(
+      parseGcashReceipt(unsafe).amount.matchingPrimaryAmountDisplays,
+      false,
+      "only one exact status token and two agreeing amounts are accepted",
+    );
+  }
+});
+
 Deno.test("detached amount recovery retains contradictions and rejects unbounded lookalikes", () => {
   const conflicting = parseGcashReceipt(
     DETACHED_AMOUNT_OCR.replace("\n1,590.00\n", "\n1,490.00\n"),
