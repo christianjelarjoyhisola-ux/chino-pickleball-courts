@@ -18,6 +18,10 @@ const preRemittanceReleaseMigrationSource = fs.readFileSync(
   path.join(root, 'supabase', 'migrations', '20260911100000_pre_remittance_booking_fee_releases.sql'),
   'utf8',
 );
+const cancelledAdminReleaseMigrationSource = fs.readFileSync(
+  path.join(root, 'supabase', 'migrations', '20260916100000_cancelled_admin_booking_fee_release.sql'),
+  'utf8',
+);
 const courtBreakdownDashboardSql = courtBreakdownMigrationSource.match(
   /create or replace function public\.get_booking_fee_remittance_dashboard\(\)[\s\S]*?\n\$\$;/i,
 )?.[0] || '';
@@ -172,7 +176,18 @@ test('cancelled rejected fees receive an immutable pre-remittance release instea
   assert.doesNotMatch(preRemittanceReleaseMigrationSource, /update\s+public\.bookings[\s\S]*?booking_fee_earned_at\s*=/i);
 });
 
-test('local remittance preview excludes a cancelled rejected earned fee but keeps manual bookings billable', async () => {
+test('cancelled owner-created manual bookings receive an audited pre-remittance release', () => {
+  assert.match(cancelledAdminReleaseMigrationSource, /terminal_payment_status in \('rejected', 'failed', 'unpaid', 'paid'\)/i);
+  assert.match(cancelledAdminReleaseMigrationSource, /'automatic_admin_cancellation'/i);
+  assert.match(cancelledAdminReleaseMigrationSource, /lower\(coalesce\(new\.created_via, ''\)\) = 'admin'/i);
+  assert.match(cancelledAdminReleaseMigrationSource, /new\.status <> 'cancelled'[\s\S]*?new\.payment_status not in \('rejected', 'failed', 'unpaid'\)[\s\S]*?lower\(coalesce\(new\.created_via, ''\)\) <> 'admin'/i);
+  assert.match(cancelledAdminReleaseMigrationSource, /admin-created booking was cancelled by an owner/i);
+  assert.match(cancelledAdminReleaseMigrationSource, /update public\.bookings b[\s\S]*?set status = b\.status[\s\S]*?lower\(coalesce\(b\.created_via, ''\)\) = 'admin'/i);
+  assert.match(cancelledAdminReleaseMigrationSource, /not exists \([\s\S]*?booking_fee_pre_remittance_releases/i);
+  assert.doesNotMatch(cancelledAdminReleaseMigrationSource, /booking_fee_earned_at\s*=\s*null/i);
+});
+
+test('local remittance preview keeps active manual bookings billable and releases them after cancellation', async () => {
   const common = {
     total: 400,
     slots: [18],
@@ -188,12 +203,14 @@ test('local remittance preview excludes a cancelled rejected earned fee but keep
     createdVia: 'admin',
   };
   const dashboard = await runLocalRemittanceDashboard([
-    { ...common, ref: 'PB-BOOK-FOR-CUSTOMER' },
+    { ...common, ref: 'PB-ACTIVE-MANUAL' },
+    { ...common, ref: 'PB-CANCELLED-MANUAL', status: 'cancelled' },
     { ...common, ref: 'CANCELLED-NO-PAYMENT', status: 'cancelled', paymentStatus: 'rejected' },
+    { ...common, ref: 'PB-CANCELLED-CUSTOMER-PAID', status: 'cancelled', createdVia: 'customer' },
   ]);
-  assert.equal(dashboard.accumulated.booking_rows_count, 1);
-  assert.equal(dashboard.accumulated.billable_hours, 1);
-  assert.equal(dashboard.accumulated.amount, 15);
+  assert.equal(dashboard.accumulated.booking_rows_count, 2);
+  assert.equal(dashboard.accumulated.billable_hours, 2);
+  assert.equal(dashboard.accumulated.amount, 30);
 });
 
 test('the accumulating dashboard derives additive court totals from its authoritative unclaimed snapshot', () => {
