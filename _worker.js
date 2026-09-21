@@ -23,6 +23,10 @@ export default {
       '/host-balance-admin.js',
       '/owner-insights.js',
       '/owner-insights.css',
+      '/weather.css',
+      '/weather-api.js',
+      '/weather-admin.js',
+      '/weather-reschedule.js',
       '/manage-booking.js',
       '/manage-booking.css',
       '/promo-pricing.css',
@@ -31,7 +35,7 @@ export default {
       releaseCoupledRuntime.has(url.pathname);
     const isHtmlEntry = url.pathname === '/' ||
       url.pathname.endsWith('.html') ||
-      ['/admin', '/host', '/login', '/manage-booking', '/player-live'].includes(url.pathname);
+      ['/admin', '/host', '/login', '/manage-booking', '/weather-reschedule', '/player-live'].includes(url.pathname);
     if (!isSharedRuntime && !isHtmlEntry) return response;
 
     // Pages' advanced-mode asset binding can attach a four-hour cache policy

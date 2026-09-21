@@ -651,6 +651,7 @@ function rowToBooking(r) {
   const slots = r.slots || [];
   return {
     ref:           r.ref,
+    weatherAffected: r.weather_affected === true,
     groupRef:      r.booking_group_ref || null,
     fullName:      r.full_name,
     contactNumber: r.contact_number,
@@ -2862,6 +2863,14 @@ window.DB = {
       if (error) { console.error('getSettings:', error); return {}; }
       const out = {};
       data.forEach(r => out[r.key] = r.value);
+      if (!PB_PRIVATE_DATA_SURFACE) {
+        const weather = await _sb.rpc('get_public_weather_closures');
+        if (weather.error) throw new Error('Weather availability could not be checked. Please refresh before booking.');
+        const config = JSON.parse(out.maintenance_config || '{"rules":[]}');
+        const existing = Array.isArray(config.rules) ? config.rules : config.mode ? [config] : [];
+        const weatherRules = (weather.data || []).map(s => ({ enabled: true, mode: 'specific', dates: [s.date], courtIds: [s.courtId], start: Number(s.hour), end: Number(s.hour) + 1, label: s.reason, weatherClosure: true }));
+        out.maintenance_config = JSON.stringify({ rules: [...weatherRules, ...existing] });
+      }
       return out;
     });
   },
@@ -8020,8 +8029,8 @@ window.Auth = {
   ROLES: ['owner', 'court_owner', 'staff', 'host'],
   ROLE_LABELS: { owner: 'System Owner', court_owner: 'Court Owner', staff: 'Court Staff', host: 'Open Play Host' },
   ROLE_PERMISSIONS: {
-    owner:       ['dashboard', 'insights', 'bookings', 'payment_review', 'reports', 'courts', 'open_play', 'host_open_play', 'host_accounts_view', 'remittances', 'maintenance', 'payments', 'accounts', 'booking_delete', 'export', 'settings', 'owner_only'],
-    court_owner: ['dashboard', 'insights', 'bookings', 'payment_review', 'reports', 'courts', 'open_play', 'host_open_play', 'host_accounts_view', 'remittances', 'maintenance', 'payments', 'export', 'settings', 'court_owner_only'],
+    owner:       ['weather', 'dashboard', 'insights', 'bookings', 'payment_review', 'reports', 'courts', 'open_play', 'host_open_play', 'host_accounts_view', 'remittances', 'maintenance', 'payments', 'accounts', 'booking_delete', 'export', 'settings', 'owner_only'],
+    court_owner: ['weather', 'dashboard', 'insights', 'bookings', 'payment_review', 'reports', 'courts', 'open_play', 'host_open_play', 'host_accounts_view', 'remittances', 'maintenance', 'payments', 'export', 'settings', 'court_owner_only'],
     staff:       ['bookings', 'open_play', 'payment_review'],
     host:        ['host_open_play'],
   },

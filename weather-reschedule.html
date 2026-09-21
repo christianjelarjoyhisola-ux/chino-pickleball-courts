@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="referrer" content="no-referrer">
+  <title>Your weather replacement | CHINO Pickleball Courts</title>
+  <link rel="icon" href="assets/chino-mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="weather.css?v=20260921">
+</head>
+<body class="weather-page">
+  <main class="weather-player">
+    <a class="wx-brand" href="/"><img src="assets/chino-mark.svg" alt="">CHINO PICKLEBALL COURTS</a>
+    <header class="wx-hero"><div class="wx-chip">Your paid hours are protected</div><p class="wx-eyebrow">YOUR WEATHER REPLACEMENT</p><h1>A new time.<br>The same great game.</h1><p>Weather interrupted your plans. Choose a new available date and time, and we’ll take care of the move.</p></header>
+    <div class="wx-zero"><div><b>Same court. Same booked hours.</b><br>Your payment and booking fee carry over.</div><strong>₱0 extra</strong></div>
+    <div id="wxPlayerMessage" class="wx-feedback" role="status" aria-live="polite">Checking your private booking link…</div>
+    <div id="wxPlayerItems"></div>
+    <p class="wx-player-footer">All times are in Philippine time. Any original unpaid balance stays unchanged.<br>Need help? Reply to your weather closure email or contact CHINO.</p>
+  </main>
+  <script src="supabase.min.js"></script>
+  <script src="supabase-config.js?v=20260921-weather"></script>
+  <script src="weather-api.js?v=20260921"></script>
+  <script src="weather-reschedule.js?v=20260921"></script>
+</body>
+</html>

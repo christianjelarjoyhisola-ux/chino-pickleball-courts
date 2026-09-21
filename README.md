@@ -55,3 +55,13 @@ For a new database, follow `SETUP_NEW_SUPABASE.sql` and its migration instructio
 Receipt OCR uses server-side Google Cloud Vision. Email notifications use Maileroo with a verified CHINO sending address. Telegram alerts and PayMongo checkout use separately configured credentials. See [Google Vision setup](GOOGLE_VISION_SETUP.md), [payment setup](PAYMENT_SETUP.md), and [Maya receipt verification](MAYA_RECEIPT_VERIFICATION.md).
 
 Integration code is included. Each provider becomes operational after its credentials and venue settings are configured and its end-to-end flow is verified. Provider secrets, service-role keys, customer exports, and local deployment caches do not belong in Git or browser code.
+
+## Weather closures
+
+Owners and court owners can open **Weather Closures** to select booked or vacant court hours, review affected reservations, and close slots for rain, wet courts, or unsafe weather. Guests see the closure reason. Database checks also reject booking attempts from stale pages.
+
+Affected booking groups receive a private replacement link. Each affected reservation moves its full original duration on the same court, with its price, payments, booking fee and reference unchanged. Weather replacements bypass the ordinary notice cutoff and confirm immediately after a fresh availability check. Reopening a closure preserves replacement rights. Host balance deadlines pause while affected and follow the replacement date afterwards.
+
+Email jobs are processed every minute with delivery leases and automatic retries. The owner desk displays delivery status, allows resending, and provides a private link for players whose booking has no valid email. A successful send means provider acceptance; inbox delivery is not guaranteed. Weather closures remain owner-controlled; this feature does not automatically close courts from a forecast or individually move Open Play registrations.
+
+`supabase/tests/weather-closures.sql` exercises the database workflow in a rollback-only transaction. `weather.test.js` covers slot scoping and public UI helpers. Include all `weather-*` assets and `weather.css` in Pages releases, and deploy `weather-notifications` together with migration `20260921100000`.

@@ -21,6 +21,9 @@
 <script src="admin-activity-accounts.js?v=20260910-complete-activity-v1"></script>
 <script src="admin-activity.js?v=20260910-complete-activity-v1"></script>
 <link rel="stylesheet" href="admin-activity.css?v=20260910-complete-activity-v1">
+<link rel="stylesheet" href="weather.css?v=20260921">
+<script src="weather-api.js?v=20260921"></script>
+<script src="weather-admin.js?v=20260921"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 <style>
@@ -5097,6 +5100,7 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(45, 62, 79, .1
       <div class="nav-item" data-s="courts" data-perm="courts" onclick="goto('courts')"><span>&#127967;</span> Courts</div>
       <div class="nav-item" data-s="gamemgr" data-perm="open_play" onclick="goto('gamemgr')"><span>&#127955;</span> Play Manager</div>
       <div class="nav-item" data-s="hosts" data-perm="host_open_play" onclick="goto('hosts')"><span>👥</span> Host Center</div>
+      <div class="nav-item" data-s="weather" data-perm="weather" onclick="goto('weather')"><span>☂</span> Weather Closures</div>
       <div class="nav-item" data-s="maintenance" data-perm="maintenance" onclick="goto('maintenance')"><span>&#128295;</span> Maintenance</div>
       <div class="nav-item" data-s="payments" data-perm="payments" onclick="goto('payments')"><span>&#128179;</span> Payments</div>
     </div>
@@ -6621,6 +6625,7 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(45, 62, 79, .1
     </div>
 
     <!-- MAINTENANCE -->
+    <div id="sec-weather" class="adm-sec"><div id="weatherDesk" class="weather-desk"></div></div>
     <div id="sec-maintenance" class="adm-sec">
       <div class="toolbar"><h2>🔧 MAINTENANCE</h2></div>
       <div class="panel" style="max-width:600px;margin-bottom:20px">
@@ -9212,9 +9217,9 @@ let sess;
 /* ==============================================
    NAVIGATION
    ============================================== */
-const titles={dash:'Dashboard',insights:'Insights',bookings:'Bookings',activity:'Activity History',deleted:'Deleted Bookings',payreview:'Payment Review',reports:'Reports',courts:'Courts',gamemgr:'Play Manager',accounts:'Host Accounts',remittances:'Remittances',hosts:'Host Center',maintenance:'Maintenance',payments:'Payments'};
-const SECTION_PERM={dash:'dashboard',insights:'insights',bookings:'bookings',activity:'owner_only',deleted:'owner_only',payreview:'payment_review',reports:'reports',courts:'courts',gamemgr:'open_play',accounts:'host_accounts_view',remittances:'remittances',hosts:'host_open_play',maintenance:'maintenance',payments:'payments'};
-const SECTION_LOADERS={dash:renderDash,insights:()=>renderPaddleInsights({force:true}),bookings:renderBookings,activity:renderAdminActivity,deleted:renderDeletedBookings,payreview:()=>renderPaymentReview(),reports:renderReport,courts:renderCourts,gamemgr:()=>window.PlayManager?.render(),accounts:renderAccounts,remittances:renderRemittances,hosts:renderHostCenter,maintenance:renderMaintenance,payments:renderPaymentSettings};
+const titles={weather:'Weather Closures',dash:'Dashboard',insights:'Insights',bookings:'Bookings',activity:'Activity History',deleted:'Deleted Bookings',payreview:'Payment Review',reports:'Reports',courts:'Courts',gamemgr:'Play Manager',accounts:'Host Accounts',remittances:'Remittances',hosts:'Host Center',maintenance:'Maintenance',payments:'Payments'};
+const SECTION_PERM={weather:'weather',dash:'dashboard',insights:'insights',bookings:'bookings',activity:'owner_only',deleted:'owner_only',payreview:'payment_review',reports:'reports',courts:'courts',gamemgr:'open_play',accounts:'host_accounts_view',remittances:'remittances',hosts:'host_open_play',maintenance:'maintenance',payments:'payments'};
+const SECTION_LOADERS={weather:()=>window.WeatherClosures.render(),dash:renderDash,insights:()=>renderPaddleInsights({force:true}),bookings:renderBookings,activity:renderAdminActivity,deleted:renderDeletedBookings,payreview:()=>renderPaymentReview(),reports:renderReport,courts:renderCourts,gamemgr:()=>window.PlayManager?.render(),accounts:renderAccounts,remittances:renderRemittances,hosts:renderHostCenter,maintenance:renderMaintenance,payments:renderPaymentSettings};
 let _adminActivity = null;
 function initAdminActivity() {
   if (_adminActivity || !window.ChinoAdminActivity) return _adminActivity;
@@ -14154,6 +14159,7 @@ function pendingRescheduleRequestForBooking(booking) {
 }
 
 function bookingRescheduleRequestBadge(booking) {
+  if (booking.weatherAffected || (booking.allItems || booking.items || []).some(b => b.weatherAffected)) return '<span class="booking-reschedule-note">☂ Weather affected · reschedule available</span>';
   const request = pendingRescheduleRequestForBooking(booking);
   return request ? '<span class="booking-reschedule-note">Reschedule requested</span>' : '';
 }

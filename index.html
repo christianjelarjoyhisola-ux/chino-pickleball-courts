@@ -5874,6 +5874,9 @@ function getMaintenanceRule(date, h, courtId = null) {
   return _checkMaintenanceRule(maintenanceConfig, date, h, courtId) ? maintenanceConfig : null;
 }
 const _mtLabels = {
+  rain: { icon: '☂', text: 'Closed due to rain' },
+  wet_court: { icon: '☂', text: 'Closed · wet court' },
+  unsafe_weather: { icon: '☂', text: 'Closed · unsafe weather' },
   closed:      { icon: '🚫', text: 'Closed' },
   maintenance: { icon: '🔧', text: 'Maintenance' },
   reserved:    { icon: '🔒', text: 'Reserved' },
@@ -7743,6 +7746,7 @@ async function onCardDate(courtId, date, options = {}) {
     const isMaint_ = isMaintenanceHour(date, h, courtId);
     const timeRange = slotTimeLabel(h);
     const plainTimeRange = `${fmtT(h)} to ${fmtT(h + 1)}`;
+    if (getMaintenanceRule(date,h,courtId)?.weatherClosure) { const w=getMaintenanceLabel(date,h,courtId); return `<div class="cc-slot-btn maintenance weather-closed"><div class="csl-time">${timeRange}</div><div class="csl-tag">${w.icon} ${w.text}</div></div>`; }
     if (isPast_)    return `<div class="cc-slot-btn past-slot"><div class="csl-time">${timeRange}</div><div class="csl-tag">${isPastDate_ ? 'Past' : 'Done'}</div></div>`;
     if (isBooked_ && verifyingHrs.has(h)) return `<div class="cc-slot-btn processing"><div class="csl-time">${timeRange}</div><div class="csl-tag">Processing...</div></div>`;
     if (isBooked_) return `<div class="cc-slot-btn taken"><div class="csl-time">${timeRange}</div><div class="csl-name">Booked</div></div>`;
@@ -7858,6 +7862,7 @@ async function renderCourts() {
           const isSelectedSlot_ = !!cardSelection && cardSelection.date === selectedDate && cardSelection.slots.includes(h);
           const timeRange = slotTimeLabel(h);
           const plainTimeRange = `${fmtT(h)} to ${fmtT(h + 1)}`;
+          if (getMaintenanceRule(selectedDate,h,c.id)?.weatherClosure) { const w=getMaintenanceLabel(selectedDate,h,c.id); return `<div class="cc-slot-btn maintenance weather-closed"><div class="csl-time">${timeRange}</div><div class="csl-tag">${esc(w.icon)} ${esc(w.text)}</div></div>`; }
           if (isPast_)    return `<div class="cc-slot-btn past-slot"><div class="csl-time">${timeRange}</div><div class="csl-tag">${isSelectedPast ? 'Past' : 'Done'}</div></div>`;
           if (isBooked_ && verifyingHoursSet.has(h)) return `<div class="cc-slot-btn processing"><div class="csl-time">${timeRange}</div><div class="csl-tag">Processing...</div></div>`;
           if (isBooked_) return `<div class="cc-slot-btn taken"><div class="csl-time">${timeRange}</div><div class="csl-name">Booked</div></div>`;
@@ -8095,7 +8100,7 @@ async function renderSlots() {
     const isMaint     = isMaintenanceHour(date, h, court?.id);
 
     // Skip rendering individual Open Play slots — shown in combined block above
-    if (isOpenPlay) continue;
+    if (isOpenPlay && !getMaintenanceRule(date,h,court?.id)?.weatherClosure) continue;
 
     const isUnavail   = isPast || isBooked || isMaint;
 
@@ -8105,7 +8110,8 @@ async function renderSlots() {
     let cls = 'slot';
     let tag = '';
 
-    if (isSel)             { cls += ' sel'; }
+    if (getMaintenanceRule(date,h,court?.id)?.weatherClosure) { const w=getMaintenanceLabel(date,h,court?.id); cls += ' maintenance weather-closed'; tag = `<span class="slot-tag mt-tag">${w.icon} ${w.text}</span>`; }
+    else if (isSel)        { cls += ' sel'; }
     else if (isPast)       { cls += ' past'; tag = `<span class="slot-tag past-tag">DONE</span>`; }
     else if (isNow)        { cls += ' now';  tag = `<span class="slot-tag">NOW</span>`; }
     else if (isBooked)     { cls += ' booked'; tag = `<span class="slot-tag booked-tag">Booked</span>`; }

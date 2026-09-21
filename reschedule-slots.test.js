@@ -43,8 +43,13 @@ function harness(overrides = {}) {
     bookingRef: booking.ref, courtId: booking.courtId, date,
     duration: booking.slots.length, starts, oldDate: booking.date, oldSlots: [...booking.slots], ...patch,
   });
+  // Keep the future-booking fixture ahead of the clock regardless of run date.
+  class FixtureDate extends Date {
+    constructor(...args) { super(...(args.length ? args : ['2026-09-20T00:00:00Z'])); }
+    static now() { return new Date('2026-09-20T00:00:00Z').getTime(); }
+  }
   const context = vm.createContext({
-    $, document, console, Date,
+    $, document, console, Date: FixtureDate,
     phDateKeyFromTimestamp: () => '2026-09-20',
     _pbMinimumPublicBookingDate: () => '2026-09-20',
     fmtD: date => date,

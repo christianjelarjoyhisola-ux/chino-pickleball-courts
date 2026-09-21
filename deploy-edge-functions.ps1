@@ -223,6 +223,7 @@ try {
     "process-host-balance-deadlines",
     "send-reschedule-email",
     "booking-reschedule-notifications",
+    "weather-notifications",
     "send-telegram-notification",
     "submit-public-registration",
     "submit-public-booking",
@@ -234,7 +235,8 @@ try {
   # own provider/shared-secret authentication internally.
   $noJwtFunctions = @(
     "payment-webhook",
-    "process-host-balance-deadlines"
+    "process-host-balance-deadlines",
+    "weather-notifications"
   )
 
   $protectedFunctions = @($functions | Where-Object { $noJwtFunctions -notcontains $_ })
