@@ -49,7 +49,7 @@
     try {
       const data = await WeatherAPI.call('get_weather_desk', { p_date: el('wxDate').value });
       if (ticket !== sequence) return;
-      state = data;
+      state = { ...data, courts: [...data.courts].sort((a, b) => String(a.name).localeCompare(String(b.name), undefined, { numeric: true, sensitivity: 'base' })) };
       const selected = el('wxCourt').value;
       el('wxCourt').innerHTML = '<option value="">All courts</option>' + state.courts.map(c => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
       el('wxCourt').value = state.courts.some(c => String(c.id) === selected) ? selected : '';
