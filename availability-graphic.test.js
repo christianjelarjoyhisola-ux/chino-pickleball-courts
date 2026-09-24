@@ -48,6 +48,7 @@ test('September 26 evening bookings remain visible in totals and every export fo
   });
   for (const format of ['feed', 'story']) {
     const pages = graphic.paginateSnapshot(snapshot, format);
+    assert.equal(pages.length, 1);
     let bookedCells = 0;
     for (const [index, page] of pages.entries()) {
       const canvas = fakeCanvas();
@@ -58,7 +59,7 @@ test('September 26 evening bookings remain visible in totals and every export fo
       const labels = canvas.calls.map(call => call.value);
       assert.ok(labels.includes('SATURDAY · SEPTEMBER 26, 2026'));
       assert.ok(labels.includes('FULL DAY · 60 AVAILABLE / 16 BOOKED COURT-HOURS'));
-      assert.ok(labels.some(label => label.startsWith('SHOWING ')));
+      assert.ok(labels.some(label => label.startsWith('FULL SCHEDULE · ')));
       bookedCells += labels.filter(label => label === 'BOOKED').length;
     }
     assert.equal(bookedCells, 16, 'all four booked hours on every court must reach the exported pages');
@@ -168,7 +169,7 @@ test('feed and story renderers set exact Facebook canvas dimensions', async () =
   assert.deepEqual([story.width, story.height], [1080, 1920]);
 });
 
-test('nine courts become complete, ordered carousel pages in both formats', () => {
+test('nine courts stay together in one complete image in both formats', () => {
   const snapshot = graphic.normalizeSnapshot({
     date: '2026-09-20',
     asOf: '2026-09-02T12:00:00.000Z',
@@ -180,12 +181,12 @@ test('nine courts become complete, ordered carousel pages in both formats', () =
   });
   ['feed', 'story'].forEach(format => {
     const pages = graphic.paginateSnapshot(snapshot, format);
-    assert.equal(pages.length, 3);
+    assert.equal(pages.length, 1);
     assert.deepEqual(
       pages.flatMap(page => page.courts.map(court => court.id)),
       snapshot.courts.map(court => court.id),
     );
-    assert.ok(pages.every(page => page.courts.length <= graphic.posterLayouts[format].capacity));
+    assert.equal(pages[0].courts.length, 9);
   });
 });
 
@@ -208,7 +209,7 @@ test('court controls, captions, and carousel pages use stable natural court orde
   });
 });
 
-test('long schedules split into readable timeslot pages without dropping any slot', () => {
+test('long schedules keep all slots on one page', () => {
   const slots = Array.from({ length: 9 }, (_, index) => ({
     hour: index * 2,
     end: index * 2 + 1,
@@ -219,8 +220,8 @@ test('long schedules split into readable timeslot pages without dropping any slo
     courts: [{ id: 'show-court', name: 'Show Court', slots }],
   });
   const pages = graphic.paginateSnapshot(snapshot, 'feed');
-  assert.equal(pages.length, 2);
-  assert.deepEqual(pages.map(page => page.courts[0].slots.length), [8, 1]);
+  assert.equal(pages.length, 1);
+  assert.deepEqual(pages.map(page => page.courts[0].slots.length), [9]);
   assert.deepEqual(
     pages.flatMap(page => page.courts[0].slots.map(slot => slot.start)),
     snapshot.courts[0].slots.map(slot => slot.start),
@@ -246,7 +247,7 @@ test('adaptive range grid keeps common and dense schedules readable inside one c
   });
 });
 
-test('every timeslot carousel page keeps the selected court columns together', () => {
+test('single-page schedule keeps every selected court column', () => {
   const denseSlots = Array.from({ length: 9 }, (_, index) => ({
     hour: index * 2,
     end: index * 2 + 1,
@@ -263,11 +264,9 @@ test('every timeslot carousel page keeps the selected court columns together', (
   });
   for (const format of ['feed', 'story']) {
     const pages = graphic.paginateSnapshot(snapshot, format);
-    assert.deepEqual(pages.map(page => page.courts.length), format === 'feed' ? [4, 4] : [4]);
+    assert.deepEqual(pages.map(page => page.courts.length), [4]);
     const ids = pages.flatMap(page => page.courts.map(court => court.id));
-    assert.deepEqual(ids, format === 'feed'
-      ? ['1', '2', '3', '4', '1', '2', '3', '4']
-      : ['1', '2', '3', '4']);
+    assert.deepEqual(ids, ['1', '2', '3', '4']);
   }
 });
 
@@ -285,8 +284,8 @@ test('poster shows every hourly slot as available or booked instead of merging o
     ],
   });
   const pages = graphic.paginateSnapshot(snapshot, 'feed');
-  assert.equal(pages.length, 2);
-  assert.ok(pages.every(page => page.courts.every(court => court.slots.length === 8)));
+  assert.equal(pages.length, 1);
+  assert.ok(pages.every(page => page.courts.every(court => court.slots.length === 16)));
   const calls = [];
   for (let index = 0; index < pages.length; index += 1) {
     const canvas = fakeCanvas();
@@ -333,7 +332,7 @@ test('feed and story draw one Court 3 card containing all three broken-time rang
   }
 });
 
-test('carousel filenames are numbered and every rendered page carries its marker', async () => {
+test('single image has an unnumbered filename and no page marker', async () => {
   const snapshot = graphic.normalizeSnapshot({
     date: '2026-09-20',
     courts: Array.from({ length: 9 }, (_, index) => ({
@@ -353,10 +352,10 @@ test('carousel filenames are numbered and every rendered page carries its marker
       summarySnapshot: snapshot,
     });
     assert.deepEqual([canvas.width, canvas.height], [1080, 1350]);
-    assert.ok(canvas.calls.some(call => call.value === `PAGE ${index + 1} / ${pages.length}`));
+    assert.equal(canvas.calls.some(call => call.value.startsWith('PAGE ')), false);
     assert.equal(
       graphic.outputFileName(snapshot.date, 'feed', index, pages.length),
-      `chino-availability-2026-09-20-feed-0${index + 1}-of-03.png`,
+      'chino-availability-2026-09-20-feed.png',
     );
   }
 });

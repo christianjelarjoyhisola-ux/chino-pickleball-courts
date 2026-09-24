@@ -16,10 +16,10 @@
   });
   const POSTER_LAYOUTS = Object.freeze({
     feed: Object.freeze({
-      brandY: 54,
-      heroTop: 205,
-      cardsStart: 503,
-      cardsEnd: 1004,
+      brandY: 34,
+      heroTop: 150,
+      cardsStart: 350,
+      cardsEnd: 1016,
       footerY: 1040,
       safeTop: 0,
       safeBottom: 1350,
@@ -28,8 +28,8 @@
     }),
     story: Object.freeze({
       brandY: 105,
-      heroTop: 275,
-      cardsStart: 630,
+      heroTop: 245,
+      cardsStart: 500,
       cardsEnd: 1460,
       footerY: 1496,
       safeTop: 80,
@@ -339,39 +339,9 @@
     };
   }
 
-  function paginateSnapshot(snapshot, formatName = 'feed') {
-    const format = FORMATS[formatName] ? formatName : 'feed';
-    const capacity = POSTER_LAYOUTS[format].capacity;
-    const normalized = normalizeSnapshot(snapshot, snapshot?.date);
-    const courts = normalized.courts || [];
-    if (!courts.length) return [{ ...normalized, courts: [] }];
-    const slotsPerPage = format === 'story' ? 10 : 8;
-    const pages = [];
-    for (let courtStart = 0; courtStart < courts.length; courtStart += capacity) {
-      const courtGroup = courts.slice(courtStart, courtStart + capacity);
-      const slotKeys = [...new Set(courtGroup.flatMap(court => court.slots.map(slot => `${slot.start}|${slot.end}`)))]
-        .map(key => {
-          const [start, end] = key.split('|').map(Number);
-          return { key, start, end };
-        })
-        .sort((left, right) => left.start - right.start || left.end - right.end);
-      const chunks = slotKeys.length
-        ? Array.from({ length: Math.ceil(slotKeys.length / slotsPerPage) }, (_, index) => slotKeys.slice(index * slotsPerPage, (index + 1) * slotsPerPage))
-        : [[]];
-      chunks.forEach(chunk => {
-        const keys = new Set(chunk.map(slot => slot.key));
-        pages.push({
-          ...normalized,
-          courts: courtGroup.map(court => ({
-            ...court,
-            slots: court.slots.filter(slot => keys.has(`${slot.start}|${slot.end}`)),
-          })),
-          slotPageStart: chunk[0]?.start ?? null,
-          slotPageEnd: chunk[chunk.length - 1]?.end ?? null,
-        });
-      });
-    }
-    return pages;
+  function paginateSnapshot(snapshot) {
+    // Preserve every selected court and hour in one downloadable image.
+    return [normalizeSnapshot(snapshot, snapshot?.date)];
   }
 
   function rangeGridLayout(rangeCount, bounds = {}, story = false) {
@@ -686,7 +656,7 @@
       const summary = posterSummary(currentSnapshot());
       const page = pages[state.page];
       coverage.hidden = !state.snapshot;
-      coverage.innerHTML = `<strong>${escapeHtml(pageTimeLabel(page))}</strong><span>Full day: ${summary.openHours} available · ${summary.bookedHours} booked court-hours.${pages.length > 1 ? ` View all ${pages.length} pages for the complete schedule.` : ''}</span>`;
+      coverage.innerHTML = `<strong>${escapeHtml(pageTimeLabel(page))}</strong><span>Full day: ${summary.openHours} available · ${summary.bookedHours} booked court-hours. All selected courts and hours in one image.</span>`;
     }
     return pages;
   }
@@ -987,7 +957,7 @@
   function pageTimeLabel(snapshot) {
     const slots = (snapshot?.courts || []).flatMap(court => court.slots);
     if (!slots.length) return 'No time slots';
-    return `Showing ${formatRange(Math.min(...slots.map(slot => slot.start)), Math.max(...slots.map(slot => slot.end)))}`;
+    return `Full schedule · ${formatRange(Math.min(...slots.map(slot => slot.start)), Math.max(...slots.map(slot => slot.end)))}`;
   }
 
   function drawHero(context, snapshot, summary, layout) {
@@ -1001,15 +971,15 @@
     trackedText(context, summary.kicker, 72, top, 5);
 
     context.fillStyle = '#f4f7fa';
-    const headlineSize = fitFont(context, summary.headline, width - 144, story ? 144 : 124, 82, '"Bebas Neue", "Arial Narrow", sans-serif', 900);
+    const headlineSize = fitFont(context, summary.headline, width - 144, story ? 88 : 70, 52, '"Bebas Neue", "Arial Narrow", sans-serif', 900);
     context.font = `900 ${headlineSize}px "Bebas Neue", "Arial Narrow", sans-serif`;
-    context.fillText(summary.headline, 68, top + (story ? 138 : 117));
+    context.fillText(summary.headline, 68, top + (story ? 90 : 66));
 
     context.fillStyle = '#c1d9ed';
-    context.font = `900 ${story ? 49 : 40}px "DM Sans", Arial, sans-serif`;
-    context.fillText(`${weekday} · ${date.toUpperCase()}`, 72, top + (story ? 210 : 176));
+    context.font = `900 ${story ? 38 : 32}px "DM Sans", Arial, sans-serif`;
+    context.fillText(`${weekday} · ${date.toUpperCase()}`, 72, top + (story ? 140 : 108));
 
-    const pillY = top + (story ? 255 : 214);
+    const pillY = top + (story ? 172 : 130);
     const selectedCount = summary.courts.length;
     const statText = summary.bookedHours
       ? `FULL DAY · ${summary.openHours} AVAILABLE / ${summary.bookedHours} BOOKED COURT-HOURS`
@@ -1018,11 +988,11 @@
       : `${selectedCount} COURT${selectedCount === 1 ? '' : 'S'} CHECKED  ·  NO OPEN SLOTS`;
     context.font = `800 ${story ? 20 : 17}px "DM Sans", Arial, sans-serif`;
     const pillWidth = width - 144;
-    fillRoundRect(context, 72, pillY, pillWidth, story ? 56 : 50, 15, 'rgba(255,255,255,.075)');
-    strokeRoundRect(context, 72, pillY, pillWidth, story ? 56 : 50, 15, 'rgba(255,255,255,.13)', 1.5);
+    fillRoundRect(context, 72, pillY, pillWidth, story ? 44 : 38, 15, 'rgba(255,255,255,.075)');
+    strokeRoundRect(context, 72, pillY, pillWidth, story ? 44 : 38, 15, 'rgba(255,255,255,.13)', 1.5);
     context.fillStyle = '#e5eaee';
     fitFont(context, statText, pillWidth - 56, story ? 20 : 17, 13, '"DM Sans", Arial, sans-serif', 800);
-    context.fillText(statText, 100, pillY + (story ? 36 : 32));
+    context.fillText(statText, 100, pillY + (story ? 28 : 25));
     context.fillStyle = '#8eb9e1';
     context.font = '800 17px "DM Sans", Arial, sans-serif';
     context.fillText(pageTimeLabel(snapshot).toUpperCase(), 76, layout.cardsStart - 12);
@@ -1063,10 +1033,10 @@
 
     const timeSlots = [...new Map(courts.flatMap(court => court.slots).map(slot => [`${slot.start}|${slot.end}`, slot])).values()]
       .sort((left, right) => left.start - right.start || left.end - right.end);
-    const headerHeight = story ? 66 : 58;
+    const headerHeight = story ? 58 : 44;
     const timeWidth = story ? 172 : 158;
     const columnGap = story ? 10 : 8;
-    const rowGap = story ? 8 : 7;
+    const rowGap = timeSlots.length > 12 ? 3 : (story ? 8 : 7);
     const boardHeight = endY - startY;
     const rowHeight = timeSlots.length
       ? (boardHeight - headerHeight - rowGap * Math.max(0, timeSlots.length - 1)) / timeSlots.length
@@ -1095,7 +1065,7 @@
       context.fillRect(88, y, timeWidth - 26, rowHeight);
       context.fillStyle = '#dbe7f1';
       const timeLabel = formatRange(slotWindow.start, slotWindow.end);
-      const timeFont = fitFont(context, timeLabel, timeWidth - 40, story ? 24 : 21, 14, '"DM Sans", Arial, sans-serif', 800);
+      const timeFont = fitFont(context, timeLabel, timeWidth - 40, Math.min(story ? 26 : 23, rowHeight * .7), 12, '"DM Sans", Arial, sans-serif', 800);
       context.font = `800 ${timeFont}px "DM Sans", Arial, sans-serif`;
       context.fillText(timeLabel, 98, y + rowHeight / 2 + timeFont * .35);
 
@@ -1114,7 +1084,7 @@
         fillRoundRect(context, x, y, courtWidth, rowHeight, 11, fill);
         strokeRoundRect(context, x, y, courtWidth, rowHeight, 11, stroke, 1.5);
         context.fillStyle = color;
-        const statusFont = fitFont(context, state.label, courtWidth - 14, story ? 17 : 15, 10, '"DM Sans", Arial, sans-serif', 900);
+        const statusFont = fitFont(context, state.label, courtWidth - 14, Math.min(story ? 24 : 21, rowHeight * .65), 9, '"DM Sans", Arial, sans-serif', 900);
         context.font = `900 ${statusFont}px "DM Sans", Arial, sans-serif`;
         context.textAlign = 'center';
         context.fillText(state.label, x + courtWidth / 2, y + rowHeight / 2 + statusFont * .34);
@@ -1285,7 +1255,7 @@
 
   async function prepareOutputSet(label) {
     const snapshot = await ensureFreshForExport(label);
-    setBusy(true, 'Rendering every carousel page from the fresh schedule…');
+    setBusy(true, 'Rendering your complete daily schedule…');
     const operationToken = state.operationToken;
     const pages = paginateSnapshot(snapshot, state.format);
     const items = [];
