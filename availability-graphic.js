@@ -554,6 +554,7 @@
                   <span class="prag-ready-badge" data-prag-ready><i></i>Ready to post</span>
                 </div>
               </div>
+              <div class="prag-coverage" data-prag-coverage hidden></div>
               <div class="prag-canvas-stage" data-prag-stage>
                 <div class="prag-canvas-shell" data-prag-canvas-shell>
                   <canvas data-prag-canvas width="1080" height="1350" aria-label="Preview of the CHINO court availability post"></canvas>
@@ -680,6 +681,13 @@
     if (previous) previous.disabled = state.busy || state.page === 0;
     if (next) next.disabled = state.busy || state.page >= pages.length - 1;
     if (downloadButton) downloadButton.textContent = pages.length > 1 ? `Download ${pages.length} PNGs` : 'Download PNG';
+    const coverage = element('[data-prag-coverage]');
+    if (coverage) {
+      const summary = posterSummary(currentSnapshot());
+      const page = pages[state.page];
+      coverage.hidden = !state.snapshot;
+      coverage.innerHTML = `<strong>${escapeHtml(pageTimeLabel(page))}</strong><span>Full day: ${summary.openHours} available · ${summary.bookedHours} booked court-hours.${pages.length > 1 ? ` View all ${pages.length} pages for the complete schedule.` : ''}</span>`;
+    }
     return pages;
   }
 
@@ -961,6 +969,9 @@
       total + ranges.reduce((sum, range) => sum + (range.end - range.start), 0)
     ), 0);
     const openCourts = rangesByCourt.filter(ranges => ranges.length).length;
+    const bookedHours = courts.reduce((total, court) => total + court.slots.reduce((sum, slot) => (
+      sum + (slotCellLabel(slot).tone === 'booked' ? slot.end - slot.start : 0)
+    ), 0), 0);
     let headline = 'OPEN COURTS';
     let kicker = 'BOOK YOUR GAME';
     if (!openHours) {
@@ -970,7 +981,13 @@
       headline = 'LAST SLOTS';
       kicker = 'MOVE FAST';
     }
-    return { courts, rangesByCourt, openHours, openCourts, headline, kicker };
+    return { courts, rangesByCourt, openHours, bookedHours, openCourts, headline, kicker };
+  }
+
+  function pageTimeLabel(snapshot) {
+    const slots = (snapshot?.courts || []).flatMap(court => court.slots);
+    if (!slots.length) return 'No time slots';
+    return `Showing ${formatRange(Math.min(...slots.map(slot => slot.start)), Math.max(...slots.map(slot => slot.end)))}`;
   }
 
   function drawHero(context, snapshot, summary, layout) {
@@ -994,7 +1011,9 @@
 
     const pillY = top + (story ? 255 : 214);
     const selectedCount = summary.courts.length;
-    const statText = summary.openHours
+    const statText = summary.bookedHours
+      ? `FULL DAY · ${summary.openHours} AVAILABLE / ${summary.bookedHours} BOOKED COURT-HOURS`
+      : summary.openHours
       ? `${summary.openHours} AVAILABLE COURT-HOUR${summary.openHours === 1 ? '' : 'S'}  ·  ${summary.openCourts}/${selectedCount} COURTS`
       : `${selectedCount} COURT${selectedCount === 1 ? '' : 'S'} CHECKED  ·  NO OPEN SLOTS`;
     context.font = `800 ${story ? 20 : 17}px "DM Sans", Arial, sans-serif`;
@@ -1004,6 +1023,9 @@
     context.fillStyle = '#e5eaee';
     fitFont(context, statText, pillWidth - 56, story ? 20 : 17, 13, '"DM Sans", Arial, sans-serif', 800);
     context.fillText(statText, 100, pillY + (story ? 36 : 32));
+    context.fillStyle = '#8eb9e1';
+    context.font = '800 17px "DM Sans", Arial, sans-serif';
+    context.fillText(pageTimeLabel(snapshot).toUpperCase(), 76, layout.cardsStart - 12);
   }
 
   function slotCellLabel(slot) {

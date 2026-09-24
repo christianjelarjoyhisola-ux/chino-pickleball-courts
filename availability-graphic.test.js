@@ -34,6 +34,37 @@ function fakeCanvas() {
   };
 }
 
+test('September 26 evening bookings remain visible in totals and every export format', async () => {
+  const snapshot = graphic.normalizeSnapshot({
+    date: '2026-09-26',
+    courts: Array.from({ length: 4 }, (_, index) => ({
+      id: `c${index + 1}`, name: `Court ${index + 1}`,
+      slots: Array.from({ length: 19 }, (_, offset) => ({
+        hour: offset + 4, startHour: offset + 4, endHour: offset + 5,
+        state: offset + 4 >= 19 ? 'unavailable' : 'free',
+        reason: offset + 4 >= 19 ? 'booked' : null,
+      })),
+    })),
+  });
+  for (const format of ['feed', 'story']) {
+    const pages = graphic.paginateSnapshot(snapshot, format);
+    let bookedCells = 0;
+    for (const [index, page] of pages.entries()) {
+      const canvas = fakeCanvas();
+      await graphic.drawPoster(canvas, page, format, {
+        logo: false, qr: false, summarySnapshot: snapshot,
+        pageNumber: index + 1, totalPages: pages.length,
+      });
+      const labels = canvas.calls.map(call => call.value);
+      assert.ok(labels.includes('SATURDAY · SEPTEMBER 26, 2026'));
+      assert.ok(labels.includes('FULL DAY · 60 AVAILABLE / 16 BOOKED COURT-HOURS'));
+      assert.ok(labels.some(label => label.startsWith('SHOWING ')));
+      bookedCells += labels.filter(label => label === 'BOOKED').length;
+    }
+    assert.equal(bookedCells, 16, 'all four booked hours on every court must reach the exported pages');
+  }
+});
+
 test('normalizes the production availability graphic contract without carrying PII', () => {
   const snapshot = graphic.normalizeSnapshot({
     version: 1,

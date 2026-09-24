@@ -12,6 +12,7 @@ const migration = fs.readFileSync(path.join(
   '20260902230000_admin_availability_graphic_rpc.sql',
 ), 'utf8');
 const client = fs.readFileSync(path.join(root, 'supabase-config.js'), 'utf8');
+const admin = fs.readFileSync(path.join(root, 'admin.html'), 'utf8');
 const canonicalOccupancy = fs.readFileSync(path.join(
   root,
   'supabase',
@@ -43,6 +44,35 @@ function extractFunction(source, name) {
   }
   throw new Error(`unterminated ${name}`);
 }
+
+test('availability post opens the selected booking date from list and mobile calendar', () => {
+  const opened = [];
+  let calendar = false;
+  let listDate = '2026-09-26';
+  const context = {
+    Auth: { can: () => true }, sess: { role: 'owner' },
+    calSelectedDate: '2026-09-27',
+    $: id => id === 'viewBtnCal' ? { classList: { contains: () => calendar } } : { value: listDate },
+    phDateKeyFromTimestamp: () => '2026-09-24',
+    window: { PaddleRageAvailabilityGraphic: { open: options => opened.push(options.date) } },
+  };
+  vm.createContext(context);
+  vm.runInContext(`${extractFunction(admin, 'openAvailabilityGraphic')}; this.openPost = openAvailabilityGraphic;`, context);
+  context.openPost();
+  assert.equal(opened.at(-1), '2026-09-26');
+  calendar = true;
+  context.openPost();
+  assert.equal(opened.at(-1), '2026-09-27');
+  context.openPost('2026-09-28');
+  assert.equal(opened.at(-1), '2026-09-28');
+  context.calSelectedDate = '';
+  context.openPost();
+  assert.equal(opened.at(-1), '2026-09-24', 'unselected calendar must not reuse a hidden list filter');
+  calendar = false;
+  listDate = '';
+  context.openPost();
+  assert.equal(opened.at(-1), '2026-09-24');
+});
 
 function validSnapshot() {
   return {
