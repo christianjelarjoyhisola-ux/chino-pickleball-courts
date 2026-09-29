@@ -6503,7 +6503,7 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(45, 62, 79, .1
               <input type="checkbox" id="payMethodGotymeOn" /> <span class="pm-method-label"><span class="pm-brand-mark pm-brand-mark--small pm-brand-mark--gotyme" data-payment-method="gotyme" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/gotyme.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></span><span>GoTyme → GCash</span></span>
             </label>
             <label class="pm-toggle">
-              <input type="checkbox" id="payMethodMaribankOn" /> <span class="pm-method-label"><span class="pm-brand-mark pm-brand-mark--small pm-brand-mark--maribank" data-payment-method="maribank" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/maribank.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></span><span>MariBank → GCash</span></span>
+              <input type="checkbox" id="payMethodMaribankOn" /> <span class="pm-method-label"><span class="pm-brand-mark pm-brand-mark--small pm-brand-mark--maribank" data-payment-method="maribank" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/maribank.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></span><span>MariBank</span></span>
             </label>
             <label class="pm-toggle">
               <input type="checkbox" id="payMethodPnbOn" /> <span class="pm-method-label"><span class="pm-brand-mark pm-brand-mark--small pm-brand-mark--pnb" data-payment-method="pnb" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/pnb.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></span><span>PNB</span></span>
@@ -6517,7 +6517,7 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(45, 62, 79, .1
         <!-- GCash Section -->
         <div style="margin-top:16px;padding:14px;background:var(--input);border-radius:10px;border:1px solid var(--border);">
           <div class="pm-brand-heading" style="font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--green);margin-bottom:6px;"><span class="pm-brand-mark pm-brand-mark--small pm-brand-mark--gcash" data-payment-method="gcash" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/gcash.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></span><span>Shared GCash Recipient</span></div>
-          <div style="font-size:.74rem;color:var(--muted);margin-bottom:10px;line-height:1.5">Used by GCash and every source→GCash method: BDO Pay, Maya, BPI, GoTyme, and MariBank.</div>
+          <div style="font-size:.74rem;color:var(--muted);margin-bottom:10px;line-height:1.5">Used by GCash and every source→GCash method: BDO Pay, Maya, BPI, and GoTyme.</div>
           <div class="frow" style="gap:10px;margin-bottom:10px;">
             <div class="fg" style="margin:0;flex:1">
               <label class="fl">GCash Number</label>
@@ -6546,7 +6546,7 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(45, 62, 79, .1
         <!-- Shared receipt identity printed by GCash QR transfers -->
         <div style="margin-top:12px;padding:14px;background:var(--input);border-radius:10px;border:1px solid var(--border);">
           <div class="pm-brand-heading" style="font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#4a90d9;margin-bottom:7px;"><span class="pm-brand-mark pm-brand-mark--small pm-brand-mark--gcash" data-payment-method="gcash" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/gcash.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></span><span>Advanced GCash QR Receipt Verification</span></div>
-          <div style="font-size:.74rem;color:var(--muted);margin-bottom:10px;line-height:1.5">BDO Pay, BPI, GoTyme, and MariBank share this GCash destination token. BDO Pay and BPI use the receipt alias below; GoTyme and MariBank use the GCash account name above.</div>
+          <div style="font-size:.74rem;color:var(--muted);margin-bottom:10px;line-height:1.5">BDO Pay, BPI, and GoTyme share this GCash destination token. BDO Pay and BPI use the receipt alias below; GoTyme uses the GCash account name above.</div>
           <div class="frow" style="gap:10px;margin-bottom:0;">
             <div class="fg" style="margin:0;flex:1">
               <label class="fl">GCash QR Receipt Alias</label>
@@ -6564,11 +6564,6 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(45, 62, 79, .1
           <div class="pm-brand-heading" style="font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--yellow);margin-bottom:7px;"><span class="pm-brand-mark pm-brand-mark--small pm-brand-mark--gotyme" data-payment-method="gotyme" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/gotyme.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></span><span>GoTyme → GCash</span></div>
           <div style="font-size:.78rem;color:var(--muted);line-height:1.55">Players pay from GoTyme to the shared GCash number/QR above. Its receipt parser still validates GoTyme-specific references and receipt fields.</div>
         </div>
-        <div style="margin-top:12px;padding:14px;background:var(--input);border-radius:10px;border:1px solid var(--border);">
-          <div class="pm-brand-heading" style="font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--yellow);margin-bottom:7px;"><span class="pm-brand-mark pm-brand-mark--small pm-brand-mark--maribank" data-payment-method="maribank" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/maribank.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></span><span>MariBank → GCash</span></div>
-          <div style="font-size:.78rem;color:var(--muted);line-height:1.55">Players pay from MariBank to the shared GCash number/QR above. Its receipt parser validates MariBank-specific references and receipt fields.</div>
-        </div>
-
         <!-- Security Bank account transfer -->
         <div style="margin-top:12px;padding:16px;background:var(--input);border-radius:12px;border:1px solid var(--border)">
           <div class="pm-brand-heading" style="font-weight:800;margin-bottom:12px;color:var(--text)"><span class="pm-brand-mark pm-brand-mark--small pm-brand-mark--securitybank" data-payment-method="securitybank" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/security-bank.svg" width="32" height="32" alt="" decoding="async" /></span><span>Security Bank</span></div>
@@ -6587,6 +6582,25 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(45, 62, 79, .1
             </div>
           </div>
           <p style="font-size:.78rem;line-height:1.6;color:var(--muted);margin:0">Customers transfer to this Security Bank account and upload a receipt. Matching GCash bank-transfer receipts can confirm automatically. Other formats, unclear details, and mismatches stay pending for your review.</p>
+        </div>
+        <!-- MariBank account transfer -->
+        <div style="margin-top:12px;padding:16px;background:var(--input);border-radius:12px;border:1px solid var(--border)">
+          <div class="pm-brand-heading" style="font-weight:800;margin-bottom:12px;color:var(--text)"><span class="pm-brand-mark pm-brand-mark--small pm-brand-mark--maribank" data-payment-method="maribank" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/maribank.png" width="32" height="32" alt="" decoding="async" /></span><span>MariBank</span></div>
+          <div class="frow" style="gap:12px">
+            <div class="fg" style="flex:1"><label class="fl" for="maribankNumInput">Account number</label><input type="text" class="fi" id="maribankNumInput" placeholder="Full account number, including leading zeroes" inputmode="numeric" autocomplete="off" maxlength="40" /><small class="muted">Use the full account number. Masked numbers keep receipts pending for owner review.</small></div>
+            <div class="fg" style="flex:1"><label class="fl" for="maribankNameInput">Account name</label><input type="text" class="fi" id="maribankNameInput" placeholder="Enter account name" autocomplete="off" maxlength="150" /></div>
+          </div>
+          <div class="fg" style="margin:0 0 14px">
+            <label class="fl" for="maribankQrFile">MariBank QR code image</label>
+            <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap">
+              <div id="maribankQrPreviewWrap" style="display:none">
+                <img id="maribankQrPreview" alt="MariBank QR preview" style="width:140px;height:140px;object-fit:contain;border-radius:10px;border:1px solid var(--border);background:#fff;padding:6px" />
+                <button type="button" class="btn btn-sm btn-ghost" onclick="removeQr('maribank')" style="display:block;margin-top:8px">Remove QR</button>
+              </div>
+              <div><input type="file" class="fi" id="maribankQrFile" accept="image/png,image/jpeg,image/webp" onchange="handleQrUpload('maribank',event)" aria-describedby="maribankQrHint" /><p id="maribankQrHint" style="font-size:.74rem;color:var(--muted);line-height:1.5;margin:6px 0 0">Upload a clear PNG, JPG, or WebP, up to 5 MB. Saves automatically.</p></div>
+            </div>
+          </div>
+          <p style="font-size:.78rem;line-height:1.6;color:var(--muted);margin:0">Customers transfer to this MariBank account and upload a receipt. Receipts stay pending for owner review.</p>
         </div>
         <!-- PNB Section -->
         <div style="margin-top:12px;padding:14px;background:var(--input);border-radius:10px;border:1px solid var(--border);">
@@ -11142,7 +11156,7 @@ async function restoreDeletedBooking(id, ref) {
 
 /* ── CALENDAR VIEW ── */
 function paymentMethodLabel(m) {
-  return ({ gcash: 'GCash', bdopay: 'BDO Pay', maya: 'Maya', bpi: 'BPI', gotyme: 'GoTyme → GCash', maribank: 'MariBank → GCash', pnb: 'PNB', securitybank: 'Security Bank', cash: 'Cash' }[String(m || '').toLowerCase()] || (m || 'Cash'));
+  return ({ gcash: 'GCash', bdopay: 'BDO Pay', maya: 'Maya', bpi: 'BPI', gotyme: 'GoTyme → GCash', maribank: 'MariBank', pnb: 'PNB', securitybank: 'Security Bank', cash: 'Cash' }[String(m || '').toLowerCase()] || (m || 'Cash'));
 }
 
 function paymentMethodBrandMarkHtml(method, modifier = 'pm-brand-mark--inline') {
@@ -16061,6 +16075,11 @@ async function renderPaymentSettings() {
     $('gcashQrPreview').src = gcashQr;
     $('gcashQrPreviewWrap').style.display = '';
   }
+  $('maribankNumInput').value = settings.maribank_merchant_number || '';
+  $('maribankNameInput').value = settings.maribank_merchant_name || '';
+  const maribankQr = settings.maribank_qr_image || '';
+  $('maribankQrPreview').src = maribankQr;
+  $('maribankQrPreviewWrap').style.display = maribankQr ? '' : 'none';
   const securitybankQr = settings.securitybank_qr_image || '';
   $('securitybankQrPreview').src = securitybankQr;
   $('securitybankQrPreviewWrap').style.display = securitybankQr ? '' : 'none';
@@ -16070,7 +16089,7 @@ async function renderPaymentSettings() {
     $('pnbQrPreviewWrap').style.display = '';
   }
 
-  const summaryParts = [`Methods: ${(cashOn?'Cash ':'')}${(gcashOn?'GCash ':'')}${(bdopayOn?'BDO Pay ':'')}${(mayaOn?'Maya ':'')}${(bpiOn?'BPI ':'')}${(gotymeOn?'GoTyme→GCash ':'')}${(maribankOn?'MariBank→GCash ':'')}${(pnbOn?'PNB ':'')}${(securitybankOn?'Security Bank':'')}`.trim() || 'none'];
+  const summaryParts = [`Methods: ${(cashOn?'Cash ':'')}${(gcashOn?'GCash ':'')}${(bdopayOn?'BDO Pay ':'')}${(mayaOn?'Maya ':'')}${(bpiOn?'BPI ':'')}${(gotymeOn?'GoTyme→GCash ':'')}${(maribankOn?'MariBank ':'')}${(pnbOn?'PNB ':'')}${(securitybankOn?'Security Bank':'')}`.trim() || 'none'];
   $('paySettingsSummary').textContent = summaryParts.join(' • ');
 
   // Platform remittance summary
@@ -17149,7 +17168,7 @@ async function removePlatformQr() {
 
 async function removeQr(type) {
   if (!Auth.can('payments', sess.role)) { toast('You do not have access to edit payment settings.', 'err'); return; }
-  if (!['gcash', 'pnb', 'securitybank'].includes(type)) return;
+  if (!['gcash', 'pnb', 'securitybank', 'maribank'].includes(type)) return;
   const key = `${type}_qr_image`;
   const previewId = `${type}QrPreview`;
   const wrapId = `${type}QrPreviewWrap`;
@@ -17167,10 +17186,10 @@ async function removeQr(type) {
 
 function handleQrUpload(type, e) {
   if (!Auth.can('payments', sess.role)) { toast('You do not have access to edit payment settings.', 'err'); e.target.value = ''; return; }
-  if (!['gcash', 'pnb', 'securitybank'].includes(type)) { e.target.value = ''; return; }
+  if (!['gcash', 'pnb', 'securitybank', 'maribank'].includes(type)) { e.target.value = ''; return; }
   const file = e.target.files[0];
   if (!file) return;
-  if (type === 'securitybank' && (!['image/png','image/jpeg','image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024)) {
+  if (['securitybank', 'maribank'].includes(type) && (!['image/png','image/jpeg','image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024)) {
     toast('Choose a PNG, JPG, or WebP QR image up to 5 MB.', 'err'); e.target.value = ''; return;
   }
   const reader = new FileReader();
@@ -17208,6 +17227,8 @@ async function savePaymentSettings() {
   const gcashQrReceiptName = $('gcashQrReceiptNameInput')?.value.trim() || '';
   const gcashQrReceiptToken = $('gcashQrReceiptTokenInput')?.value.trim() || '';
   const pnbNum = $('pnbNumInput')?.value.trim() || '';
+  const maribankNum = $('maribankNumInput')?.value.trim() || '';
+  const maribankName = $('maribankNameInput')?.value.trim() || '';
   const securitybankNum = $('securitybankNumInput')?.value.trim() || '';
   const pnbName = $('pnbNameInput')?.value.trim() || '';
   const securitybankName = $('securitybankNameInput')?.value.trim() || '';
@@ -17218,12 +17239,16 @@ async function savePaymentSettings() {
     toast('Enable at least one payment method.', 'err');
     return;
   }
-  if ((gcashOn || bdopayOn || mayaOn || bpiOn || gotymeOn || maribankOn) && (!gcashName || (!gcashNum && !gcashQrSrc))) {
+  if ((gcashOn || bdopayOn || mayaOn || bpiOn || gotymeOn) && (!gcashName || (!gcashNum && !gcashQrSrc))) {
     toast('Add the shared GCash recipient name and number or QR before enabling a GCash-routed method.', 'err');
     return;
   }
   if ((bdopayOn || bpiOn) && (!gcashQrReceiptName || !gcashQrReceiptToken)) {
     toast('Add the GCash QR receipt alias and destination token before enabling BDO Pay or BPI.', 'err');
+    return;
+  }
+  if (maribankOn && (!maribankName || !maribankNum)) {
+    toast('Add the MariBank account name and account number before enabling it.', 'err');
     return;
   }
   if (securitybankOn && (!securitybankName || !securitybankNum)) {
@@ -17260,6 +17285,8 @@ async function savePaymentSettings() {
     await DB.saveSetting('bpi_receipt_recipient_name', gcashQrReceiptName);
     await DB.saveSetting('pnb_merchant_number', pnbNum);
     await DB.saveSetting('securitybank_merchant_number', securitybankNum);
+    await DB.saveSetting('maribank_merchant_number', maribankNum);
+    await DB.saveSetting('maribank_merchant_name', maribankName);
     await DB.saveSetting('pnb_merchant_name', pnbName);
     await DB.saveSetting('securitybank_merchant_name', securitybankName);
 

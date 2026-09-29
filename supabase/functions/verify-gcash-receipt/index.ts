@@ -55,12 +55,18 @@ import { readReceiptTransferStatus } from "../_shared/receipt-providers/transfer
 import { createReceiptReadingSession, gcashLayoutFamily } from "../_shared/receipt-reading-session.ts";
 import type { ReceiptVerificationContext } from "../_shared/receipt-providers/bank-to-gcash.ts";
 import {
-  isDedicatedReceiptProvider,
+  isDedicatedReceiptProvider as isLegacyDedicatedReceiptProvider,
   parseProviderReceipt,
   type ProviderReceiptParse,
   type ProviderReceiptVerificationEvidence,
   verifyProviderReceipt,
 } from "../_shared/receipt-providers/index.ts";
+// The legacy MariBank parser verifies transfers TO GCash, not this bank account.
+// Direct MariBank transfers must remain owner-reviewed.
+function isDedicatedReceiptProvider(provider: string) {
+  return provider !== "maribank" && isLegacyDedicatedReceiptProvider(provider);
+}
+
 import {
   detectReceiptImageContentType,
   googleVisionOcr,
@@ -719,7 +725,10 @@ function expectedMerchantForProvider(
         settings.gcash_merchant_name || "",
     };
   }
-  if (provider === "gotyme" || provider === "maribank") {
+  if (provider === "maribank") {
+    return { number: settings.maribank_merchant_number || "", name: settings.maribank_merchant_name || "" };
+  }
+  if (provider === "gotyme") {
     // Both bank routes are transfers to the configured GCash destination.
     // Provider-specific sender settings must never weaken receiver matching.
     return {

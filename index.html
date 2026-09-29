@@ -3915,8 +3915,8 @@ try {
               </div>
               <div class="pay-opt" id="payOptMaribank" data-m="maribank" role="button" tabindex="0" aria-pressed="false" onkeydown="paymentOptionKeydown(event)" onclick="pickPay('maribank')">
                 <div class="pay-ic pm-brand-mark pm-brand-mark--picker pm-brand-mark--maribank" data-payment-method="maribank" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/maribank.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></div>
-                <div class="pay-lb">MariBank → GCash</div>
-                <div class="pay-sub">Pay from MariBank</div>
+                <div class="pay-lb">MariBank</div>
+                <div class="pay-sub">Bank transfer to MariBank</div>
               </div>
               <div class="pay-opt" id="payOptPnb" data-m="pnb" role="button" tabindex="0" aria-pressed="false" onkeydown="paymentOptionKeydown(event)" onclick="pickPay('pnb')">
                 <div class="pay-ic pm-brand-mark pm-brand-mark--picker pm-brand-mark--pnb" data-payment-method="pnb" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/pnb.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></div>
@@ -3994,7 +3994,7 @@ try {
             </div>
             <div class="bpay-recipient">
               <div class="bpay-qr-wrap">
-                <img id="gcashQrImg" class="qr-img bpay-qr qr-clickable" alt="GCash QR Code" style="display:none" onclick="openQrZoomFromImg(this,'GCash QR')" />
+                <img id="gcashQrImg" class="qr-img bpay-qr qr-clickable" alt="GCash QR Code" style="display:none" onclick="openQrZoomFromImg(this,this.alt)" />
                 <div id="gcashQrPlaceholder" class="bpay-qr-placeholder">
                   <span class="pm-brand-mark pm-brand-mark--gcash" data-payment-method="gcash" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/gcash.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></span>
                   <span style="font-size:.74rem">QR not uploaded</span>
@@ -5654,7 +5654,7 @@ function isDigitalPayMethod(method) {
 }
 
 function paymentMethodName(method) {
-  return ({ gcash: 'GCash', bdopay: 'BDO Pay', maya: 'Maya', bpi: 'BPI', gotyme: 'GoTyme → GCash', maribank: 'MariBank → GCash', pnb: 'PNB', securitybank: 'Security Bank', cash: 'Cash' }[String(method || '').toLowerCase()] || 'Payment');
+  return ({ gcash: 'GCash', bdopay: 'BDO Pay', maya: 'Maya', bpi: 'BPI', gotyme: 'GoTyme → GCash', maribank: 'MariBank', pnb: 'PNB', securitybank: 'Security Bank', cash: 'Cash' }[String(method || '').toLowerCase()] || 'Payment');
 }
 
 function paymentMethodBrandMarkHtml(method, modifier = 'pm-brand-mark--inline') {
@@ -5677,7 +5677,7 @@ function renderPaymentMethodBrandLabel(element, method, label = paymentMethodNam
 }
 
 function paymentReceiverKey(method) {
-  return ['bdopay', 'maya', 'bpi', 'gotyme', 'maribank'].includes(String(method || '').toLowerCase()) ? 'gcash' : method;
+  return ['bdopay', 'maya', 'bpi', 'gotyme'].includes(String(method || '').toLowerCase()) ? 'gcash' : method;
 }
 let paymentWatch = { ref: null, timer: null, tries: 0 };
 
@@ -6073,9 +6073,9 @@ function applyPaymentSettings(settings) {
       qrImage: settings.gcash_qr_image || '',
     },
     maribank: {
-      number: settings.gcash_merchant_number || '',
-      name: settings.gcash_merchant_name || sharedMerchantName,
-      qrImage: settings.gcash_qr_image || '',
+      number: settings.maribank_merchant_number || '',
+      name: settings.maribank_merchant_name || '',
+      qrImage: settings.maribank_qr_image || '',
     },
     securitybank: { number: settings.securitybank_merchant_number || '', name: settings.securitybank_merchant_name || '', qrImage: settings.securitybank_qr_image || '' },
     pnb: {
@@ -8315,7 +8315,7 @@ function pickPay(m) {
         'Your receipt stays pending for court-owner review.',
       ],
       gotyme: 'Pay from GoTyme to the GCash recipient shown. Clean receipts can confirm automatically; anything doubtful stays pending for owner review.',
-      maribank: 'Pay from MariBank to the GCash recipient shown. Clean receipts can confirm automatically; anything doubtful stays pending for owner review.',
+      maribank: 'Transfer to the MariBank account shown and upload the complete receipt for owner review.',
       pnb: 'Use the configured PNB payment details. Your receipt stays pending for court-owner review.',
       securitybank: 'Transfer to the Security Bank account shown. Matching GCash bank-transfer receipts can confirm automatically; anything uncertain stays pending for owner review.',
       cash: 'Cash bookings are paid at the front desk and confirmed by staff.',
@@ -8411,13 +8411,21 @@ function syncGcashSharedPanel(method) {
       help: 'GoTyme → GCash. Clean receipts can confirm automatically; anything doubtful stays pending for owner review.',
     },
     maribank: {
-      header: 'MariBank → GCash',
-      title: 'Send from MariBank to this GCash account',
-      guide: ['Open the QR in MariBank.', 'Pay the exact amount.', 'Save the transaction reference.', 'Upload the MariBank receipt.'],
-      help: 'MariBank → GCash. Clean receipts can confirm automatically; anything doubtful stays pending for owner review.',
+      header: 'MariBank',
+      title: 'Send Payment to this MariBank account',
+      guide: ['Scan the MariBank QR or transfer to the account shown.', 'Pay the exact amount.', 'Save the transaction reference.', 'Upload the complete transfer receipt.'],
+      help: 'Transfer to MariBank. Upload the complete receipt for owner review.',
     },
   };
   const profile = profiles[method] || profiles.gcash;
+  const receiver = paymentReceiverSettings[paymentReceiverKey(method)] || paymentReceiverSettings.gcash;
+  $('gcMerchantNumber').textContent = receiver.number || 'Scan QR';
+  $('gcMerchantName').textContent = method === 'maribank' ? receiver.name : (maskGcashOwnerName(receiver.name) || 'Court owner account');
+  const qr = $('gcashQrImg');
+  qr.src = receiver.qrImage || '';
+  qr.alt = method === 'maribank' ? 'MariBank payment QR code' : 'GCash payment QR code';
+  qr.style.display = receiver.qrImage ? '' : 'none';
+  $('gcashQrPlaceholder').style.display = receiver.qrImage ? 'none' : 'flex';
   const header = $('gcashBox')?.querySelector('.gc-header-lbl');
   if (header) header.textContent = profile.header;
   const title = $('gcashBox')?.querySelector('.bpay-send-title');
@@ -8437,7 +8445,7 @@ function copyPaymentNumber(method = 'gcash') {
     maya: { id: 'gcMerchantNumber', label: 'Maya' },
     bpi: { id: 'gcMerchantNumber', label: 'BPI' },
     gotyme: { id: 'gcMerchantNumber', label: 'GCash recipient for GoTyme' },
-    maribank: { id: 'gcMerchantNumber', label: 'GCash recipient for MariBank' },
+    maribank: { id: 'gcMerchantNumber', label: 'MariBank' },
     pnb: { id: 'pnMerchantNumber', label: 'PNB' },
     securitybank: { id: 'sbMerchantNumber', label: 'Security Bank' },
   };
@@ -10384,7 +10392,7 @@ function hostBalancePaymentMethodNote(method) {
     maya: 'Use Maya and enter the Maya Reference ID shown on the successful receipt.',
     bpi: 'Use BPI and enter the Confirmation No., not the Transaction Ref. No.',
     gotyme: 'Pay from GoTyme to the GCash recipient and enter the complete transaction reference.',
-    maribank: 'Pay from MariBank to the GCash recipient and enter the complete transaction reference.',
+    maribank: 'Transfer to the MariBank account shown and enter the complete transaction reference.',
     pnb: 'Use the configured PNB payment details and upload the complete successful receipt.',
     securitybank: 'Use the configured Security Bank payment details and upload the complete successful receipt.',
   })[method] || 'Use a new transaction and upload its complete successful receipt.';
@@ -11356,7 +11364,7 @@ async function openPlaySignup(courtId, date, h, courtName) {
     paymentMethods.bdopay  ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'bdopay' ? 'on' : ''}" data-m="bdopay" role="button" tabindex="0" aria-pressed="${defaultPayMethod === 'bdopay' ? 'true' : 'false'}" onkeydown="paymentOptionKeydown(event)"  onclick="opPickPay('bdopay')">${paymentMethodBrandMarkHtml('bdopay', 'po-ico pm-brand-mark--compact')}<span class="po-lbl">BDO Pay</span><span class="po-sub">InstaPay to GCash QR</span></div>` : '',
     paymentMethods.maya    ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'maya' ? 'on' : ''}" data-m="maya" role="button" tabindex="0" aria-pressed="${defaultPayMethod === 'maya' ? 'true' : 'false'}" onkeydown="paymentOptionKeydown(event)"    onclick="opPickPay('maya', { showGuide: true })">${paymentMethodBrandMarkHtml('maya', 'po-ico pm-brand-mark--compact')}<span class="po-lbl">Maya</span><span class="po-sub">QRPh to GCash</span></div>` : '',
     paymentMethods.gotyme  ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'gotyme' ? 'on' : ''}" data-m="gotyme" role="button" tabindex="0" aria-pressed="${defaultPayMethod === 'gotyme' ? 'true' : 'false'}" onkeydown="paymentOptionKeydown(event)"  onclick="opPickPay('gotyme')">${paymentMethodBrandMarkHtml('gotyme', 'po-ico pm-brand-mark--compact') || '<span class="po-ico">GT</span>'}<span class="po-lbl">GoTyme → GCash</span><span class="po-sub">Pay from GoTyme</span></div>` : '',
-    paymentMethods.maribank ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'maribank' ? 'on' : ''}" data-m="maribank" role="button" tabindex="0" aria-pressed="${defaultPayMethod === 'maribank' ? 'true' : 'false'}" onkeydown="paymentOptionKeydown(event)" onclick="opPickPay('maribank')">${paymentMethodBrandMarkHtml('maribank', 'po-ico pm-brand-mark--compact') || '<span class="po-ico">MB</span>'}<span class="po-lbl">MariBank → GCash</span><span class="po-sub">Pay from MariBank</span></div>` : '',
+    paymentMethods.maribank ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'maribank' ? 'on' : ''}" data-m="maribank" role="button" tabindex="0" aria-pressed="${defaultPayMethod === 'maribank' ? 'true' : 'false'}" onkeydown="paymentOptionKeydown(event)" onclick="opPickPay('maribank')">${paymentMethodBrandMarkHtml('maribank', 'po-ico pm-brand-mark--compact') || '<span class="po-ico">MB</span>'}<span class="po-lbl">MariBank</span><span class="po-sub">Bank transfer to MariBank</span></div>` : '',
     paymentMethods.pnb     ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'pnb' ? 'on' : ''}" data-m="pnb" role="button" tabindex="0" aria-pressed="${defaultPayMethod === 'pnb' ? 'true' : 'false'}" onkeydown="paymentOptionKeydown(event)"     onclick="opPickPay('pnb')">${paymentMethodBrandMarkHtml('pnb', 'po-ico pm-brand-mark--compact')}<span class="po-lbl">PNB</span><span class="po-sub">Scan QR · enter ref #</span></div>` : '',
     paymentMethods.securitybank     ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'securitybank' ? 'on' : ''}" data-m="securitybank" role="button" tabindex="0" aria-pressed="${defaultPayMethod === 'securitybank' ? 'true' : 'false'}" onkeydown="paymentOptionKeydown(event)"     onclick="opPickPay('securitybank')">${paymentMethodBrandMarkHtml('securitybank', 'po-ico pm-brand-mark--compact')}<span class="po-lbl">Security Bank</span><span class="po-sub">Bank transfer</span></div>` : '',
     paymentMethods.cash    ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'cash' ? 'on' : ''}" data-m="cash" role="button" tabindex="0" aria-pressed="${defaultPayMethod === 'cash' ? 'true' : 'false'}" onkeydown="paymentOptionKeydown(event)"    onclick="opPickPay('cash')">${paymentMethodBrandMarkHtml('cash', 'po-ico pm-brand-mark--compact')}<span class="po-lbl">Cash</span><span class="po-sub">Pay at front desk</span></div>` : '',
@@ -11481,7 +11489,7 @@ function opPickPay(method, options = {}) {
       maya: { icon: paymentMethodBrandMarkHtml('maya', 'pm-brand-mark--small'), label: 'Maya', receiver: paymentReceiverSettings.gcash },
       bpi: { icon: paymentMethodBrandMarkHtml('bpi', 'pm-brand-mark--small'), label: 'BPI', receiver: paymentReceiverSettings.gcash },
       gotyme: { icon: paymentMethodBrandMarkHtml('gotyme', 'pm-brand-mark--small') || 'GT', label: 'GoTyme → GCash', receiver: paymentReceiverSettings.gcash },
-      maribank: { icon: paymentMethodBrandMarkHtml('maribank', 'pm-brand-mark--small') || 'MB', label: 'MariBank → GCash', receiver: paymentReceiverSettings.gcash },
+      maribank: { icon: paymentMethodBrandMarkHtml('maribank', 'pm-brand-mark--small') || 'MB', label: 'MariBank', receiver: paymentReceiverSettings.maribank },
       pnb: { icon: paymentMethodBrandMarkHtml('pnb', 'pm-brand-mark--small'), label: 'PNB', receiver: paymentReceiverSettings.pnb },
       securitybank: { icon: paymentMethodBrandMarkHtml('securitybank', 'pm-brand-mark--small'), label: 'Security Bank', receiver: paymentReceiverSettings.securitybank },
     }[method];
@@ -11494,7 +11502,7 @@ function opPickPay(method, options = {}) {
         ? 'Pay from BPI to this GCash/G-Xchange recipient. Enter the BPI Confirmation No.; the receipt stays pending for court-owner review.'
       : method === 'gcash'
         ? 'Pay from GCash to this GCash recipient. Receipts that pass every automated check confirm automatically; otherwise they stay pending for court-owner review.'
-        : ['pnb', 'securitybank'].includes(method)
+        : ['pnb', 'securitybank', 'maribank'].includes(method)
           ? (method === 'securitybank' ? 'Matching GCash bank-transfer receipts can confirm automatically. Any issue stays pending for owner review.' : `Use the configured ${meta.label} recipient. Your receipt stays pending for court-owner review.`)
           : `Pay using ${meta.label}. Receipts that pass every automated check confirm automatically; otherwise they stay pending for court-owner review.`;
     const displayReceiverName = paymentReceiverKey(method) === 'gcash'

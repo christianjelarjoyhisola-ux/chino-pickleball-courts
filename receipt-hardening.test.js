@@ -428,19 +428,19 @@ test('receipt verification preserves authorization, resource, and settlement bou
   );
 });
 
-test('GoTyme and MariBank use dedicated source methods with the shared GCash destination', () => {
+test('GoTyme routes to GCash while MariBank has its own destination', () => {
   const page = read('index.html');
   const admin = read('admin.html');
   const client = read('supabase-config.js');
 
   assert.match(page, /id="payOptGotyme"[\s\S]*?GoTyme → GCash/);
-  assert.match(page, /id="payOptMaribank"[\s\S]*?MariBank → GCash/);
-  assert.match(page, /\['bdopay', 'maya', 'bpi', 'gotyme', 'maribank'\][\s\S]*?\? 'gcash'/);
+  assert.match(page, /id="payOptMaribank"[\s\S]*?MariBank/);
+  assert.match(page, /\['bdopay', 'maya', 'bpi', 'gotyme'\][\s\S]*?\? 'gcash'/);
   assert.match(page, /payment_method_maribank === '1' && receiverReady\('maribank'\)/);
   assert.doesNotMatch(page, /id="gotymeBox"|id="gotymeQrPlaceholder"/);
 
   assert.match(admin, /id="payMethodGotymeOn"[\s\S]{0,500}?GoTyme → GCash/);
-  assert.match(admin, /id="payMethodMaribankOn"[\s\S]{0,500}?MariBank → GCash/);
+  assert.match(admin, /id="payMethodMaribankOn"[\s\S]{0,500}?MariBank/);
   assert.match(admin, /saveSetting\('payment_method_maribank'/);
   assert.doesNotMatch(admin, /id="gotymeNumInput"|id="gotymeNameInput"|saveSetting\('gotyme_merchant_/);
 

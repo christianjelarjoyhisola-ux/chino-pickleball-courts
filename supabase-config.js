@@ -623,6 +623,7 @@ function receivedAccountForBooking(b = {}) {
   if (explicit) return explicit;
 
   if (method === 'cash') return 'cash';
+  if (method === 'maribank') return 'maribank';
   return 'gcash';
 }
 
