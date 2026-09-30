@@ -81,6 +81,10 @@ async function serveBackend(request, url) {
       await response.body?.cancel();
       return new Response(JSON.stringify({ message: 'Unexpected backend redirect' }), { status: 502, headers });
     }
+    if (!response.ok && path === '/rest/v1/accounts') {
+      const failure = await response.clone().json().catch(() => ({}));
+      console.error('Account verification upstream', response.status, String(failure.code || ''), String(failure.message || '').slice(0, 300));
+    }
     const responseHeaders = new Headers(headers);
     for (const name of ['Content-Type', 'Content-Range', 'Range-Unit', 'Preference-Applied', 'WWW-Authenticate', 'Retry-After']) {
       const value = response.headers.get(name);

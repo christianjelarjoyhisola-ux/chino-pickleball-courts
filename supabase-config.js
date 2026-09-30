@@ -8091,7 +8091,7 @@ window.Auth = {
       .maybeSingle();
 
     if (accountErr) {
-      console.error('refreshSessionFromAuth account lookup:', accountErr);
+      console.error('refreshSessionFromAuth account lookup:', JSON.stringify({ code: accountErr.code, message: accountErr.message, details: accountErr.details }));
       this._lastLoginMessage = 'Could not verify your account status right now. Please try again in a moment.';
       sessionStorage.removeItem('pb_session');
       localStorage.removeItem('pb_session');
