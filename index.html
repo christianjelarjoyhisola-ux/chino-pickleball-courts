@@ -11134,13 +11134,35 @@ function handleSplashBackgroundTap(event) {
 // Lock scroll while splash is showing
 document.body.style.overflow = 'hidden';
 
+function showCourtLoadingRecovery() {
+  const grid = $('courtsGrid');
+  if (!grid) return;
+  grid.innerHTML = '<div role="status" style="grid-column:1/-1;text-align:center;padding:40px 16px"><h2>Courts are taking longer to load</h2><p>Please check your connection and try again.</p><button type="button" class="btn btn-p" onclick="window.location.reload()">Retry loading courts</button></div>';
+}
+
+async function initializePublicCourts() {
+  // A slow or failed request must not leave an endless, unexplained spinner.
+  const loadingTimer = setTimeout(showCourtLoadingRecovery, 15000);
+  try {
+    if (!(await refreshHostBookingSession())) return false;
+    applyHostChrome();
+    // renderCourts loads settings and availability concurrently. Housekeeping
+    // must never delay the public court list or fetch settings a second time.
+    await renderCourts();
+    void expireStaleVerifyingBookings().catch(err => console.warn('Booking cleanup deferred:', err));
+    return true;
+  } catch (err) {
+    console.error('Court loading failed:', err);
+    showCourtLoadingRecovery();
+    return false;
+  } finally {
+    clearTimeout(loadingTimer);
+  }
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   initDark();
-  if (!(await refreshHostBookingSession())) return;
-  applyHostChrome();
-  await loadOperatingHours();
-  await expireStaleVerifyingBookings();
-  await renderCourts();
+  if (!(await initializePublicCourts())) return;
   initGuestResumePersistence();
   await maybeResumeGuestBooking();
   await maybeOpenHostSessionLink();
