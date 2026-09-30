@@ -7584,13 +7584,7 @@ window.DB = {
         const earnedAt = booking.bookingFeeEarnedAt || booking.booking_fee_earned_at;
         const transferredOut = booking.paymentReassignedToRef || booking.payment_reassigned_to_ref;
         const bookingStatus = String(booking.status || '').toLowerCase();
-        const paymentStatus = String(booking.paymentStatus || booking.payment_status || '').toLowerCase();
-        const createdVia = String(booking.createdVia || booking.created_via || '').toLowerCase();
-        const releasedBeforeRemittance = bookingStatus === 'cancelled'
-          && (
-            ['rejected', 'failed', 'unpaid'].includes(paymentStatus)
-            || createdVia === 'admin'
-          );
+        const releasedBeforeRemittance = bookingStatus === 'cancelled';
         const eligible = booking.bookingFeeLedgerEligibleSnapshot
           ?? booking.booking_fee_ledger_eligible_snapshot;
         const amount = Number(

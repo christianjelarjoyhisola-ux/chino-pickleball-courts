@@ -187,7 +187,7 @@ test('cancelled owner-created manual bookings receive an audited pre-remittance 
   assert.doesNotMatch(cancelledAdminReleaseMigrationSource, /booking_fee_earned_at\s*=\s*null/i);
 });
 
-test('local remittance preview keeps active manual bookings billable and releases them after cancellation', async () => {
+test('local remittance preview excludes all cancellations including paid customer bookings', async () => {
   const common = {
     total: 400,
     slots: [18],
@@ -208,9 +208,9 @@ test('local remittance preview keeps active manual bookings billable and release
     { ...common, ref: 'CANCELLED-NO-PAYMENT', status: 'cancelled', paymentStatus: 'rejected' },
     { ...common, ref: 'PB-CANCELLED-CUSTOMER-PAID', status: 'cancelled', createdVia: 'customer' },
   ]);
-  assert.equal(dashboard.accumulated.booking_rows_count, 2);
-  assert.equal(dashboard.accumulated.billable_hours, 2);
-  assert.equal(dashboard.accumulated.amount, 30);
+  assert.equal(dashboard.accumulated.booking_rows_count, 1);
+  assert.equal(dashboard.accumulated.billable_hours, 1);
+  assert.equal(dashboard.accumulated.amount, 15);
 });
 
 test('the accumulating dashboard derives additive court totals from its authoritative unclaimed snapshot', () => {
