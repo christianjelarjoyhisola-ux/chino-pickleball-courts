@@ -59,10 +59,20 @@ async function _pbFetchWithTimeout(input, init = {}, timeoutMs = PB_REQUEST_TIME
   }
 }
 
+function _pbBackendEndpoint(input) {
+  const target = new URL(String(input));
+  const local = ['localhost', '127.0.0.1', '::1'].includes(location.hostname);
+  if (!local && target.origin === SUPABASE_URL &&
+      (target.pathname.startsWith('/auth/v1/') || target.pathname.startsWith('/rest/v1/'))) {
+    return '/api/backend' + target.pathname + target.search;
+  }
+  return input;
+}
+
 // Initialize Supabase client (uses UMD global loaded from CDN). A bounded
 // fetch prevents embedded browsers from leaving the booking button hanging.
 const _sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  global: { fetch: (input, init) => _pbFetchWithTimeout(input, init) },
+  global: { fetch: (input, init) => _pbFetchWithTimeout(_pbBackendEndpoint(input), init) },
 });
 
 // Public browsing must not wait for a persisted login or cross-tab auth lock.

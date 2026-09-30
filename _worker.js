@@ -48,9 +48,58 @@ async function servePublicData(request, url) {
   }
 }
 
+// Transport only: Supabase still verifies the caller JWT and enforces all RLS.
+// No service credentials, cookie forwarding, token storage, or auth bypass.
+async function serveBackend(request, url) {
+  const path = url.pathname.slice('/api/backend'.length);
+  const authMethods = { token: ['POST'], user: ['GET', 'PUT'], logout: ['POST'], recover: ['POST'], signup: ['POST'], verify: ['POST'], resend: ['POST'] };
+  const authRoute = path.match(/^\/auth\/v1\/([a-z]+)$/)?.[1];
+  const restRoute = /^\/rest\/v1\/(?:rpc\/)?[a-zA-Z0-9_]+$/.test(path);
+  const headers = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
+  const origin = request.headers.get('Origin');
+  if (origin && origin !== url.origin) return new Response(JSON.stringify({ message: 'Origin not allowed' }), { status: 403, headers });
+  if (!(authRoute && authMethods[authRoute]?.includes(request.method)) &&
+      !(restRoute && ['GET', 'HEAD', 'POST', 'PATCH', 'PUT', 'DELETE'].includes(request.method))) {
+    return new Response(JSON.stringify({ message: 'Endpoint not allowed' }), { status: 404, headers });
+  }
+  const upstreamHeaders = new Headers({ apikey: PUBLIC_ANON_KEY, Authorization: request.headers.get('Authorization') || 'Bearer ' + PUBLIC_ANON_KEY });
+  for (const name of ['Content-Type', 'Accept', 'Prefer', 'Range', 'Range-Unit', 'Accept-Profile', 'Content-Profile', 'X-Supabase-Api-Version']) {
+    const value = request.headers.get(name);
+    if (value) upstreamHeaders.set(name, value);
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 40000);
+  try {
+    const response = await fetch('https://wskzptxekldhsxluhgos.supabase.co' + path + url.search, {
+      method: request.method,
+      headers: upstreamHeaders,
+      body: ['GET', 'HEAD'].includes(request.method) ? undefined : request.body,
+      signal: controller.signal,
+      redirect: 'manual',
+    });
+    if (response.status >= 300 && response.status < 400) {
+      await response.body?.cancel();
+      return new Response(JSON.stringify({ message: 'Unexpected backend redirect' }), { status: 502, headers });
+    }
+    const responseHeaders = new Headers(headers);
+    for (const name of ['Content-Type', 'Content-Range', 'Range-Unit', 'Preference-Applied', 'WWW-Authenticate', 'Retry-After']) {
+      const value = response.headers.get(name);
+      if (value) responseHeaders.set(name, value);
+    }
+    return new Response(response.body, { status: response.status, headers: responseHeaders });
+  } catch (error) {
+    // Never log credentials, tokens, request bodies or query parameters.
+    console.error('CHINO backend connection failed', error.name);
+    return new Response(JSON.stringify({ message: 'Unable to reach the sign-in service. Please try again.' }), { status: 503, headers });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.pathname.startsWith('/api/backend/')) return serveBackend(request, url);
     if (url.pathname.startsWith('/api/public-data/')) return servePublicData(request, url);
 
     const primaryHostname = String(env.PRIMARY_HOSTNAME || 'chinopickleballcourt.com').trim().toLowerCase();
