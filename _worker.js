@@ -1,6 +1,49 @@
+// This is the existing public anonymous key, never a service-role credential.
+const PUBLIC_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indza3pwdHhla2xkaHN4bHVoZ29zIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg4NDA3NDEsImV4cCI6MjEwNDQxNjc0MX0.hW0ApbdEUbhFkLIG_Z32o6uwpYQ_nMcb0sME9vh1kqA';
+const PUBLIC_READ_PATHS = new Map([
+  ['/rest/v1/courts', 'select=*&order=id.asc'],
+  ['/rest/v1/settings', 'select=*'],
+  ['/rest/v1/blocked_dates', 'select=date&order=date.asc'],
+  ['/rest/v1/rpc/get_public_booking_availability', null],
+  ['/rest/v1/rpc/get_public_open_play_counts', null],
+  ['/rest/v1/rpc/get_public_weather_closures', ''],
+]);
+
+async function servePublicData(request, url) {
+  const path = url.pathname.slice('/api/public-data'.length);
+  const headers = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
+  if (request.method !== 'GET' || !PUBLIC_READ_PATHS.has(path)) {
+    return new Response(JSON.stringify({ message: 'Public read not allowed' }), { status: 404, headers });
+  }
+  const upstream = new URL('https://wskzptxekldhsxluhgos.supabase.co' + path);
+  const fixedQuery = PUBLIC_READ_PATHS.get(path);
+  if (fixedQuery !== null) upstream.search = fixedQuery;
+  else {
+    const date = url.searchParams.get('p_date');
+    const court = url.searchParams.get('p_court_id');
+    if ((date && date !== 'null' && !/^\d{4}-\d{2}-\d{2}$/.test(date)) || (court && court.length > 100)) {
+      return new Response(JSON.stringify({ message: 'Invalid availability parameters' }), { status: 400, headers });
+    }
+    if (date && date !== 'null') upstream.searchParams.set('p_date', date);
+    if (court && court !== 'null') upstream.searchParams.set('p_court_id', court);
+  }
+  try {
+    const response = await fetch(upstream, {
+      headers: { apikey: PUBLIC_ANON_KEY, Authorization: 'Bearer ' + PUBLIC_ANON_KEY },
+      signal: AbortSignal.timeout(12000),
+      redirect: 'error',
+    });
+    return new Response(response.body, { status: response.status, headers });
+  } catch (error) {
+    console.error('Public court data unavailable', path, error.name);
+    return new Response(JSON.stringify({ message: 'Court data temporarily unavailable' }), { status: 503, headers });
+  }
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.pathname.startsWith('/api/public-data/')) return servePublicData(request, url);
 
     const primaryHostname = String(env.PRIMARY_HOSTNAME || 'chinopickleballcourt.com').trim().toLowerCase();
     if (primaryHostname && url.hostname === `www.${primaryHostname}`) {

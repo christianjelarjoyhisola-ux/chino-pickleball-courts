@@ -65,6 +65,19 @@ const _sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   global: { fetch: (input, init) => _pbFetchWithTimeout(input, init) },
 });
 
+// Public browsing must not wait for a persisted login or cross-tab auth lock.
+// Production public reads use CHINO's own origin to avoid blocked database hosts.
+const _pbPublicRead = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'chino-public-read' },
+  global: { fetch: (input, init) => {
+    const target = new URL(String(input));
+    const local = ['localhost', '127.0.0.1', '::1'].includes(location.hostname);
+    const endpoint = local ? String(input) : '/api/public-data' + target.pathname + target.search;
+    return _pbFetchWithTimeout(endpoint, init, 15000);
+  } },
+});
+function _pbCourtReadClient() { return PB_PRIVATE_DATA_SURFACE ? _sb : _pbPublicRead; }
+
 // Expose globally so HTML pages can use real-time subscriptions
 window._supabase = _sb;
 
@@ -1284,8 +1297,8 @@ window.DB = {
   // ---- COURTS ----
   async getCourts() {
     return _pbCached('courts', {}, PB_FAST_CACHE_MS.courts, async () => {
-      const { data, error } = await _sb.from('courts').select('*').order('id');
-      if (error) { console.error('getCourts:', error); return []; }
+      const { data, error } = await _pbCourtReadClient().from('courts').select('*').order('id');
+      if (error) { console.error('getCourts:', error); throw new Error('Courts could not be loaded. Please retry.'); }
       return data.map(rowToCourt);
     });
   },
@@ -1343,18 +1356,18 @@ window.DB = {
   async getBookings(filters = {}) {
     const opts = filters || {};
     return _pbCached('bookings', opts, PB_FAST_CACHE_MS.bookings, async () => {
-      const accountRole = await _pbCurrentAccountRole();
+      const accountRole = PB_PRIVATE_DATA_SURFACE ? await _pbCurrentAccountRole() : '';
       const canReadFullRows = PB_PRIVATE_DATA_SURFACE
         && ['owner', 'court_owner', 'staff'].includes(accountRole);
 
       if (!canReadFullRows) {
-        const { data, error } = await _sb.rpc('get_public_booking_availability', {
+        const { data, error } = await _pbPublicRead.rpc('get_public_booking_availability', {
           p_date: opts.date || null,
           p_court_id: opts.courtId ? String(opts.courtId) : null,
-        });
+        }, { get: true });
         if (error) {
           console.error('getBookings:', error);
-          return [];
+          throw new Error('Court availability could not be loaded. Please retry.');
         }
         return (data || []).map(rowToBooking);
       }
@@ -2334,10 +2347,10 @@ window.DB = {
 
   async getOpenPlayCountsForDate(date) {
     return _pbCached('openPlayCounts', { date }, PB_FAST_CACHE_MS.openPlay, async () => {
-      const { data, error } = await _sb.rpc('get_public_open_play_counts', {
+      const { data, error } = await _pbPublicRead.rpc('get_public_open_play_counts', {
         p_date: date,
         p_court_id: null,
-      });
+      }, { get: true });
       if (error) { console.error('getOpenPlayCountsForDate:', error); return {}; }
       return (data || []).reduce((counts, row) => {
         const key = String(row.court_id || '');
@@ -2802,7 +2815,7 @@ window.DB = {
   // ---- BLOCKED DATES ----
   async getBlockedDates() {
     return _pbCached('blockedDates', {}, PB_FAST_CACHE_MS.blockedDates, async () => {
-      const { data, error } = await _sb.from('blocked_dates').select('date').order('date');
+      const { data, error } = await _pbCourtReadClient().from('blocked_dates').select('date').order('date');
       if (error) { console.error('getBlockedDates:', error); return []; }
       return data.map(r => r.date);
     });
@@ -2860,12 +2873,12 @@ window.DB = {
   // ---- SETTINGS ----
   async getSettings() {
     return _pbCached('settings', {}, PB_FAST_CACHE_MS.settings, async () => {
-      const { data, error } = await _sb.from('settings').select('*');
-      if (error) { console.error('getSettings:', error); return {}; }
+      const { data, error } = await _pbCourtReadClient().from('settings').select('*');
+      if (error) { console.error('getSettings:', error); throw new Error('Court settings could not be loaded. Please retry.'); }
       const out = {};
       data.forEach(r => out[r.key] = r.value);
       if (!PB_PRIVATE_DATA_SURFACE) {
-        const weather = await _sb.rpc('get_public_weather_closures');
+        const weather = await _pbPublicRead.rpc('get_public_weather_closures', {}, { get: true });
         if (weather.error) throw new Error('Weather availability could not be checked. Please refresh before booking.');
         const config = JSON.parse(out.maintenance_config || '{"rules":[]}');
         const existing = Array.isArray(config.rules) ? config.rules : config.mode ? [config] : [];

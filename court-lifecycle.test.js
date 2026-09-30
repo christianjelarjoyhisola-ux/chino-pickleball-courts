@@ -109,7 +109,8 @@ test('repeated production loads never recreate deleted courts after empty or fai
     const db = backend({ readError });
     for (let reload = 0; reload < 3; reload += 1) {
       const page = loadClient({ db });
-      await page.DB.getCourts();
+      if (readError) await assert.rejects(page.DB.getCourts(), /Courts could not be loaded/);
+      else await page.DB.getCourts();
       await page.DB.seedDefaultData();
     }
     assert.equal(db.state.reads, 3);

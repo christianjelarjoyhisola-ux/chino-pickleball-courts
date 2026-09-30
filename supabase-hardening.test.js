@@ -67,7 +67,7 @@ test('anonymous booking reads expose availability fields but not PII', () => {
   assert.match(migration, /drop policy if exists bookings_select_public on public\.bookings/i);
   assert.doesNotMatch(migration, /grant select \([\s\S]*?\) on public\.bookings to anon/i);
   assert.match(migration, /function public\.get_public_booking_availability/i);
-  assert.match(client, /_sb\.rpc\('get_public_booking_availability'/i);
+  assert.match(client, /_pbPublicRead\.rpc\('get_public_booking_availability'/i);
   assert.match(migration, /function public\.get_public_booking_by_ref/i);
   assert.match(client, /_sb\.rpc\('get_public_booking_by_ref'/i);
   assert.match(migration, /customer_access_token_hash = encode\(extensions\.digest\(p_access_token, 'sha256'\), 'hex'\)/i);
