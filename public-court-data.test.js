@@ -6,6 +6,7 @@ test('public court reads use the fixed database and anonymous credentials, ignor
  let called;const w=worker(async(url,init)=>{called={url:String(url),init};return new Response('[{"id":"court1"}]')});
  const r=await w.fetch(new Request('https://chinopickleballcourt.com/api/public-data/rest/v1/courts?select=*,bookings(*)',{headers:{Authorization:'Bearer private-token',Cookie:'secret'}}),env);
  assert.equal(r.status,200);assert.match(called.url,/^https:\/\/wskzptxekldhsxluhgos.supabase.co\/rest\/v1\/courts\?select=\*&order=id.asc$/);
+ assert.equal(called.init.redirect,'manual');
  assert.notEqual(called.init.headers.Authorization,'Bearer private-token');assert.equal(called.init.headers.Cookie,undefined);assert.equal(r.headers.get('cache-control'),'no-store');
 });
 test('only anonymous read endpoints are exposed; writes and private tables never reach the database',async()=>{

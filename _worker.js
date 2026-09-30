@@ -33,8 +33,12 @@ async function servePublicData(request, url) {
     const response = await fetch(upstream.toString(), {
       headers: { apikey: PUBLIC_ANON_KEY, Authorization: 'Bearer ' + PUBLIC_ANON_KEY },
       signal: controller.signal,
-      redirect: 'error',
+      redirect: 'manual',
     });
+    if (response.status >= 300 && response.status < 400) {
+      await response.body?.cancel();
+      return new Response(JSON.stringify({ message: 'Unexpected database redirect' }), { status: 502, headers });
+    }
     return new Response(response.body, { status: response.status, headers });
   } catch (error) {
     console.error('Public court data unavailable', path, error.name, error.message);
