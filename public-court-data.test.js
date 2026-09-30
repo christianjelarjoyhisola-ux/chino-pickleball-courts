@@ -1,6 +1,6 @@
 const test=require('node:test');const assert=require('node:assert/strict');const fs=require('node:fs');const vm=require('node:vm');
 const source=fs.readFileSync('_worker.js','utf8').replace('export default {','globalThis.worker = {');
-function worker(fetch){const c=vm.createContext({URL,Request,Response,Headers,AbortSignal,console,fetch});vm.runInContext(source,c);return c.worker;}
+function worker(fetch){const c=vm.createContext({URL,Request,Response,Headers,AbortSignal,AbortController,setTimeout,clearTimeout,console,fetch});vm.runInContext(source,c);return c.worker;}
 const env={ASSETS:{fetch:async()=>new Response('asset')}};
 test('public court reads use the fixed database and anonymous credentials, ignoring caller auth and query expansion',async()=>{
  let called;const w=worker(async(url,init)=>{called={url:String(url),init};return new Response('[{"id":"court1"}]')});

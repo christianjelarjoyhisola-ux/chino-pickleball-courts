@@ -27,16 +27,20 @@ async function servePublicData(request, url) {
     if (date && date !== 'null') upstream.searchParams.set('p_date', date);
     if (court && court !== 'null') upstream.searchParams.set('p_court_id', court);
   }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12000);
   try {
-    const response = await fetch(upstream, {
+    const response = await fetch(upstream.toString(), {
       headers: { apikey: PUBLIC_ANON_KEY, Authorization: 'Bearer ' + PUBLIC_ANON_KEY },
-      signal: AbortSignal.timeout(12000),
+      signal: controller.signal,
       redirect: 'error',
     });
     return new Response(response.body, { status: response.status, headers });
   } catch (error) {
-    console.error('Public court data unavailable', path, error.name);
+    console.error('Public court data unavailable', path, error.name, error.message);
     return new Response(JSON.stringify({ message: 'Court data temporarily unavailable' }), { status: 503, headers });
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
