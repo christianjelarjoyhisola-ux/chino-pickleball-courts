@@ -1,6 +1,21 @@
 const test=require('node:test');const assert=require('node:assert/strict');const fs=require('node:fs');const vm=require('node:vm');
 function worker(fetch){const c=vm.createContext({URL,Request,Response,Headers,AbortController,setTimeout,clearTimeout,console,fetch});vm.runInContext(fs.readFileSync('_worker.js','utf8').replace('export default {','globalThis.worker = {'),c);return c.worker;}
 const root='https://chinopickleballcourt.com/api/backend';
+test('fresh JWT clock skew retries the same authenticated read until the database accepts it',async()=>{
+ let calls=0;
+ const w=worker(async(url,init)=>{
+  assert.equal(init.headers.get('Authorization'),'Bearer original-token');
+  calls++;
+  return calls===1?new Response('{"code":"PGRST303","message":"JWT issued at future"}',{status:401}):new Response('[{"role":"owner","status":"active"}]');
+ });
+ const r=await w.fetch(new Request(root+'/rest/v1/accounts',{headers:{Authorization:'Bearer original-token'}}),{});
+ assert.equal(r.status,200);assert.equal(calls,2);
+});
+test('clock skew never causes a write to be replayed',async()=>{
+ let calls=0;const w=worker(async()=>{calls++;return new Response('{"code":"PGRST303","message":"JWT issued at future"}',{status:401})});
+ const r=await w.fetch(new Request(root+'/rest/v1/bookings',{method:'POST',body:'{}'}),{});
+ assert.equal(r.status,401);assert.equal(calls,1);
+});
 test('login transport streams credentials only to the fixed auth endpoint and never forwards cookies',async()=>{
  let captured;const w=worker(async(url,init)=>{captured={url,init,body:await new Response(init.body).text()};return new Response('{"error":"invalid_credentials"}',{status:400})});
  const response=await w.fetch(new Request(root+'/auth/v1/token?grant_type=password',{method:'POST',headers:{'Content-Type':'application/json',Cookie:'private-cookie',apikey:'caller-key',Origin:'https://chinopickleballcourt.com'},body:'{"email":"test@example.com","password":"test-only"}'}),{});

@@ -70,13 +70,28 @@ async function serveBackend(request, url) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 40000);
   try {
-    const response = await fetch('https://wskzptxekldhsxluhgos.supabase.co' + path + url.search, {
+    const upstreamUrl = 'https://wskzptxekldhsxluhgos.supabase.co' + path + url.search;
+    const upstreamInit = {
       method: request.method,
       headers: upstreamHeaders,
       body: ['GET', 'HEAD'].includes(request.method) ? undefined : request.body,
       signal: controller.signal,
       redirect: 'manual',
-    });
+    };
+    let response = await fetch(upstreamUrl, upstreamInit);
+    // Auth and PostgREST can briefly disagree on the time at token issuance.
+    // Retry only this explicit pre-query rejection, with the unchanged JWT.
+    // Never replay writes or relax the database's authentication checks.
+    if (restRoute && request.method === 'GET') {
+      for (const delay of [1000, 2000, 4000]) {
+        if (response.status !== 401) break;
+        const failure = await response.clone().json().catch(() => ({}));
+        if (failure.code !== 'PGRST303' || failure.message !== 'JWT issued at future') break;
+        await response.body?.cancel();
+        await new Promise(resolve => setTimeout(resolve, delay));
+        response = await fetch(upstreamUrl, upstreamInit);
+      }
+    }
     if (response.status >= 300 && response.status < 400) {
       await response.body?.cancel();
       return new Response(JSON.stringify({ message: 'Unexpected backend redirect' }), { status: 502, headers });
