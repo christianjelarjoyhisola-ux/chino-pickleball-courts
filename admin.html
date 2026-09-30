@@ -7303,6 +7303,11 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(45, 62, 79, .1
       </div>
       <div class="rm-detail-title" style="margin-top:4px">Fee calculation</div>
       <div class="rm-fee-breakdown" id="rmPrepareFeeBreakdown"></div>
+      <div id="rmOwnerCutoffFields" hidden>
+        <div class="rm-info-note">Cancelled booking fees are excluded. The court owner will see this cutoff under Remittances and can submit payment proof. No payment is sent by this action.</div>
+        <label class="rm-field">Payment deadline (Philippine time)<input id="rmCutoffDue" type="date" required></label>
+        <label class="rm-field">Cutoff reason<input id="rmCutoffReason" type="text" maxlength="500" required></label>
+      </div>
     </div>
     <div class="m-foot">
       <button class="btn btn-g" type="button" onclick="closeRemittanceModal('rmPrepareModal')">Not Yet</button>
@@ -16699,16 +16704,16 @@ async function renderRemittances({ announce = false } = {}) {
     $('rmNextDuePill').textContent = `${duePrefix}: ${nextDueLabel}`;
     $('rmCycleTitle').textContent = dueKey === todayKey ? 'Today is remittance day' : dueKey && dueKey < todayKey ? 'The remittance date has passed' : 'Remittance is scheduled every 14th';
     $('rmCycleCopy').textContent = role === 'owner'
-      ? 'Court owners freeze the exact balance when they prepare payment. You verify the submitted proof before it becomes settled.'
+      ? 'You can cut off the current balance now and set a payment deadline. The court owner submits proof; you verify it before settlement.'
       : 'Your balance keeps accumulating until you prepare payment. The database freezes the exact cutoff at that moment.';
 
     const prepareBtn = $('rmPrepareBtn');
     const liveAction = $('rmLiveAction');
-    liveAction.hidden = role !== 'court_owner';
-    prepareBtn.hidden = role !== 'court_owner';
-    prepareBtn.disabled = !canPrepare.allowed || liveAmount <= 0;
-    prepareBtn.textContent = liveAmount > 0 ? `Prepare ${fmt(liveAmount)}` : 'Prepare Remittance';
-    $('rmPrepareHint').textContent = canPrepare.reason || (liveAmount <= 0 ? 'The button activates when an eligible fee is available.' : canPrepare.allowed ? 'The exact cutoff is created only after confirmation.' : `Next scheduled payment: ${nextDueLabel}`);
+    liveAction.hidden = !['owner', 'court_owner'].includes(role);
+    prepareBtn.hidden = !['owner', 'court_owner'].includes(role);
+    prepareBtn.disabled = (role !== 'owner' && !canPrepare.allowed) || liveAmount <= 0;
+    prepareBtn.textContent = role === 'owner' ? 'Cut off now' : liveAmount > 0 ? `Prepare ${fmt(liveAmount)}` : 'Prepare Remittance';
+    $('rmPrepareHint').textContent = role === 'owner' ? 'Freeze the eligible balance now and choose when the court owner must remit it.' : canPrepare.reason || (liveAmount <= 0 ? 'The button activates when an eligible fee is available.' : canPrepare.allowed ? 'The exact cutoff is created only after confirmation.' : `Next scheduled payment: ${nextDueLabel}`);
 
     renderRemittanceRecords();
     if (announce) {
@@ -16770,11 +16775,17 @@ function remittanceModalKeydown(event) {
 }
 
 function openRemittancePrepare() {
-  if (rmDashboardRole() !== 'court_owner') { toast('Only a court owner can prepare remittance.', 'err'); return; }
+  const owner = rmDashboardRole() === 'owner';
+  if (!['owner', 'court_owner'].includes(rmDashboardRole())) { toast('Only an owner can prepare remittance.', 'err'); return; }
   const live = rmPick(_rmState.dashboard, 'live', 'current', 'accumulated', 'live_balance', 'liveBalance') || {};
   const canPrepare = rmCanPrepareInfo(_rmState.dashboard || {});
   const amount = rmAmountDue(live);
-  if (!canPrepare.allowed || amount <= 0) { toast(canPrepare.reason || 'There is no eligible balance to prepare.', 'err'); return; }
+  if ((!owner && !canPrepare.allowed) || amount <= 0) { toast(canPrepare.reason || 'There is no eligible balance to prepare.', 'err'); return; }
+  $('rmPrepareTitle').textContent = owner ? 'CUT OFF REMITTANCE NOW' : 'PREPARE REMITTANCE';
+  $('rmOwnerCutoffFields').hidden = !owner;
+  $('rmCutoffDue').value = rmPhDateKey(rmPick(_rmState.dashboard, 'server_now', 'serverNow') || new Date().toISOString());
+  $('rmCutoffReason').value = 'System owner requested an immediate remittance cutoff.';
+  $('rmPrepareConfirmBtn').textContent = owner ? 'Confirm Cutoff' : 'Freeze Balance & Continue';
   $('rmPrepareAmount').textContent = fmt(amount);
   const reservations = rmReservationCount(live);
   const courtBookings = rmBookingCount(live);
@@ -16785,7 +16796,7 @@ function openRemittancePrepare() {
   $('rmPrepareHours').textContent = hours === null ? 'Not recorded' : (hours === 0 && flatBookings > 0) ? 'Not applicable - flat fee' : `${rmMetricNumber(hours)} court-hour${hours === 1 ? '' : 's'}`;
   $('rmPrepareFeeBreakdown').innerHTML = rmFeeBreakdownHtml(live);
   $('rmPrepareCoverage').textContent = rmCoverageLabel(live, { live:true });
-  $('rmPrepareNextDue').textContent = rmDateOnly(rmPick(_rmState.dashboard, 'next_due_on', 'nextDueOn', 'next_due_at', 'nextDueAt'));
+  $('rmPrepareNextDue').textContent = owner ? 'Choose the payment deadline below' : rmDateOnly(rmPick(_rmState.dashboard, 'next_due_on', 'nextDueOn', 'next_due_at', 'nextDueAt'));
   openRemittanceModal('rmPrepareModal', '#rmPrepareConfirmBtn');
 }
 
@@ -16794,7 +16805,12 @@ async function prepareRemittanceNow() {
   rmSetBusy(button, true, 'Freezing balance...');
   try {
     if (typeof DB.prepareBookingFeeRemittance !== 'function') throw new Error('The prepare-remittance service is unavailable.');
-    const result = await DB.prepareBookingFeeRemittance();
+    const owner = rmDashboardRole() === 'owner';
+    if (!['owner', 'court_owner'].includes(rmDashboardRole())) throw new Error('Only an owner can prepare remittance.');
+    const dueOn = $('rmCutoffDue').value;
+    const reason = $('rmCutoffReason').value.trim();
+    if (owner && (!/^\d{4}-\d{2}-\d{2}$/.test(dueOn) || reason.length < 3)) throw new Error('Choose a payment deadline and enter a cutoff reason.');
+    const result = await DB.prepareBookingFeeRemittance(owner ? { ownerOverride: true, overrideDueOn: dueOn, overrideReason: reason } : {});
     const prepared = result?.remittance || result?.data?.remittance || result?.data || result;
     const preparedId = rmRecordId(prepared);
     closeRemittanceModal('rmPrepareModal');
@@ -16802,7 +16818,10 @@ async function prepareRemittanceNow() {
     await renderRemittances();
     const fallback = _rmState.active.find(record => rmStatusKey(record) === 'awaiting-payment');
     const id = preparedId || rmRecordId(fallback);
-    if (id) await openRemittancePayment(id);
+    if (id) {
+      if (owner) await openRemittanceDetails(id);
+      else await openRemittancePayment(id);
+    }
   } catch (error) {
     console.error('[prepareRemittanceNow]', error);
     toast(error?.message || 'Could not prepare remittance.', 'err');

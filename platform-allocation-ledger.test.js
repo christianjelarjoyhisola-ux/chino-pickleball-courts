@@ -590,3 +590,25 @@ test('the court breakdown remains an accessible, closed-by-default authoritative
   );
   assert.doesNotMatch(renderSource, /DB\.getBookings|readDb\(\)|window\.DB\.getBookings/);
 });
+
+test('system owner cutoff sends the deadline and reason, while court owners retain the scheduled payment flow', async () => {
+  const start = adminSource.indexOf('async function prepareRemittanceNow()');
+  const end = adminSource.indexOf('async function openRemittancePayment(', start);
+  const source = adminSource.slice(start, end);
+  for (const role of ['owner', 'court_owner', 'staff']) {
+    let request = null, details = null, payment = null;
+    const elements = { rmPrepareConfirmBtn: {}, rmCutoffDue: { value: '2026-10-02' }, rmCutoffReason: { value: 'Owner requested cutoff' } };
+    const run = new Function('$','rmSetBusy','DB','rmDashboardRole','rmRecordId','closeRemittanceModal','toast','renderRemittances','_rmState','rmStatusKey','openRemittanceDetails','openRemittancePayment','console', source+'; return prepareRemittanceNow;')(
+      id => elements[id], () => {}, { prepareBookingFeeRemittance: async options => { request = options; return { remittance: { id: 'batch-1' } }; } },
+      () => role, r => r?.id, () => {}, () => {}, async () => {}, { active: [] }, () => '',
+      async id => { details = id; }, async id => { payment = id; }, { error() {} },
+    );
+    await run();
+    if (role === 'owner') {
+      assert.deepEqual(request, { ownerOverride: true, overrideDueOn: '2026-10-02', overrideReason: 'Owner requested cutoff' });
+      assert.equal(details, 'batch-1'); assert.equal(payment, null);
+    } else if (role === 'court_owner') {
+      assert.deepEqual(request, {}); assert.equal(payment, 'batch-1'); assert.equal(details, null);
+    } else assert.equal(request, null);
+  }
+});
