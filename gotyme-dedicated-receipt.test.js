@@ -103,16 +103,17 @@ test('GCash masked-recipient approval retains every other evidence gate', () => 
   }
 });
 
-test('configured QR destination token is supplied to both bank parsers and recorded in the audit', () => {
+test('legacy GCash bank routes receive the QR token while MariBank retains its own account', () => {
   for (const property of ['expectedRecipientAccount', 'expectedReceiverAccount']) {
-    const accountExpression = edge.match(new RegExp(`${property}:\\s*(provider === "bdopay"[\\s\\S]*?)\\n\\s*: (?:""|null),`));
+    const accountExpression = edge.match(new RegExp(`${property}:\\s*(provider === "[^"]+"[\\s\\S]*?)\\n\\s*: (?:""|null),`));
     assert.ok(accountExpression, property);
     for (const provider of ['gotyme', 'maribank']) {
       const result = vm.runInNewContext(accountExpression[1] + '\n: null', {
         provider,
         settings: { gcash_qr_receipt_destination_token: 'CONFIGURED_QR_TOKEN' },
+        expectedNumber:'15521507144',
       });
-      assert.equal(result, 'CONFIGURED_QR_TOKEN', `${property}: ${provider}`);
+      assert.equal(result, provider === 'gotyme' ? 'CONFIGURED_QR_TOKEN' : property === 'expectedReceiverAccount' ? '15521507144' : null, `${property}: ${provider}`);
     }
   }
 });
@@ -235,7 +236,7 @@ test('providers without an applicable dedicated layout keep their original OCR o
 });
 
 test('all dedicated banks use validated rows immediately and preserve the untouched original', async () => {
-  for (const provider of ['bdopay','maya','bpi','gotyme','maribank','securitybank']) {
+  for (const provider of ['bdopay','maya','bpi','gotyme','securitybank']) {
     const { result, observed } = await dispatchOcr(provider, {
       text: 'Amount\nFee\n265.00\n10.00', layoutText: 'Amount 265.00\nFee 10.00',
       confidence:.91, confidenceSource:'native',
@@ -348,3 +349,5 @@ test('reverification rechecks the complete group after claiming its lease and pr
   assert.match(edge.replace(/\s+/g, ' '), /if \(\s*result === "manual_review" && hasPersistedBooking && !isReverification\s*\)/,
     'unchanged manual review does not send another review notification');
 });
+
+test('direct MariBank parses original OCR with its own strict column reconstruction', async()=>{const {result}=await dispatchOcr('maribank',{text:'Original receipt',layoutText:'Unrelated reconstructed rows',confidence:.97,confidenceSource:'native'});assert.equal(result.text,'Original receipt');assert.equal(result.layoutApplied,false);});

@@ -26,10 +26,10 @@ test('MariBank uses its own account and QR; switching to GCash restores the GCas
  assert.equal(c.paymentReceiverKey('maribank'),'maribank');
 });
 
-test('direct MariBank receipts require review even when a legacy GCash parser exists',()=>{
+test('direct MariBank receipts are enabled with a dedicated destination parser',()=>{
  const c=vm.createContext({isLegacyDedicatedReceiptProvider:()=>true});
  vm.runInContext(fn('supabase/functions/verify-gcash-receipt/index.ts','isDedicatedReceiptProvider').replace('provider: string','provider'),c);
- assert.equal(c.isDedicatedReceiptProvider('maribank'),false);
+ assert.equal(c.isDedicatedReceiptProvider('maribank'),true);
  assert.equal(c.isDedicatedReceiptProvider('gcash'),true);
 });
 

@@ -8315,7 +8315,7 @@ function pickPay(m) {
         'Your receipt stays pending for court-owner review.',
       ],
       gotyme: 'Pay from GoTyme to the GCash recipient shown. Clean receipts can confirm automatically; anything doubtful stays pending for owner review.',
-      maribank: 'Transfer to the MariBank account shown and upload the complete receipt for owner review.',
+      maribank: 'Transfer to the MariBank account shown. Upload the full successful receipt, including the recipient, amount, reference, and date/time.',
       pnb: 'Use the configured PNB payment details. Your receipt stays pending for court-owner review.',
       securitybank: 'Transfer to the Security Bank account shown. Matching GCash bank-transfer receipts can confirm automatically; anything uncertain stays pending for owner review.',
       cash: 'Cash bookings are paid at the front desk and confirmed by staff.',
@@ -8414,7 +8414,7 @@ function syncGcashSharedPanel(method) {
       header: 'MariBank',
       title: 'Send Payment to this MariBank account',
       guide: ['Scan the MariBank QR or transfer to the account shown.', 'Pay the exact amount.', 'Save the transaction reference.', 'Upload the complete transfer receipt.'],
-      help: 'Transfer to MariBank. Upload the complete receipt for owner review.',
+      help: 'MariBank or GCash transfers to this MariBank account can confirm automatically when all details match. Upload the full successful receipt with recipient, amount, reference, and date/time visible. Other or unclear receipts go to owner review.',
     },
   };
   const profile = profiles[method] || profiles.gcash;

@@ -88,7 +88,7 @@ function nameTokens(value: string): string[] {
     " ",
   ).trim().split(/\s+/).filter(Boolean);
 }
-function compareName(
+export function compareName(
   observed: string | null,
   expected: string,
 ): "exact" | "initial_compatible" | "missing" | "not_configured" | "mismatch" {
@@ -104,7 +104,7 @@ function compareName(
   ) return "initial_compatible";
   return "mismatch";
 }
-function compareAccount(
+export function compareAccount(
   raw: string | null,
   expected: string,
 ): "exact" | "suffix_match" | "missing" | "not_configured" | "mismatch" {
@@ -381,7 +381,7 @@ function validDateParts(year: number, month: number, day: number): boolean {
     date.getUTCDate() === day;
 }
 
-function parseTimestamp(lines: string[]): BankReceiptTimestamp {
+export function parseTimestamp(lines: string[]): BankReceiptTimestamp {
   const pattern =
     /\b(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)?\s*,?\s*(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(\d{1,2}),?\s+(\d{4})\s*,?\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)\b/i;
   for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {

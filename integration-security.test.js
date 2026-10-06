@@ -340,7 +340,7 @@ test('receipt and confirmation delivery use recoverable single-worker leases', (
   );
   assert.match(
     receiptEdge,
-    /parseProviderReceipt\(provider, ocrText,[\s\S]*?typedReference: typedRef/
+    /parseProviderReceipt\(provider === "maribank" \? "maribank_direct" : provider, ocrText,[\s\S]*?typedReference: typedRef/
   );
   assert.match(
     receiptEdge,

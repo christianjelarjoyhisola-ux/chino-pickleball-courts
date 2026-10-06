@@ -50,7 +50,7 @@ import { recoverGcashReceipt, gcashReceiptHasIncompleteStatus } from "../_shared
 import { recoverBankReceipt } from "../_shared/bank-adaptive-ocr.ts";
 import { recoverGotymeNativeFields } from "../_shared/gotyme-native-fusion.ts";
 import { recoverGotymeFields } from "../_shared/gotyme-field-recovery.ts";
-import { bankApprovalConfidence, bankLayoutFamily, bankOcrText, isBankAdaptiveProvider } from "../_shared/bank-ocr-evidence.ts";
+import { maribankDirectApprovalConfidence, bankApprovalConfidence, bankLayoutFamily, bankOcrText, isBankAdaptiveProvider } from "../_shared/bank-ocr-evidence.ts";
 import { readReceiptTransferStatus } from "../_shared/receipt-providers/transfer-status.ts";
 import { createReceiptReadingSession, gcashLayoutFamily } from "../_shared/receipt-reading-session.ts";
 import type { ReceiptVerificationContext } from "../_shared/receipt-providers/bank-to-gcash.ts";
@@ -61,10 +61,9 @@ import {
   type ProviderReceiptVerificationEvidence,
   verifyProviderReceipt,
 } from "../_shared/receipt-providers/index.ts";
-// The legacy MariBank parser verifies transfers TO GCash, not this bank account.
-// Direct MariBank transfers must remain owner-reviewed.
+// Direct MariBank receipts use a separate destination-specific parser.
 function isDedicatedReceiptProvider(provider: string) {
-  return provider !== "maribank" && isLegacyDedicatedReceiptProvider(provider);
+  return isLegacyDedicatedReceiptProvider(provider);
 }
 
 import {
@@ -603,8 +602,7 @@ function selectedMethodMismatch(
       maribankReceipt;
   }
   if (provider === "maribank") {
-    return gcashReceipt || bdoReceipt || mayaReceipt || bpiReceipt ||
-      gotymeReceipt;
+    return false; // Destination and supported source are checked by the direct parser.
   }
   return false;
 }
@@ -1127,7 +1125,7 @@ function ocrCriticalGaps(
 ): string[] {
   if (!text) return ["text"];
   if (isDedicatedReceiptProvider(provider)) {
-    const parsed = parseProviderReceipt(provider, text, {
+    const parsed = parseProviderReceipt(provider === "maribank" ? "maribank_direct" : provider, text, {
       typedReference: typedRef,
     });
     const receipt = parsed.provider === "gcash"
@@ -1175,7 +1173,7 @@ async function runOCR(
             v.text,
           )
           : gcashLayoutText
-        : isBankAdaptiveProvider(provider) && (v.layoutText?.trim() || v.nativeLines?.length)
+        : provider !== "maribank" && isBankAdaptiveProvider(provider) && (v.layoutText?.trim() || v.nativeLines?.length)
         ? bankOcrText(v)
         : undefined;
       const layoutApplied = !!layoutText?.trim();
@@ -2786,7 +2784,7 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
       expectedRecipientName: expectedName,
       expectedRecipientAccount:
         provider === "bdopay" || provider === "bpi" ||
-          provider === "gotyme" || provider === "maribank"
+          provider === "gotyme"
           ? settings.gcash_qr_receipt_destination_token ||
             settings.bdopay_receipt_destination_token || ""
           : "",
@@ -2869,7 +2867,7 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
     // ── field extraction ────────────────────────────────────────────────────
     let providerParse: ProviderReceiptParse | null =
       isDedicatedReceiptProvider(provider)
-        ? parseProviderReceipt(provider, ocrText, {
+        ? parseProviderReceipt(provider === "maribank" ? "maribank_direct" : provider, ocrText, {
           typedReference: typedRef,
         })
         : null;
@@ -2996,7 +2994,11 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
         }
       }
     }
+    if (providerParse?.provider === "maribank_direct" && originalOcr) {
+      bankRead = {...originalOcr,text:originalOcr.originalText ?? originalOcr.text};
+    }
     if (providerParse && providerParse.provider !== "gcash" && originalOcr &&
+      providerParse.provider !== "maribank_direct" &&
       isBankAdaptiveProvider(providerParse.provider)) {
       bankRead = {
         ...originalOcr,
@@ -3365,7 +3367,9 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
       ? gotymeFieldRecovery.selected.approval
       : bankReadingRecovery?.accepted && bankReadingRecovery.selected
       ? bankReadingRecovery.selected.approval
-      : bankRead && providerParse && providerParse.provider !== "gcash"
+      : bankRead && providerParse?.provider === "maribank_direct"
+      ? maribankDirectApprovalConfidence(bankRead, providerParse)
+      : bankRead && providerParse && providerParse.provider !== "gcash" && providerParse.provider !== "maribank_direct"
       ? bankApprovalConfidence(bankRead, providerParse, providerContext, recipientRefinement)
       : { confidence: ocrConfidence, source: ocrConfidenceSource };
     const approvalConfidence = approval.confidence;
@@ -3482,7 +3486,7 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
       : providerVerification?.provider === "bdopay"
       ? providerVerification.recipientComparison.name === "exact" &&
         providerVerification.recipientComparison.account === "exact"
-      : providerVerification?.provider === "securitybank"
+      : (providerVerification?.provider === "securitybank" || providerVerification?.provider === "maribank_direct")
       ? ["exact", "initial_compatible"].includes(
         providerVerification.recipientComparison,
       ) &&
@@ -3533,13 +3537,12 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
         ? "auto_approved"
         : "manual_review";
     let confidence = result === "auto_approved" ? approvalConfidence : 0.5;
-    const route = provider === "securitybank"
+    const route = provider === "maribank" ? "maribank_direct" : provider === "securitybank"
       ? "gcash_to_securitybank"
       : provider === "gcash"
       ? "gcash"
       : provider === "bdopay" || provider === "maya" || provider === "bpi" ||
-          provider === "gotyme" ||
-          provider === "maribank"
+          provider === "gotyme"
       ? `${provider}_to_gcash`
       : provider;
     const verification = {
@@ -3672,7 +3675,7 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
       parserVersion: providerParse?.parserVersion || "legacy",
       ...(isDedicatedReceiptProvider(provider)
         ? {
-          verifierRevision: provider === "gcash" ? GCASH_VERIFIER_REVISION : BANK_VERIFIER_REVISION,
+          verifierRevision: provider === "gcash" ? GCASH_VERIFIER_REVISION : provider === "maribank" ? "maribank_direct_20261007" : BANK_VERIFIER_REVISION,
           originalOcrConfidence: originalOcr?.confidence ?? 0,
           originalOcrConfidenceSource: originalOcr?.confidenceSource ?? "none",
           readingRecovery: readingRecovery?.audit || (gotymeFieldRecovery?.audit.attempted
@@ -3698,7 +3701,7 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
           feedback: {
             version: "receipt_feedback_v1",
             layout: readingLayout,
-            parserRevision: provider === "gcash" ? GCASH_VERIFIER_REVISION : BANK_VERIFIER_REVISION,
+            parserRevision: provider === "gcash" ? GCASH_VERIFIER_REVISION : provider === "maribank" ? "maribank_direct_20261007" : BANK_VERIFIER_REVISION,
             durationMs: ocrMetrics.durationMs,
             ocrCalls: ocrMetrics.calls,
             strategies: feedbackStrategies,
@@ -3742,7 +3745,8 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
         : null,
       bankTransfer: bankParse && providerParse
         ? {
-          provider: providerParse.provider,
+          provider: providerParse.provider === "maribank_direct" ? "maribank" : providerParse.provider,
+          ...(providerParse.provider === "maribank_direct" ? {sourceProvider:providerParse.receipt.source,invoice:providerParse.receipt.invoice,transferFee:providerParse.receipt.transferFee,total:providerParse.receipt.total} : {}),
           reference: bankParse.reference,
           invoice: "invoice" in bankParse ? bankParse.invoice : null,
           total: "total" in bankParse ? bankParse.total : null,
@@ -3770,12 +3774,12 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
               providerVerification?.provider === "bdopay" ||
               providerVerification?.provider === "gotyme" ||
               providerVerification?.provider === "maribank" ||
-              providerVerification?.provider === "securitybank"
+              (providerVerification?.provider === "securitybank" || providerVerification?.provider === "maribank_direct")
             ? providerVerification.recipientComparison
             : null,
           recipientAccountComparison:
             providerVerification?.provider === "bpi" ||
-              providerVerification?.provider === "securitybank"
+              (providerVerification?.provider === "securitybank" || providerVerification?.provider === "maribank_direct")
               ? providerVerification.recipientAccountComparison
               : providerVerification?.provider === "gotyme" ||
                   providerVerification?.provider === "maribank"
@@ -3800,8 +3804,8 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
           ? null
           : expectedNumber || null,
       expectedReceiverName: expectedName || null,
-      expectedReceiverAccount: provider === "bdopay" || provider === "bpi" ||
-          provider === "gotyme" || provider === "maribank"
+      expectedReceiverAccount: provider === "maribank" ? expectedNumber || null : provider === "bdopay" || provider === "bpi" ||
+          provider === "gotyme"
         ? settings.gcash_qr_receipt_destination_token ||
           settings.bdopay_receipt_destination_token || null
         : null,

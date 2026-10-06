@@ -236,7 +236,7 @@ function zeroFeeDigitConfidence(
 }
 
 /** Match OCR-derived values to native observed words, never to typed/expected values. */
-function fieldEvidence(
+export function fieldEvidence(
   read: GoogleVisionOcrResult,
   raw: string | null | undefined,
   masked = false,
@@ -547,4 +547,11 @@ export function bankFieldIdentity(key: string, value: string): string {
     );
   }
   return result;
+}
+
+/** Direct-bank approval requires native evidence for every payment field. */
+export function maribankDirectApprovalConfidence(read: GoogleVisionOcrResult, parsed: Extract<ProviderReceiptParse,{provider:"maribank_direct"}>): BankApprovalConfidence {
+ const fields = Object.fromEntries(Object.entries(parsed.receipt.paymentFields).map(([key,value])=>[key,fieldEvidence(read,value,key==="recipientAccount")]));
+ const complete=Object.values(fields).every(f=>score(f.confidence));
+ return {confidence:complete?Math.min(...Object.values(fields).map(f=>f.confidence!)):0,source:complete?"bank_payment_fields":"none",basis:complete?"native_payment_value_words":"missing_native_payment_evidence",fields,complete};
 }

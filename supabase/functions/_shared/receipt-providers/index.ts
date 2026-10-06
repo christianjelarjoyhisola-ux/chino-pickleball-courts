@@ -1,3 +1,4 @@
+import {parseMaribankDirectReceipt,verifyMaribankDirectReceipt,type MaribankDirectReceiptParse,type MaribankDirectReceiptVerificationEvidence} from "./maribank-direct.ts";
 import {
   parseSecurityBankReceipt,
   type SecurityBankReceiptParse,
@@ -89,6 +90,7 @@ export type MayaProviderReceiptParse = {
 };
 
 export type ProviderReceiptParse =
+  | {provider:"maribank_direct"; destinationProvider:"maribank"; parserVersion:"maribank_direct_v1"; receipt:MaribankDirectReceiptParse}
   | {
     provider: "securitybank";
     destinationProvider: "securitybank";
@@ -111,6 +113,7 @@ export type GcashReceiptVerificationEvidence = {
 };
 
 export type ProviderReceiptVerificationEvidence =
+  | MaribankDirectReceiptVerificationEvidence
   | SecurityBankReceiptVerificationEvidence
   | GcashReceiptVerificationEvidence
   | BdoPayReceiptVerificationEvidence
@@ -141,6 +144,7 @@ export function parseProviderReceipt(
   options: { typedReference?: string } = {},
 ): ProviderReceiptParse {
   switch (provider) {
+    case "maribank_direct": return {provider,destinationProvider:"maribank",parserVersion:"maribank_direct_v1",receipt:parseMaribankDirectReceipt(rawText,options)};
     case "securitybank":
       return {
         provider,
@@ -324,6 +328,7 @@ export function verifyProviderReceipt(
   context: ReceiptVerificationContext,
 ): ProviderReceiptVerificationEvidence {
   switch (parsed.provider) {
+    case "maribank_direct": return verifyMaribankDirectReceipt(parsed.receipt,context);
     case "securitybank":
       return verifySecurityBankReceipt(parsed.receipt, context);
     case "gcash":

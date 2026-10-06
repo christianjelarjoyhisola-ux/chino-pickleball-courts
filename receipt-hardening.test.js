@@ -381,7 +381,7 @@ test('receipt verification preserves authorization, resource, and settlement bou
 
   // Dedicated provider parsers keep source-bank evidence separate while all
   // uncertain results stay advisory and automated checks never reject.
-  assert.match(edge, /parseProviderReceipt\(provider,\s*ocrText,\s*\{\s*typedReference:\s*typedRef/);
+  assert.match(edge, /parseProviderReceipt\(provider === "maribank" \? "maribank_direct" : provider,\s*ocrText,\s*\{\s*typedReference:\s*typedRef/);
   assert.match(parser, /export function parseGcashReceipt\(/);
   assert.match(providerRegistry, /case "gcash"[\s\S]*?parseGcashReceipt/);
   assert.match(
