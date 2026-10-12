@@ -121,7 +121,7 @@ Deno.test("wrong recipient, sender identity, conflicting amounts and fee-inclusi
       [native.replace("To\n", ""), "MARIBANK_RECIPIENT_SECTION_UNREADABLE"],
       [native.replace("PHP 795.00", "PHP 895.00"), "MARIBANK_AMOUNT_CONFLICT"],
       [gcash.replace("P 805.00", "P 795.00"), "MARIBANK_TOTAL_MISMATCH"],
-      [gcash.replace("15521507144", "xxxx144"), "RECEIVER_ACCOUNT_MISMATCH"],
+      [gcash.replace("15521507144", "xxxx144"), "MARIBANK_AMBIGUOUS_FIELDS"],
     ]
   ) assert(flags(text).includes(expected), expected);
   assert(flags(gcash, { expectedAmount: 805 }).includes("AMOUNT_MISMATCH"));
@@ -210,4 +210,75 @@ Deno.test("auto verification requires native confidence for every field, not pag
       0,
     );
   }
+});
+
+Deno.test("GCash October column layouts, capitalization and tight dates preserve native values", () => {
+  const variants = [
+    gcash.replace("InstaPay\n", "Instapay\n").replace(
+      "Oct 06, 2026",
+      "Oct 06,2026",
+    ),
+    gcash.replace("15521507144", ".......7144\n⚫7144").replace(
+      "InstaPay\n",
+      "Instapay\n",
+    ),
+    gcash.replace(
+      "MariBank\nAccount No.\nAccount Name\nTransfer Method\nReceipt sent to\n15521507144\nKRISTIE LOU VILLANUEVA\nInstaPay\ntest@example.invalid\nTransfer Amount\n+Fee\nTotal\nDate\nInstaPay Invoice No.\nRef No.",
+      "Account No.\nAccount Name\nTransfer Method\nReceipt sent to\nTransfer Amount\n+Fee\nTotal\nDate\nInstaPay Invoice No.\nRef No.\nMariBank\n15521507144\nKRISTIE LOU VILLANUEVA\nInstaPay\ntest@example.invalid",
+    ),
+    gcash.replace("P 805.00", "+ 805.00"),
+  ];
+  for (const text of variants) {
+    eq(flags(text), []);
+    const p = parseProviderReceipt("maribank_direct", text);
+    if (p.provider !== "maribank_direct") throw Error();
+    const score = maribankDirectApprovalConfidence(bankFixtureRead(text), p);
+    eq(score.confidence, .97);
+  }
+});
+Deno.test("conflicting repeated accounts, missing labels, extra payment fields and short suffixes remain blocked", () => {
+  for (
+    const text of [
+      gcash.replace("15521507144", ".......7144\n⚫9999"),
+      gcash.replace("Account Name\n", ""),
+      gcash + "\nRef No.\n9999999999999",
+      gcash.replace("15521507144", "7144"),
+      gcash.replace("P 805.00", "+ 905.00"),
+    ]
+  ) assert(flags(text).length > 0);
+});
+Deno.test("weak peso glyph may be ignored only with complete strong native total digits", () => {
+  const text = gcash.replace("P 805.00", "P805.00");
+  const parsed = parseProviderReceipt("maribank_direct", text);
+  if (parsed.provider !== "maribank_direct") throw Error();
+  const read = bankFixtureRead(text);
+  const word = read.nativeLines!.flatMap((l) => l.words).find((w) =>
+    w.text === "P805.00"
+  )!;
+  word.confidence = .4;
+  word.symbols[0].confidence = .4;
+  eq(maribankDirectApprovalConfidence(read, parsed).confidence, .97);
+  word.symbols[2].confidence = .4;
+  assert(maribankDirectApprovalConfidence(read, parsed).confidence < .9);
+  word.symbols.splice(2, 1);
+  assert(maribankDirectApprovalConfidence(read, parsed).confidence < .9);
+});
+Deno.test("detached native date column binds to the reference, never to status-bar time", () => {
+  const text = native.replace(
+    "Reference Number\n",
+    "Reference Number\nTransaction Date & Time\n",
+  ).replace(
+    "BC550000000000000001\nTransaction Date & Time\n",
+    "BC550000000000000001\n",
+  );
+  eq(flags(text), []);
+  assert(
+    flags(text.replace("06 Oct 2026, 16:20", "")).includes("TIME_UNREADABLE"),
+  );
+  const generated =
+    text.replace("Transfer Result", "Transaction Receipt").replace(
+      "Transfer Successful!",
+      "",
+    ) + "\nReceipt generated from MariBank app";
+  assert(flags(generated).includes("TRANSFER_STATUS_UNREADABLE"));
 });

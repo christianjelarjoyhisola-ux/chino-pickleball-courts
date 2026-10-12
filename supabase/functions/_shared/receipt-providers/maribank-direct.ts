@@ -13,6 +13,97 @@ function money(raw: string | null): number | null {
   const m = raw?.match(MONEY);
   return m ? Number(m[1].replace(/,/g, "")) : null;
 }
+/** Match one complete bank-transfer table. Vision can read entire label columns
+ * before values. Every label and typed value must exist independently; no
+ * expected merchant data is used to reconstruct the table. */
+function gcashBankFields(input: string[]) {
+  const labels = [
+    "Bank",
+    "Account No.",
+    "Account Name",
+    "Transfer Method",
+    "Receipt sent to",
+    "Transfer Amount",
+    "+Fee",
+    "Total",
+    "Date",
+    "InstaPay Invoice No.",
+    "Ref No.",
+  ];
+  const lines = input.flatMap((line) => {
+    const label = labels.find((label) => line.startsWith(label + ":"));
+    return label
+      ? [label, line.slice(label.length + 1).trim()].filter(Boolean)
+      : [line];
+  });
+  const positions = labels.map((label) => lines.indexOf(label));
+  if (
+    labels.some((label) => lines.filter((line) => line === label).length !== 1)
+  ) return null;
+  // Recipient and financial labels retain their own order even when their
+  // columns are interleaved. Receipt email may precede the rail label.
+  for (const indices of [[0, 1, 2], [5, 6, 7, 8, 9, 10]]) {
+    if (
+      indices.some((n, i) => i > 0 && positions[n] <= positions[indices[i - 1]])
+    ) return null;
+  }
+  const values = lines.slice(positions[0] + 1).filter((line) =>
+    !labels.includes(line)
+  );
+  let i = 0;
+  const bank = values[i++];
+  if (!/^MariBank$/i.test(bank || "")) return null;
+  const accounts: string[] = [];
+  while (/^[\d*•●⚫·.xX\s]+$/.test(values[i] || "") && i < values.length) {
+    accounts.push(values[i++]);
+  }
+  const validAccount = (s: string) =>
+    /^(?:\d{11}|[*•●⚫·.xX]{2,}\d{4})$/.test(s.replace(/\s/g, ""));
+  let account = accounts.join("").replace(/\s/g, "");
+  if (!validAccount(account)) {
+    // A duplicate OCR line may repeat the same masked suffix. Conflicting
+    // visible digits never get discarded or replaced with configuration.
+    if (
+      accounts.length !== 2 || !validAccount(accounts[0]) ||
+      !/^[*•●⚫·.xX]+\d{4}$/.test(accounts[1]) ||
+      !/^[*•●⚫·.xX]+\d{4}$/.test(accounts[0]) ||
+      accounts[0].slice(-4) !== accounts[1].slice(-4)
+    ) return null;
+    account = accounts[0];
+  }
+  const name = values[i++], method = values[i++];
+  if (
+    !/^[A-Za-z][A-Za-z .'-]+$/.test(name || "") ||
+    !/^instapay$/i.test(method || "")
+  ) return null;
+  const emailParts: string[] = [];
+  while (
+    i < values.length && money(values[i]) === null && emailParts.length < 4
+  ) emailParts.push(values[i++]);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailParts.join(""))) return null;
+  const [principal, fee, totalRaw, dateRaw, invoiceRaw, referenceRaw] = values
+    .slice(i, i + 6);
+  if (
+    money(principal) == null || money(fee) == null ||
+    money(totalRaw?.replace(/^\+\s*/, "P")) == null ||
+    !/^[A-Za-z]+ \d{1,2},?\s*\d{4} \d{1,2}:\d{2}(?::\d{2})? (?:AM|PM)$/i.test(
+      dateRaw || "",
+    ) ||
+    !/^\d{4,20}$/.test(invoiceRaw || "") || !/^\d{13}$/.test(referenceRaw || "")
+  ) return null;
+  return {
+    bank,
+    account,
+    name,
+    method,
+    principal,
+    fee,
+    totalRaw,
+    dateRaw,
+    invoiceRaw,
+    referenceRaw,
+  };
+}
 function nativeTimestamp(raw: string | null): BankReceiptTimestamp {
   const m = raw?.match(/^(\d{1,2}) ([A-Za-z]{3}) (\d{4}), (\d{2}):(\d{2})$/);
   if (!m || Number(m[4]) > 23 || Number(m[5]) > 59) return parseTimestamp([]);
@@ -53,6 +144,7 @@ export function parseMaribankDirectReceipt(
   let method: string | null = null;
   if (source === "maribank") {
     let breakdownReference: string | null = null;
+    let breakdownDate: string | null = null;
     if (
       lines.filter((s) => s === "To").length !== 1 ||
       lines.filter((s) => s === "From").length !== 1
@@ -84,7 +176,7 @@ export function parseMaribankDirectReceipt(
       const positions = labels.map((label) => lines.indexOf(label));
       const columnLayout = positions.every((position, n) =>
         position >= 0 && position < i &&
-        (!n || position === positions[n - 1] + 1)
+        (!n || position > positions[n - 1])
       );
       const rowLayout = labels.every((label, n) =>
         lines[i + 1 + n * 2] === label
@@ -97,6 +189,7 @@ export function parseMaribankDirectReceipt(
       ) {
         [principal, fee, totalRaw] = values;
         breakdownReference = values[3] || null;
+        breakdownDate = values[4] || null;
       }
     } else if (accounts.length > 1) issues.push("MARIBANK_AMBIGUOUS_FIELDS");
     referenceRaw = unique(lines.filter((s) => /^BC\d{18}$/.test(s)));
@@ -110,6 +203,13 @@ export function parseMaribankDirectReceipt(
         ).length === 1
       ? lines[di + 1] || null
       : null;
+    if (
+      di >= 0 && lines.filter((s) =>
+          s === "Transaction Date & Time"
+        ).length === 1 &&
+      nativeTimestamp(dateRaw).completeness !== "date_time" &&
+      nativeTimestamp(breakdownDate).completeness === "date_time"
+    ) dateRaw = breakdownDate;
     for (const label of ["Transfer Amount", "Transfer Fee", "Total Amount"]) {
       if (lines.filter((s) => s === label).length !== 1) {
         issues.push("MARIBANK_AMOUNT_BREAKDOWN_UNREADABLE");
@@ -128,62 +228,26 @@ export function parseMaribankDirectReceipt(
       )
     ) issues.push("MARIBANK_AMOUNT_CONFLICT");
   } else {
-    // GCash may emit labels as rows, columns, or mixed. Only reorder an
-    // exact known label sequence followed by the correctly typed values.
-    let canonical = text;
-    canonical = canonical.replace(
-      /Transfer Amount\n\+Fee\nTotal\nDate\nInstaPay Invoice No\.\nRef No\.\n([^\n]+)\n([^\n]+)\n([^\n]+)\n([^\n]+)\n(\d{4,20})\n(\d{13})\n/g,
-      (m, a, f, t, d, i, r) =>
-        [a, f, t].every((x) => money(x) !== null)
-          ? `Transfer Amount: ${a}\n+Fee: ${f}\nTotal: ${t}\nDate: ${d}\nInstaPay Invoice No.: ${i}\nRef No.: ${r}\n`
-          : m,
-    );
-    canonical = canonical.replace(
-      /Bank\nAccount No\.\nAccount Name\nTransfer Method\n(?:Receipt sent to\n)?(MariBank)\n([\d*•●·.xX\s]+)\n([A-Za-z][A-Za-z .'-]+)\n(InstaPay)\n/g,
-      (_m, b, a, n, t) =>
-        `Bank: ${b}\nAccount No.: ${
-          a.replace(/\s/g, "")
-        }\nAccount Name: ${n}\nTransfer Method: ${t}\n`,
-    );
-    canonical = canonical.replace(
-      /Account No\.\nAccount Name\nTransfer Method\n(?:Receipt sent to\n)?([\d*•●·.xX\s]+)\n([A-Za-z][A-Za-z .'-]+)\n(InstaPay)\n/g,
-      (_m, a, n, t) =>
-        `Account No.: ${
-          a.replace(/\s/g, "")
-        }\nAccount Name: ${n}\nTransfer Method: ${t}\n`,
-    );
-    canonical = canonical.replace(
-      /Transfer Amount\n\+Fee\nTotal\n([^\n]+)\n([^\n]+)\n([^\n]+)\n/g,
-      (m, a, f, t) =>
-        [a, f, t].every((x) => money(x) !== null)
-          ? `Transfer Amount: ${a}\n+Fee: ${f}\nTotal: ${t}\n`
-          : m,
-    );
-    canonical = canonical.replace(
-      /Date\nInstaPay Invoice No\.\nRef No\.\n([^\n]+)\n(\d{4,20})\n(\d{13})\n/g,
-      (_m, d, i, r) =>
-        `Date: ${d}\nInstaPay Invoice No.: ${i}\nRef No.: ${r}\n`,
-    );
-    const row = (label: string): string | null =>
-      unique(
-        [...canonical.matchAll(
-          new RegExp(`^${label}(?:: ?|\\n)([^\\n]+)$`, "gm"),
-        )].map((m) => m[1]),
-      );
-    bank = row("Bank");
-    account = row("Account No\\.");
-    name = row("Account Name");
-    method = row("Transfer Method");
-    principal = row("Transfer Amount");
-    fee = row("\\+Fee");
-    totalRaw = row("Total");
-    referenceRaw = row("Ref No\\.");
-    invoiceRaw = row("InstaPay Invoice No\\.");
-    dateRaw = row("Date");
+    const fields = gcashBankFields(lines);
+    if (!fields) issues.push("MARIBANK_AMBIGUOUS_FIELDS");
+    if (fields) {
+      ({
+        bank,
+        account,
+        name,
+        method,
+        principal,
+        fee,
+        totalRaw,
+        referenceRaw,
+        invoiceRaw,
+        dateRaw,
+      } = fields);
+    }
   }
   const transferAmount = money(principal),
     transferFee = money(fee),
-    total = money(totalRaw);
+    total = money(totalRaw?.replace(/^\+\s*/, "P") || null);
   if (transferAmount === null || transferFee === null || total === null) {
     issues.push("MARIBANK_AMOUNT_BREAKDOWN_UNREADABLE");
   } else if (
@@ -195,13 +259,18 @@ export function parseMaribankDirectReceipt(
     ? referenceRaw
     : null;
   const typed = (options.typedReference || "").replace(/\s/g, "").toUpperCase();
+  const normalizedDate = dateRaw?.replace(/,(?=\d{4})/g, ", ") || null;
   const timestamp = source === "gcash"
-    ? parseTimestamp(dateRaw ? [dateRaw] : [])
+    ? parseTimestamp(normalizedDate ? [normalizedDate] : [])
     : nativeTimestamp(dateRaw);
   // Date parser must consume the complete field, not accept a timestamp within unrelated text.
   if (
-    source === "gcash" && dateRaw && timestamp.raw?.trim() !== dateRaw.trim()
+    source === "gcash" && dateRaw &&
+    timestamp.raw?.trim() !== normalizedDate?.trim()
   ) issues.push("MARIBANK_TIMESTAMP_AMBIGUOUS");
+  if (source === "gcash" && timestamp.completeness === "date_time") {
+    timestamp.raw = dateRaw;
+  }
   const statusRaw = source === "gcash"
     ? lines.find((s) => /^Bank Transfer Complete$/i.test(s))
     : lines.find((s) => /^Transfer Successful!$/i.test(s));
@@ -264,7 +333,7 @@ export function parseMaribankDirectReceipt(
       transferSuccess: !!statusRaw && !status.failureStatus &&
         !status.pendingStatus,
       destinationMaribank: /^(?:M )?MariBank$/.test(bank || ""),
-      instaPay: method === "InstaPay",
+      instaPay: /^instapay$/i.test(method || ""),
       ...status,
     },
     issues: [...new Set(issues)],

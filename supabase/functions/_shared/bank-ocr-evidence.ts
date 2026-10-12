@@ -241,6 +241,7 @@ export function fieldEvidence(
   raw: string | null | undefined,
   masked = false,
   zeroFee = false,
+  moneyDigits = false,
 ): BankPaymentFieldEvidence {
   const text = String(raw || "").trim();
   const value = compact(text);
@@ -278,17 +279,23 @@ export function fieldEvidence(
     const boundarySafe = (!/[A-Z0-9.,]$/.test(left) || attachedLabel) &&
       !/^[A-Z0-9.,]/.test(right);
     if (boundarySafe && matched.length) {
-      const valueWords = masked
+      const valueWords = moneyDigits
+        ? matched.filter(span => !/^(?:PHP|₱|P|\+)$/i.test(span.word.text))
+        : masked
         ? matched.filter((span) =>
           !/^(?:[•‣●◦∙·*#]+|\.{2,}|X{2,})$/.test(span.word.text)
         )
         : matched;
-      const scores = valueWords.map((span) =>
-        nativeWordConfidence(
+      const scores = valueWords.map((span) => {
+        if (moneyDigits && /^(?:PHP|₱|P|\+)?[\d,.]+$/i.test(span.word.text)) {
+          const symbols = span.word.symbols?.filter(s => /[\d,.]/.test(s.text));
+          if (symbols?.length && symbols.map(s=>s.text).join('')===span.word.text.replace(/^(?:PHP|₱|P|\+)/i,'') && symbols.every(s=>score(s.confidence))) return Math.min(...symbols.map(s=>s.confidence!));
+        }
+        return nativeWordConfidence(
           span.word,
           masked && /[•‣●◦∙·*#]|\.{2,}|X{2,}/.test(text),
-        )
-      );
+        );
+      });
       const zeroConfidence = zeroFee && /^(?:PHP|₱|P)?\s*0\.00$/i.test(text)
         ? zeroFeeDigitConfidence(matched.map((span) => span.word))
         : undefined;
@@ -551,7 +558,12 @@ export function bankFieldIdentity(key: string, value: string): string {
 
 /** Direct-bank approval requires native evidence for every payment field. */
 export function maribankDirectApprovalConfidence(read: GoogleVisionOcrResult, parsed: Extract<ProviderReceiptParse,{provider:"maribank_direct"}>): BankApprovalConfidence {
- const fields = Object.fromEntries(Object.entries(parsed.receipt.paymentFields).map(([key,value])=>[key,fieldEvidence(read,value,key==="recipientAccount")]));
+ // The currency glyph is often read as P or +. Require native confidence in
+ // every total digit and punctuation, plus exact principal + fee arithmetic.
+ // This does not relax confidence in the recipient, reference, principal or fee.
+ const r=parsed.receipt;
+ const reconciled=r.amount.amount!=null && r.transferFee!=null && r.total!=null && Math.round(r.amount.amount*100)+Math.round(r.transferFee*100)===Math.round(r.total*100);
+ const fields = Object.fromEntries(Object.entries(r.paymentFields).map(([key,value])=>[key,fieldEvidence(read,value,key==="recipientAccount",false,key==="total" && reconciled)]));
  const complete=Object.values(fields).every(f=>score(f.confidence));
  return {confidence:complete?Math.min(...Object.values(fields).map(f=>f.confidence!)):0,source:complete?"bank_payment_fields":"none",basis:complete?"native_payment_value_words":"missing_native_payment_evidence",fields,complete};
 }
