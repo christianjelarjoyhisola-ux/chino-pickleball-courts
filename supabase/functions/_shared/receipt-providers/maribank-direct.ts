@@ -313,9 +313,11 @@ export function parseMaribankDirectReceipt(
       amount: principal,
       fee,
       total: totalRaw,
-      recipientName: name,
+      // Profile and bank logos can be read as a bullet or M. Retain them in
+      // recipient raw fields, but measure confidence in the actual name/bank.
+      recipientName: source === "maribank" ? name?.replace(/^[•●] /, "") : name,
       recipientAccount: account,
-      destination: bank,
+      destination: source === "maribank" ? bank?.replace(/^M /, "") : bank,
       status: statusRaw || null,
       ...(source === "gcash"
         ? {

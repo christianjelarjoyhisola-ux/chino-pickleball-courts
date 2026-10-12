@@ -108,11 +108,19 @@ Deno.test("GCash row, mixed-column and column layouts retain original field iden
   for (const text of variants) eq(flags(text), []);
 });
 Deno.test("native profile icon OCR preserves recipient identity and confidence checks", () => {
-  const text = native.replace("Kristie Lou V.", "• Kristie Lou V.");
+  const text = native.replace("Kristie Lou V.", "• Kristie Lou V.").replace(
+    "MariBank\nAcct.",
+    "M MariBank\nAcct.",
+  );
   eq(flags(text), []);
   const parsed = parseProviderReceipt("maribank_direct", text);
   if (parsed.provider !== "maribank_direct") throw Error();
   eq(parsed.receipt.recipient.nameRaw, "• Kristie Lou V.");
+  const read = bankFixtureRead(text);
+  for (const word of read.nativeLines!.flatMap((line) => line.words)) {
+    if (word.text === "•" || word.text === "M") word.confidence = .2;
+  }
+  eq(maribankDirectApprovalConfidence(read, parsed).confidence, .97);
   eq(
     maribankDirectApprovalConfidence(bankFixtureRead(text), parsed).confidence,
     .97,
