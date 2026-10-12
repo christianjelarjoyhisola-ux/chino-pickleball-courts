@@ -158,7 +158,7 @@ export function parseMaribankDirectReceipt(
       account = m![1];
       if (
         /^(?:M )?MariBank$/.test(lines[i - 1] || "") &&
-        /^[A-Za-z][A-Za-z .'-]+$/.test(lines[i - 2] || "")
+        /^(?:[•●] )?[A-Za-z][A-Za-z .'-]+$/.test(lines[i - 2] || "")
       ) {
         bank = lines[i - 1];
         name = lines[i - 2];
