@@ -23,7 +23,8 @@
 <link rel="stylesheet" href="admin-activity.css?v=20260910-complete-activity-v1">
 <link rel="stylesheet" href="weather.css?v=20260921">
 <script src="weather-api.js?v=20260921"></script>
-<script src="weather-admin.js?v=20260921"></script>
+<script src="weather-admin.js?v=20261013"></script>
+<script src="weather-refund.js?v=20261013"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 <style>
@@ -9154,9 +9155,11 @@ async function openBookingDetails(ref) {
         <div class="booking-detail-row"><span>Payment state</span><strong>${pendingBalance ? 'Balance receipt awaiting review' : esc(payStatusText(b.paymentStatus))}</strong></div>
         <div class="booking-detail-row"><span>Policy</span><strong>Final and non-refundable</strong></div>
       </div>
+      <div id="bookingWeatherRefund"></div>
       ${cancellationHistory}
       ${rescheduleHistory}
       ${b.hostBooking ? `<div class="booking-detail-section"><h3>Email history</h3><div class="booking-notice-list">${notices}</div></div>` : ''}`;
+    await WeatherRefund.load($('bookingWeatherRefund'), historyBookings.map(item=>item.ref));
     const actionRef = b.primaryRef || b.ref;
     const hasReceipt = (b.gcashRef || (b.receiptStatus && b.receiptStatus !== 'none')) && isDigitalPayment(b.paymentMethod);
     $('bookingDetailsActions').innerHTML = `

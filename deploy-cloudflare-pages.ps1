@@ -52,6 +52,7 @@ $publicFiles = @(
   "weather.css",
   "weather-api.js",
   "weather-admin.js",
+  "weather-refund.js",
   "weather-reschedule.html",
   "weather-reschedule.js",
   "admin-activity.css",
