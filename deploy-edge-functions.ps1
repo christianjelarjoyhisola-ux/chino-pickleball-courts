@@ -215,6 +215,7 @@ try {
     "create-payment-session",
     "payment-webhook",
     "verify-gcash-receipt",
+    "chino-gcash-optical-check",
     "host-booking-balance-payment",
     "host-application",
     "manage-account",

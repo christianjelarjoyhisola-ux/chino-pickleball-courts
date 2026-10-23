@@ -31,9 +31,10 @@ function gcashBankFields(input: string[]) {
     "Ref No.",
   ];
   const lines = input.flatMap((line) => {
-    const label = labels.find((label) => line.startsWith(label + ":"));
+    const label = labels.find((label) => (line.startsWith(label + ":") || line.startsWith(label + " ")) &&
+      (label !== "Bank" || /^Bank[: ]+MariBank$/i.test(line)));
     return label
-      ? [label, line.slice(label.length + 1).trim()].filter(Boolean)
+      ? [label, line.slice(label.length).replace(/^:/, "").trim()].filter(Boolean)
       : [line];
   });
   const positions = labels.map((label) => lines.indexOf(label));

@@ -47,5 +47,8 @@ verify_jwt = true
 [functions.integration-status]
 verify_jwt = true
 
+[functions.chino-gcash-optical-check]
+verify_jwt = true
+
 [functions.weather-notifications]
 verify_jwt = false

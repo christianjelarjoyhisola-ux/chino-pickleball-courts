@@ -13,6 +13,8 @@ export type GoogleVisionOcrResult = {
   recipientCropEvidence?: GoogleVisionRecipientCropEvidence;
   /** Native observed rows only; no merchant or player values are inserted. */
   nativeLines?: GoogleVisionNativeLine[];
+  /** Original hierarchy order, for value confidence only; never layout repair. */
+  nativeWordLines?: GoogleVisionNativeLine[];
   requestMetrics?: GoogleVisionRequestMetrics;
 };
 
@@ -590,6 +592,36 @@ export function googleVisionNativeLines(
   return nativeLinesFromLayout(
     googleVisionLayout(annotation, originalText, true),
   );
+}
+
+/** A rotated status-bar glyph must not erase confidence in upright receipt
+ * words. Preserve EVERY hierarchy character in source order; malformed words
+ * remain present but carry no usable confidence. Never use this as row layout. */
+export function googleVisionNativeWordLines(annotation: Record<string, unknown> | null, originalText: string): GoogleVisionNativeLine[] | undefined {
+  if(!Array.isArray(annotation?.pages) || annotation.pages.length!==1)return undefined;
+  const page=record(annotation.pages[0]);if(!Array.isArray(page?.blocks))return undefined;
+  const lines: GoogleVisionNativeLine[]=[];
+  for(const rawBlock of page.blocks){
+    const block=record(rawBlock);if(!block)return undefined;
+    if(block.paragraphs===undefined && block.blockType!=='TEXT')continue;
+    if(!Array.isArray(block.paragraphs))return undefined;
+    for(const rawParagraph of block.paragraphs){
+      const paragraph=record(rawParagraph);if(!Array.isArray(paragraph?.words))return undefined;
+      for(const rawWord of paragraph.words){
+        const word=record(rawWord);if(!Array.isArray(word?.symbols))return undefined;
+        const symbols=word.symbols.map(record);
+        if(!symbols.length || symbols.some(s=>typeof s?.text!=='string'||!s.text))return undefined;
+        const text=symbols.map(s=>s!.text as string).join('');
+        const valid=layoutWord(rawWord,page,lines.length,true);
+        // Zero boxes are unusable sentinels, not inferred geometry. No native
+        // score or symbols are attached to invalid words.
+        const evidence=valid || {text,left:0,right:0,top:0,bottom:0,symbols:[]};
+        lines.push({text,page:0,words:[evidence]});
+      }
+    }
+  }
+  if(!lines.length || lines.map(l=>l.text).join('').replace(/\s/g,'')!==originalText.replace(/\s/g,''))return undefined;
+  return lines;
 }
 
 function recipientRegionFromLayout(
@@ -1230,6 +1262,7 @@ export async function googleVisionOcr(
     nativeLines: nativeLinesFromLayout(
       layout || googleVisionLayout(fullText, text, true),
     ),
+    nativeWordLines: googleVisionNativeWordLines(fullText, text),
     requestMetrics: requestMetrics(),
   };
 }

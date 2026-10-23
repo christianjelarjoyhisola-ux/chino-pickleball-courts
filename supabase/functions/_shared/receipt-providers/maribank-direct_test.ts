@@ -84,6 +84,40 @@ const flags = (
     ...context,
     ...override,
   }).flags;
+
+Deno.test('GCash native row layout reads real mask without confusing Bank Transfer heading',()=>{
+ const rows=`Bank Transfer
+Bank Transfer Complete
+Sent via GCash
+Bank MariBank
+Account No. .......7144
+Account Name KRISTIE LOU V.
+Transfer Method Instapay
+Receipt sent to test@example.invalid
+Transfer Amount 795.00
++Fee 10.00
+Total + 805.00
+Date Oct 06, 2026 04:20 PM
+InstaPay Invoice No. 1234567
+Ref No. 1234567890123`;
+ eq(flags(rows),[]);
+ assert(flags(rows.replace('.......7144','.......9999')).length>0);
+ assert(flags(rows.replace('.......7144','7144')).includes('RECEIVER_ACCOUNT_UNREADABLE'));
+ assert(flags(rows+'\nAccount No. .......9999').length>0);
+ assert(flags(rows.replace('Complete','Pending')).length>0);
+ const parsed=parseProviderReceipt('maribank_direct',rows);if(parsed.provider!=='maribank_direct')throw Error();
+ const read=bankFixtureRead(rows);const fallback={...read,nativeLines:undefined,nativeWordLines:read.nativeLines};
+ assert(maribankDirectApprovalConfidence(fallback,parsed).confidence>=.9);
+ const weak=structuredClone(fallback);const word=weak.nativeWordLines!.flatMap(l=>l.words).find(w=>w.text.includes('1234567890123'))!;word.confidence=.4;word.symbols.forEach(s=>s.confidence=.4);
+ assert(maribankDirectApprovalConfidence(weak,parsed).confidence<.9);
+ const logoRead=bankFixtureRead(rows+'\nPowered by InstaPay');
+ const logo=logoRead.nativeLines!.at(-1)!.words.at(-1)!;
+ logo.confidence=.3;logo.symbols.forEach(s=>s.confidence=.3);
+ assert(maribankDirectApprovalConfidence(logoRead,parsed).confidence>=.9,'low decorative logo must not replace labeled rail confidence');
+ const method=logoRead.nativeLines!.find(line=>line.text.startsWith('Transfer Method'))!.words.at(-1)!;
+ method.confidence=.3;method.symbols.forEach(s=>s.confidence=.3);
+ assert(maribankDirectApprovalConfidence(logoRead,parsed).confidence<.9,'weak labeled rail cannot borrow confidence from another occurrence');
+});
 Deno.test("direct MariBank and GCash receipts verify destination, principal and Philippine timestamp", () => {
   for (const text of [native, gcash]) {
     const p = parseProviderReceipt("maribank_direct", text);

@@ -5,6 +5,7 @@ import {
   googleVisionGcashEvidence,
   googleVisionLayoutText,
   googleVisionNativeLines,
+  googleVisionNativeWordLines,
   googleVisionOcr,
   googleVisionRecipientCropEvidence,
   googleVisionRecipientRegion,
@@ -285,6 +286,19 @@ function visionWord(
 function visionPage(words: ReturnType<typeof visionWord>[]) {
   return { width: 1000, height: 2000, blocks: [{ paragraphs: [{ words }] }] };
 }
+
+Deno.test('native value evidence preserves good words without trusting malformed UI or payment geometry', () => {
+  const good={...visionWord('1234567890123',20,100),confidence:.97};
+  const bad={...visionWord('Failed',20,150),confidence:.99,boundingBox:{vertices:[]}};
+  const annotation={pages:[visionPage([good,bad])]};
+  const lines=googleVisionNativeWordLines(annotation,'1234567890123\nFailed')!;
+  assertEquals(lines[0].words[0].confidence,.97,'retain observed confidence');
+  assertEquals(lines[1].text,'Failed','never drop adverse text');
+  assertEquals(lines[1].words[0].confidence,undefined,'malformed geometry gets no confidence');
+  assertEquals(lines[1].words[0].symbols.length,0,'no confidence through symbols');
+  assertEquals(googleVisionNativeWordLines(annotation,'1234567890123'),undefined,'partial hierarchy rejected');
+  assertEquals(googleVisionNativeWordLines(annotation,'Failed\n1234567890123'),undefined,'changed hierarchy order rejected');
+});
 
 Deno.test("native line export retains exact word and symbol confidences and rejects incomplete geometry", () => {
   const word = {

@@ -534,7 +534,7 @@ export function bankApprovalConfidence(
 }
 
 function moneyIdentity(value: string): string {
-  return compact(value).replace(/^(?:PHP|₱|P)/, "").replace(/,/g, "");
+  return compact(value).replace(/^(?:PHP|₱|P|\+)/, "").replace(/,/g, "");
 }
 /** OCR evidence signature preserves visible masks instead of filling them. */
 export function bankFieldIdentity(key: string, value: string): string {
@@ -560,13 +560,35 @@ export function bankFieldIdentity(key: string, value: string): string {
 }
 
 /** Direct-bank approval requires native evidence for every payment field. */
+function gcashTransferMethodEvidence(read: GoogleVisionOcrResult, raw: string | null | undefined): BankPaymentFieldEvidence {
+ const words=read.nativeLines?.flatMap(line=>line.words) || [];
+ const sameRow=(a:GoogleVisionNativeWord,b:GoogleVisionNativeWord)=>{
+   const height=Math.min(a.bottom-a.top,b.bottom-b.top);
+   return height>0 && Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top)>=height*.5;
+ };
+ const anchors=words.flatMap((word,index)=>{
+   if(compact(word.text)==='TRANSFERMETHOD')return [word];
+   const next=words[index+1];
+   if(compact(word.text)!=='TRANSFER'||!next||compact(next.text)!=='METHOD'||!sameRow(word,next)||next.left<word.right||next.left-word.right>(word.bottom-word.top)*2)return [];
+   if((nativeWordConfidence(word,false)??0)<.9||(nativeWordConfidence(next,false)??0)<.9)return [];
+   return [{...next,left:word.left}];
+ });
+ if(anchors.length===1 && (nativeWordConfidence(anchors[0],false)??0)>=.9){
+   const anchor=anchors[0];
+   const values=words.filter(word=>compact(word.text)===compact(raw||'')&&word.left>anchor.right&&sameRow(word,anchor));
+   if(values.length===1)return fieldEvidence({...read,nativeLines:[{text:values[0].text,page:0,words:values}]},raw);
+ }
+ return fieldEvidence(read,raw);
+}
+
 export function maribankDirectApprovalConfidence(read: GoogleVisionOcrResult, parsed: Extract<ProviderReceiptParse,{provider:"maribank_direct"}>): BankApprovalConfidence {
  // The currency glyph is often read as P or +. Require native confidence in
  // every total digit and punctuation, plus exact principal + fee arithmetic.
  // This does not relax confidence in the recipient, reference, principal or fee.
  const r=parsed.receipt;
+ const evidenceRead={...read,nativeLines:read.nativeLines?.length ? read.nativeLines : read.nativeWordLines};
  const reconciled=r.amount.amount!=null && r.transferFee!=null && r.total!=null && Math.round(r.amount.amount*100)+Math.round(r.transferFee*100)===Math.round(r.total*100);
- const fields = Object.fromEntries(Object.entries(r.paymentFields).map(([key,value])=>[key,fieldEvidence(read,value,key==="recipientAccount",false,key==="total" && reconciled)]));
+ const fields = Object.fromEntries(Object.entries(r.paymentFields).map(([key,value])=>[key,key==='rail'&&r.source==='gcash'?gcashTransferMethodEvidence(evidenceRead,value):fieldEvidence(evidenceRead,value,key==="recipientAccount",false,key==="total" && reconciled)]));
  const complete=Object.values(fields).every(f=>score(f.confidence));
  return {confidence:complete?Math.min(...Object.values(fields).map(f=>f.confidence!)):0,source:complete?"bank_payment_fields":"none",basis:complete?"native_payment_value_words":"missing_native_payment_evidence",fields,complete};
 }
