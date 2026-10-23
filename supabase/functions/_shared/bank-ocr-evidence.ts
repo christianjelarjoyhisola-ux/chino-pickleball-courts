@@ -146,6 +146,9 @@ export function bankLayoutFamily(provider: string, text: string): string {
       return has(/^Transfer successful\b/im) && has(/^Transaction ID\b/im)
         ? "gotyme_transfer_success_v1"
         : "unknown";
+    case "maribank_direct":
+      return has(/^Sent via GCash$/im) && has(/^Bank Transfer Complete$/im) ? "gcash_to_maribank_v1"
+        : has(/^Transfer Result$/im) && has(/^Transfer Successful!$/im) ? "maribank_direct_v1" : "unknown";
     case "maribank":
       return has(/\bMariBank\b/i) && has(/^Money sent\b/im) &&
           has(/^Recipient\b/im) && has(/^Reference No\b/im)

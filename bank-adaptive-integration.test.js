@@ -137,11 +137,11 @@ test('raw original adverse status remains a veto even when reconstructed rows om
   assert.ok(from>0 && to>from);
   for(const [raw,expected] of [['Transfer successful\nPending','TRANSFER_PENDING'],['Sent!\nTransaction reversed','TRANSFER_STATUS_INVALID']]) {
     const context={provider:'gotyme',isBankAdaptiveProvider:()=>true,ocrOriginalText:raw,readReceiptTransferStatus:status,flags:[]};
-    vm.runInNewContext(edge.slice(from,to),context);
+    vm.runInNewContext(edge.slice(from,to).replace(/\(item\): item is typeof item & \{parsed: Exclude<[^\n]+?=>/, "(item) =>"),context);
     assert.deepEqual(Array.from(context.flags),[expected]);
   }
   const context={provider:'gotyme',isBankAdaptiveProvider:()=>true,ocrOriginalText:'Transfer successful\nProcessing time: Instant',readReceiptTransferStatus:status,flags:[]};
-  vm.runInNewContext(edge.slice(from,to),context);
+  vm.runInNewContext(edge.slice(from,to).replace(/\(item\): item is typeof item & \{parsed: Exclude<[^\n]+?=>/, "(item) =>"),context);
   assert.equal(context.flags.length,0);
 });
 
@@ -152,14 +152,14 @@ test('native field recovery updates readable evidence but retains global review 
   const original={read:{text:'original'},parsed:{provider:'gotyme',receipt:{}}};
   const improved={provider:'gotyme',receipt:{amount:{amount:4240},recipient:{accountSuffix:'9W07'}}};
   const context={providerParse:original.parsed,originalBankReading:original,
-    bankReadingRecovery:{accepted:false,observations:[{read:{text:'observed'}}]},
+    bankReadingRecovery:{accepted:false,observations:[{read:{text:'observed'},parsed:original.parsed}]},
     gotymeFieldRecovery:null,recipientRefinement:null,gotymeNativeFusion:null,
     providerContext:{},flags:['DUPLICATE_REF'],ocrFallbackReason:'google_missing_amount',
     recoverGotymeNativeFields:input=>{
       assert.equal(input.original,original);
       return {safeToUse:true,applied:true,parsed:improved,recoveredFields:['amount'],conservationFlags:[],approval:{confidence:.5,source:'bank_payment_fields'}};
     }};
-  vm.runInNewContext(edge.slice(from,to),context);
+  vm.runInNewContext(edge.slice(from,to).replace(/\(item\): item is typeof item & \{parsed: Exclude<[^\n]+?=>/, "(item) =>"),context);
   assert.equal(context.providerParse,improved);
   assert.deepEqual(context.flags,['DUPLICATE_REF']);
   assert.equal(context.ocrFallbackReason,null);
@@ -170,7 +170,7 @@ test('native field recovery updates readable evidence but retains global review 
   assert.equal(context.observedConfidence,.5,'recovered amount cannot raise account confidence');
   context.recipientRefinement={accepted:true};
   context.providerParse=original.parsed;
-  vm.runInNewContext(edge.slice(from,to),context);
+  vm.runInNewContext(edge.slice(from,to).replace(/\(item\): item is typeof item & \{parsed: Exclude<[^\n]+?=>/, "(item) =>"),context);
   assert.equal(context.providerParse,original.parsed,'successful dedicated recipient refinement keeps priority');
 });
 

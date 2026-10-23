@@ -6901,6 +6901,17 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(45, 62, 79, .1
             <div id="vmReceiptFlags" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px"></div>
             <div id="vmReceiptDetails" class="receipt-detail-grid" style="display:none"></div>
           </div>
+          <section id="vmReconcileFields" hidden style="margin-top:16px">
+            <h3>Reconcile past payment</h3>
+            <p>This records full payment and marks the past session completed. Check the receiving bank account first. The original receipt checks stay in the audit history.</p>
+            <label for="vmReconcileReference">Bank transaction reference</label>
+            <input class="fi" id="vmReconcileReference" maxlength="100" autocomplete="off">
+            <label for="vmReconcileReason">Reconciliation reason</label>
+            <textarea class="fi" id="vmReconcileReason" maxlength="1000" placeholder="Explain how you matched this receipt to money received"></textarea>
+            <label><input type="checkbox" id="vmReconcileAttest"> I checked that full payment was received and this court session took place.</label>
+            <p id="vmReconcileError" role="alert" style="color:var(--red)"></p>
+          </section>
+          <p id="vmReconciliationAudit" hidden></p>
           <p id="vmReviewHint" style="font-size:.78rem;color:var(--muted);text-align:center;margin-top:12px;line-height:1.6">Match the receipt and payment reference, then choose Received or Not Received.</p>
         </section>
       </div>
@@ -6909,6 +6920,7 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(45, 62, 79, .1
       <button class="btn btn-d" id="vmRejectBtn" onclick="rejectPayment()">❌ Not Received</button>
       <button class="btn booking-duplicate-transfer" id="vmResolveDuplicateBtn" style="display:none" onclick="openDuplicatePaymentTransferFromVerify()">Resolve duplicate</button>
       <button class="btn btn-g" id="vmRereadBtn" style="display:none" onclick="rereadStoredReceipt()" title="System Owner only">↻ Re-read Receipt</button>
+      <button class="btn btn-p" id="vmReconcileBtn" style="display:none" onclick="reconcilePastPayment()">Reconcile past payment</button>
       <button class="btn btn-p" id="vmConfirmBtn" onclick="verifyAndConfirm()">✅ Received — Confirm</button>
       <button class="btn btn-g" id="vmResolvedClose" style="display:none" onclick="closeVerifyModal()">Close</button>
     </div>
@@ -12009,7 +12021,7 @@ async function confirmBookingTransaction(ref, {
     const priorPaymentState = String(current.paymentStatus || '').toLowerCase();
     const verifiedPaymentNow = isDigitalPayment(current.paymentMethod) && !['paid','downpayment_paid'].includes(priorPaymentState);
     const verificationNote = (sess || Auth.getSession?.())?.role === 'owner'
-      ? 'Your system-owner confirmation will automatically mark this payment as verified.'
+      ? 'This records your manual confirmation and preserves the original automated receipt result.'
       : 'This records your manual confirmation and does not mark the receipt as automatically verified.';
     if (verifiedPaymentNow && !confirm(`Confirm that CHINO received ₱${Number(current.downpayment || current.total).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} for this booking?\n\nYou can confirm even if the reference or receipt details are missing. ${verificationNote}`)) return false;
     const result = await DB.confirmBookingTransaction(current.primaryRef || key);
@@ -12272,13 +12284,23 @@ async function openVerifyModal(ref, { returnFocus = null } = {}) {
     breakdown.style.display = b.isGroup ? '' : 'none';
     breakdown.innerHTML = b.isGroup ? bookingGroupBreakdownHtml(b.items) : '';
   }
-  await vmPopulateReceipt(b);
-  if (openToken !== _vmOpenToken) return;
+  // Open the controls before waiting for a signed image URL. Slow receipt storage must not block review.
+  const receiptLoad = vmPopulateReceipt(b).catch(error => { if (openToken === _vmOpenToken) toast('Receipt preview unavailable. You can still review the booking details.', 'err'); });
   const readOnly = bookingPaymentIsResolved(b);
   const canReview = canManuallyResolvePayment();
+  const todayPh = new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+  const pastItems = b.allItems?.length ? b.allItems : b.items?.length ? b.items : [b];
+  const canReconcile = !readOnly && (sess || Auth.getSession?.())?.role === 'owner' && pastItems.every(item => item.date && item.date < todayPh && ['pending','verifying'].includes(item.status));
+  $('vmReconcileFields').hidden = !canReconcile;
+  $('vmReconcileBtn').style.display = canReconcile ? '' : 'none';
+  $('vmReconcileReference').value = b.gcashRef || '';
+  $('vmReconcileReason').value = '';
+  $('vmReconcileAttest').checked = false;
+  $('vmReconcileError').textContent = '';
+  $('vmReconciliationAudit').hidden = true;
   const transferSource = !readOnly && canReview ? cancelledDuplicatePaymentSource(b) : null;
   if ($('vmRejectBtn')) $('vmRejectBtn').style.display = !readOnly && canReview ? '' : 'none';
-  if ($('vmConfirmBtn')) $('vmConfirmBtn').style.display = !readOnly && canReview ? '' : 'none';
+  if ($('vmConfirmBtn')) $('vmConfirmBtn').style.display = !readOnly && canReview && !canReconcile ? '' : 'none';
   const canReread = !readOnly && canRereadReceipt() &&
     String(b.status || '').toLowerCase() === 'pending' &&
     String(b.paymentStatus || '').toLowerCase() === 'for_verification' &&
@@ -12306,6 +12328,11 @@ async function openVerifyModal(ref, { returnFocus = null } = {}) {
   overlay.setAttribute('aria-hidden', 'false');
   overlay.classList.add('show');
   requestAnimationFrame(() => overlay.querySelector('.verify-payment-modal')?.focus());
+  DB.getPaymentReconciliation?.(b.primaryRef || ref).then(record => {
+    if (openToken !== _vmOpenToken || !record) return;
+    const audit = $('vmReconciliationAudit'); audit.hidden = false;
+    audit.textContent = 'Past payment reconciled on ' + new Date(record.reconciled_at).toLocaleString('en-PH',{timeZone:'Asia/Manila'}) + ' PH. Reason: ' + record.reason;
+  }).catch(() => {});
 }
 
 function closeVerifyModal({ restoreFocus = true } = {}) {
@@ -12339,7 +12366,7 @@ function verifyPaymentModalKeydown(event) {
     return;
   }
   if (event.key !== 'Tab') return;
-  const focusable = [...overlay.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), summary, [href], [tabindex]:not([tabindex="-1"])')]
+  const focusable = [...overlay.querySelectorAll('button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), summary, [href], [tabindex]:not([tabindex="-1"])')]
     .filter(el => el.offsetParent !== null);
   if (!focusable.length) return;
   const first = focusable[0], last = focusable[focusable.length - 1];
@@ -12358,7 +12385,8 @@ async function vmPopulateReceipt(b){
   const auditWrap = $('vmReceiptAuditWrap');
   if (s === 'none' && !b.receiptImageUrl) {
     if (wrap) wrap.style.display = '';
-    if (noImg) noImg.style.display = '';
+    const emptyImage = $('vmReceiptNoImg');
+    if (emptyImage) emptyImage.style.display = '';
     return;
   }
   if (wrap) wrap.style.display = '';
@@ -12413,6 +12441,25 @@ async function vmPopulateReceipt(b){
   } else if (noImg) {
     noImg.style.display = '';
   }
+}
+
+async function reconcilePastPayment() {
+  const button = $('vmReconcileBtn');
+  if (button.disabled) return;
+  const ref = $('verifyModal').dataset.ref;
+  const reason = $('vmReconcileReason').value.trim(), reference = $('vmReconcileReference').value.trim();
+  const error = $('vmReconcileError');
+  if (reason.length < 10 || reference.length < 6 || !$('vmReconcileAttest').checked) {
+    error.textContent = 'Enter the bank reference, a reason of at least 10 characters, and confirm receipt of full payment and session completion.'; return;
+  }
+  button.disabled = true; error.textContent = '';
+  try {
+    await DB.reconcilePastBookingPayment(ref, reference, reason, true);
+    closeVerifyModal({restoreFocus:false});
+    toast('Past payment manually reconciled; session marked completed.');
+    await renderPaymentReview(); await renderBookings(); renderDash();
+  } catch(e) { error.textContent = e.message || 'Could not reconcile payment. No confirmation was saved.'; }
+  finally { button.disabled = false; }
 }
 
 async function verifyAndConfirm() {
@@ -20349,7 +20396,7 @@ async function checkAgreementGate(session) {
 
 <script src="supabase.min.js"></script>
 <script src="open-play-rating.js?v=20260729-head-to-head-v1"></script>
-<script src="supabase-config.js?v=20260910-owner-confirm-v1"></script>
+<script src="supabase-config.js?v=20261023-payment-reconciliation"></script>
 <script src="qrcode.min.js?v=1.5.4"></script>
 <script src="availability-graphic.js?v=20260925-single-page-v1"></script>
 <script src="play-manager.js?v=20260909-official-logo-v1"></script>

@@ -311,3 +311,18 @@ Deno.test("detached native date column binds to the reference, never to status-b
     ) + "\nReceipt generated from MariBank app";
   assert(flags(generated).includes("TRANSFER_STATUS_UNREADABLE"));
 });
+
+Deno.test('October displaced timestamp and inline reference preserve native details', () => {
+  const displaced = native.replace('Transaction Date & Time\n06 Oct 2026, 16:20','').replace('Reference Number\n','Reference Number\nTransaction Date & Time\n') + '\n06 Oct 2026, 16:20';
+  eq(flags(displaced), []);
+  const inline = native.replace('Reference Number\n','').replace('BC550000000000000001','Reference Number BC550000000000000001');
+  eq(flags(inline), []);
+  assert(flags(displaced+'\n07 Oct 2026, 16:20').includes('MARIBANK_TIMESTAMP_AMBIGUOUS'));
+});
+Deno.test('GCash decorative checkmark does not erase the table; bare suffix stays manual', () => {
+  eq(flags(gcash.replace('MariBank\n','☑\nMariBank\n')), []);
+  const bare = parseMaribankDirectReceipt(gcash.replace('15521507144','7144'));
+  eq(bare.amount.amount, 795); eq(bare.reference.value,'1234567890123');
+  assert(verifyMaribankDirectReceipt(bare,context).flags.includes('RECEIVER_ACCOUNT_UNREADABLE'));
+  assert(flags(native+'\nYou will be notified once this\ntransaction is successful.').includes('TRANSFER_PENDING'));
+});

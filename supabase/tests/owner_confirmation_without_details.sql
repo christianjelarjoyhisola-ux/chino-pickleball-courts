@@ -41,8 +41,8 @@ begin
       continue;
     end if;
     if denied or not result.transitioned then raise exception 'Owner confirmation failed'; end if;
-    if actor = 'owner' and (select count(*) from owner_test_bookings where receipt_status='auto_approved' and receipt_verified_at is not null) <> 2 then
-      raise exception 'System-owner confirmation must verify every group row';
+    if actor = 'owner' and (select count(*) from owner_test_bookings where receipt_status is distinct from 'auto_approved' and receipt_verified_at is not null) <> 2 then
+      raise exception 'System-owner confirmation must timestamp every group row without fabricating automatic approval';
     end if;
     if actor = 'court_owner' and exists(select 1 from owner_test_bookings where receipt_status='auto_approved' or receipt_verified_at is not null) then
       raise exception 'Court-owner confirmation must preserve receipt verification';

@@ -829,7 +829,7 @@ test('payment review covers every receipt-backed registration type', () => {
   );
   assert.match(
     admin,
-    /vmConfirmBtn'\)\.style\.display = !readOnly && canReview \? '' : 'none'/
+    /vmConfirmBtn'\)\.style\.display = !readOnly && canReview && !canReconcile \? '' : 'none'/
   );
   assert.match(
     admin,

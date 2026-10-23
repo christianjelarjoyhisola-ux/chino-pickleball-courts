@@ -2996,6 +2996,22 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
     }
     if (providerParse?.provider === "maribank_direct" && originalOcr) {
       bankRead = {...originalOcr,text:originalOcr.originalText ?? originalOcr.text};
+      const firstApproval = maribankDirectApprovalConfidence(bankRead, providerParse);
+      originalBankCheck = {clean: verifyProviderReceipt(providerParse, providerContext).flags.length === 0 && firstApproval.confidence >= .9, confidence: firstApproval.confidence};
+      readingLayout = bankLayoutFamily("maribank_direct", bankRead.text);
+      if (!originalBankCheck.clean && visionKey && !ocrError) {
+        bankReadingRecovery = await recoverBankReceipt(bytes, {read:bankRead, parsed:providerParse}, providerContext, visionKey, {ocr:readingSession.ocr});
+        if (bankReadingRecovery.reason.startsWith("original_conflict:") || ["recovery_conflict","recovery_readings_disagree"].includes(bankReadingRecovery.reason)) flags.push("RECEIPT_READINGS_CONFLICT");
+        if (bankReadingRecovery.accepted && bankReadingRecovery.selected) {
+          const selected = bankReadingRecovery.selected;
+          bankRead = selected.read;
+          providerParse = selected.parsed;
+          ocrText = bankOcrText(selected.read);
+          ocrConfidence = selected.read.confidence;
+          ocrConfidenceSource = selected.read.confidenceSource;
+          ocrFallbackReason = null;
+        }
+      }
     }
     if (providerParse && providerParse.provider !== "gcash" && originalOcr &&
       providerParse.provider !== "maribank_direct" &&
@@ -3127,7 +3143,7 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
       !recipientRefinement?.accepted && bankReadingRecovery?.observations?.length) {
       gotymeNativeFusion = recoverGotymeNativeFields({
         original: originalBankReading,
-        candidates: bankReadingRecovery.observations,
+        candidates: bankReadingRecovery.observations.filter((item): item is typeof item & {parsed: Exclude<typeof item.parsed, {provider:"maribank_direct"}>} => item.parsed.provider !== "maribank_direct"),
         context: providerContext,
       });
       if (gotymeNativeFusion.safeToUse && gotymeNativeFusion.applied) {
@@ -3675,7 +3691,7 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
       parserVersion: providerParse?.parserVersion || "legacy",
       ...(isDedicatedReceiptProvider(provider)
         ? {
-          verifierRevision: provider === "gcash" ? GCASH_VERIFIER_REVISION : provider === "maribank" ? "maribank_direct_20261012" : BANK_VERIFIER_REVISION,
+          verifierRevision: provider === "gcash" ? GCASH_VERIFIER_REVISION : provider === "maribank" ? "maribank_direct_20261023" : BANK_VERIFIER_REVISION,
           originalOcrConfidence: originalOcr?.confidence ?? 0,
           originalOcrConfidenceSource: originalOcr?.confidenceSource ?? "none",
           readingRecovery: readingRecovery?.audit || (gotymeFieldRecovery?.audit.attempted
@@ -3701,7 +3717,7 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
           feedback: {
             version: "receipt_feedback_v1",
             layout: readingLayout,
-            parserRevision: provider === "gcash" ? GCASH_VERIFIER_REVISION : provider === "maribank" ? "maribank_direct_20261012" : BANK_VERIFIER_REVISION,
+            parserRevision: provider === "gcash" ? GCASH_VERIFIER_REVISION : provider === "maribank" ? "maribank_direct_20261023" : BANK_VERIFIER_REVISION,
             durationMs: ocrMetrics.durationMs,
             ocrCalls: ocrMetrics.calls,
             strategies: feedbackStrategies,

@@ -2143,6 +2143,17 @@ window.DB = {
     };
   },
 
+  async reconcilePastBookingPayment(ref, reference, reason, sessionCompleted) {
+    const {data,error} = await _sb.rpc('reconcile_past_booking_payment', {p_booking_ref:ref,p_payment_reference:reference,p_reason:reason,p_session_completed:sessionCompleted});
+    if(error) throw new Error(_extractFnError(error,'Could not reconcile past payment'));
+    _pbClearFastCache(['bookings']);
+    return data;
+  },
+  async getPaymentReconciliation(ref) {
+    const {data,error} = await _sb.from('booking_payment_reconciliations').select('reason,reconciled_at').contains('booking_refs',[ref]).order('reconciled_at',{ascending:false}).limit(1);
+    if(error) throw error;
+    return data?.[0] || null;
+  },
   async transferCancelledBookingPayment(sourceRef, targetRef, reason, noRefundConfirmed, idempotencyKey) {
     const sourceBookingRef = String(sourceRef || '').trim();
     const targetBookingRef = String(targetRef || '').trim();

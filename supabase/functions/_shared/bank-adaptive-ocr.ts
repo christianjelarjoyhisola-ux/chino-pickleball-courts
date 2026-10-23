@@ -8,6 +8,7 @@ import {
 import {
   type BankApprovalConfidence,
   bankApprovalConfidence,
+  maribankDirectApprovalConfidence,
   bankFieldIdentity,
   bankLayoutFamily,
   bankOcrText,
@@ -39,7 +40,7 @@ export const BANK_RECOVERY_STRATEGIES = [
 export type BankRecoveryStrategy = typeof BANK_RECOVERY_STRATEGIES[number];
 export type BankRecoveryOriginal = {
   read: GoogleVisionOcrResult;
-  parsed: BankProviderParse;
+  parsed: BankProviderParse | Extract<import("./receipt-providers/index.ts").ProviderReceiptParse, {provider:"maribank_direct"}>;
 };
 export type BankRecoverySelected = BankRecoveryOriginal & {
   strategy: BankRecoveryStrategy;
@@ -67,8 +68,8 @@ export type BankRecoveryResult = {
   observations?: BankRecoverySelected[];
   audit: {
     version: "bank_adaptive_v1";
-    provider: BankProviderParse["provider"];
-    destinationProvider: BankProviderParse["destinationProvider"];
+    provider: BankRecoveryOriginal["parsed"]["provider"];
+    destinationProvider: BankRecoveryOriginal["parsed"]["destinationProvider"];
     layout: string;
     attempted: boolean;
     accepted: boolean;
@@ -91,6 +92,10 @@ function conservedFields(approval: BankApprovalConfidence) {
     ...approval.fields };
 }
 
+function recoveryApproval(read: GoogleVisionOcrResult, parsed: BankRecoveryOriginal["parsed"], context: ReceiptVerificationContext) {
+  return parsed.provider === "maribank_direct" ? maribankDirectApprovalConfidence(read, parsed) : bankApprovalConfidence(read, parsed, context);
+}
+
 export function bankOriginalRecoveryVeto(
   original: BankRecoveryOriginal,
   context: ReceiptVerificationContext,
@@ -103,7 +108,7 @@ export function bankOriginalRecoveryVeto(
     return ["COMPETING_PROVIDER"];
   }
   const verification = verifyProviderReceipt(original.parsed, context);
-  const evidence = bankApprovalConfidence(
+  const evidence = recoveryApproval(
     original.read,
     original.parsed,
     context,
@@ -138,7 +143,7 @@ export function bankRecoveryConservationFlags(
   candidate: BankRecoverySelected,
   context: ReceiptVerificationContext,
 ): string[] {
-  const primary = bankApprovalConfidence(
+  const primary = recoveryApproval(
     original.read,
     original.parsed,
     context,
@@ -161,6 +166,10 @@ export function bankRecoveryConservationFlags(
       ) flags.push("ORIGINAL_TIMESTAMP_CONFLICT");
       continue;
     }
+    // OCR sometimes drops the mask glyphs. Recovery may only add a mask
+    // when both independent reads agree and preserve every visible digit.
+    if (key === "recipientAccount" && original.parsed.provider === "maribank_direct" && original.parsed.receipt.source === "gcash" && /^\d{4}$/.test(field.text) &&
+      bankFieldIdentity(key, candidateFields[key]?.text || "") === "*" + field.text) continue;
     if (
       !candidateFields[key]?.text ||
       bankFieldIdentity(key, field.text) !==
@@ -201,8 +210,8 @@ export function evaluateBankRecoveryRead(
     original.parsed.provider,
     bankOcrText(read),
     { typedReference: context.typedReference },
-  ) as BankProviderParse;
-  const approval = bankApprovalConfidence(read, parsed, context);
+  ) as BankProviderParse | Extract<import("./receipt-providers/index.ts").ProviderReceiptParse, {provider:"maribank_direct"}>;
+  const approval = recoveryApproval(read, parsed, context);
   const selected = { strategy, read, parsed, approval };
   const flags = [...verifyProviderReceipt(parsed, context).flags];
   const originalLayout = bankLayoutFamily(
@@ -306,7 +315,7 @@ export async function recoverBankReceipt(
   });
   const veto = bankOriginalRecoveryVeto(original, context);
   if (veto.length) return result(`original_conflict:${veto.join(",")}`);
-  const originalApproval = bankApprovalConfidence(
+  const originalApproval = recoveryApproval(
     original.read,
     original.parsed,
     context,

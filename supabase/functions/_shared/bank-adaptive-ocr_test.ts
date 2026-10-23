@@ -574,3 +574,74 @@ Deno.test("a receipt above 4 MP gets a directly reduced color view larger than t
     "distinct resolutions even when original requires downsampling",
   );
 });
+
+Deno.test('direct MariBank recovery requires two matching readings and conserves payment fields', async () => {
+  const {parseProviderReceipt} = await import('./receipt-providers/index.ts');
+  const text = `Transfer Result
+From
+To
+Transfer Successful!
+PHP 795.00
+Transfer Amount
+Transfer Fee
+Total Amount
+Reference Number
+SAMPLE SENDER
+MariBank: 11111111111
+Kristie Lou V.
+MariBank
+Acct. No.: 15521507144
+PHP 795.00
+FREE
+PHP 795.00
+BC550000000000000001
+Transaction Date & Time
+06 Oct 2026, 16:20`;
+  const parsed=parseProviderReceipt('maribank_direct',text);
+  if(parsed.provider!=='maribank_direct') throw Error('parser');
+  const context={expectedAmount:795,pricingAvailable:true,amountTolerance:.01,expectedRecipientName:'KRISTIE LOU VILLANUEVA',expectedRecipientNumber:'15521507144',bookingStartedAt:'2026-10-06T08:18:00Z',bookingStartedDate:'2026-10-06',paymentWindowMinutes:15,earlyToleranceMinutes:2};
+  const read=bankFixtureRead(text);
+  for(const line of read.nativeLines!) for(const word of line.words) if(word.text==='FREE') word.confidence=.6;
+  let calls=0;
+  const recovered=await recoverBankReceipt(await imageBytes(),{read,parsed},context,'test',{ocr:async()=>{calls++;return bankFixtureRead(text);}});
+  eq(calls,2);eq(recovered.accepted,true,JSON.stringify(recovered.audit));
+  const changed=await recoverBankReceipt(await imageBytes(),{read,parsed},context,'test',{ocr:async()=>bankFixtureRead(text.replaceAll('795.00','800.00'))});
+  eq(changed.accepted,false);
+});
+
+Deno.test('GCash missing mask requires two native rereads with the exact original suffix', async () => {
+  const {parseProviderReceipt}=await import('./receipt-providers/index.ts');
+  const text=`Bank Transfer Complete
+Sent via GCash
+Bank
+MariBank
+Account No.
+Account Name
+Transfer Method
+Receipt sent to
+7144
+KRISTIE LOU VILLANUEVA
+InstaPay
+test@example.invalid
+Transfer Amount
++Fee
+Total
+Date
+InstaPay Invoice No.
+Ref No.
+795.00
+10.00
+805.00
+Oct 06, 2026 04:20 PM
+1234567
+1234567890123`;
+  const parsed=parseProviderReceipt('maribank_direct',text);if(parsed.provider!=='maribank_direct')throw Error('parser');
+  const context={expectedAmount:795,pricingAvailable:true,amountTolerance:.01,expectedRecipientName:'KRISTIE LOU VILLANUEVA',expectedRecipientNumber:'15521507144',bookingStartedAt:'2026-10-06T08:18:00Z',bookingStartedDate:'2026-10-06',paymentWindowMinutes:15,earlyToleranceMinutes:2};
+  let calls=0;
+  const result=await recoverBankReceipt(await imageBytes(),{read:bankFixtureRead(text),parsed},context,'test',{ocr:async()=>{calls++;return bankFixtureRead(text.replace('\n7144\n','\n.......7144\n'));}});
+  eq(calls,2);eq(result.accepted,true,JSON.stringify(result.audit));
+  const unchanged=await recoverBankReceipt(await imageBytes(),{read:bankFixtureRead(text),parsed},context,'test',{ocr:async()=>bankFixtureRead(text)});
+  eq(unchanged.accepted,false);
+  const conflict=await recoverBankReceipt(await imageBytes(),{read:bankFixtureRead(text),parsed},context,'test',{ocr:async()=>bankFixtureRead(text.replace('\n7144\n','\n.......9999\n'))});
+  eq(conflict.accepted,false);
+});

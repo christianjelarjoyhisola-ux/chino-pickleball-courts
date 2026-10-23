@@ -20,6 +20,7 @@ export function readReceiptTransferStatus(
         .test(text) ||
       // "Processing time: Instant" and "Processing fee" are labels, not
       // pending transaction states. A separate "Pending" still vetoes them.
+      /you will be notified once this\s+transaction is successful/i.test(text) ||
       /\bprocessing\b(?!\s+(?:time|fee)\b)/i.test(text),
   };
 }

@@ -48,7 +48,7 @@ function gcashBankFields(input: string[]) {
     ) return null;
   }
   const values = lines.slice(positions[0] + 1).filter((line) =>
-    !labels.includes(line)
+    !labels.includes(line) && !/^[✓✔☑]$/.test(line)
   );
   let i = 0;
   const bank = values[i++];
@@ -68,8 +68,11 @@ function gcashBankFields(input: string[]) {
       !/^[*•●⚫·.xX]+\d{4}$/.test(accounts[1]) ||
       !/^[*•●⚫·.xX]+\d{4}$/.test(accounts[0]) ||
       accounts[0].slice(-4) !== accounts[1].slice(-4)
-    ) return null;
-    account = accounts[0];
+    ) {
+      if (accounts.length !== 1 || !/^\d{4}$/.test(account)) return null;
+      // Four digits alone do not prove a masked account: retain for review,
+      // never synthesize missing mask glyphs or configured account digits.
+    } else account = accounts[0];
   }
   const name = values[i++], method = values[i++];
   if (
@@ -121,7 +124,10 @@ export function parseMaribankDirectReceipt(
 ) {
   const lines = String(rawText || "").normalize("NFKC").split(/\r?\n/).map(
     (x) => x.replace(/\s+/g, " ").trim(),
-  ).filter(Boolean);
+  ).filter(Boolean).flatMap((line) => {
+    const m = line.match(/^(Reference Number|Transaction Date & Time)\s+(\S.*)$/);
+    return m ? [m[1], m[2]] : [line];
+  });
   const text = lines.join("\n");
   const source = /^Sent via GCash$/im.test(text)
     ? "gcash" as const
@@ -181,7 +187,8 @@ export function parseMaribankDirectReceipt(
       const rowLayout = labels.every((label, n) =>
         lines[i + 1 + n * 2] === label
       );
-      if (!columnLayout && !rowLayout) issues.push("MARIBANK_AMBIGUOUS_FIELDS");
+      const interleaved = positions.every((position, n) => position >= 0 && (!n || position > positions[n - 1]));
+      if (!columnLayout && !rowLayout && !interleaved) issues.push("MARIBANK_AMBIGUOUS_FIELDS");
       if (
         money(values[0]) !== null &&
         /^(?:FREE|(?:PHP|₱|P)?\s*\d+\.\d{2})$/.test(values[1] || "") &&
@@ -210,6 +217,11 @@ export function parseMaribankDirectReceipt(
       nativeTimestamp(dateRaw).completeness !== "date_time" &&
       nativeTimestamp(breakdownDate).completeness === "date_time"
     ) dateRaw = breakdownDate;
+    if (di >= 0 && lines.filter(s => s === "Transaction Date & Time").length === 1) {
+      const dates = lines.filter(s => nativeTimestamp(s).completeness === "date_time");
+      dateRaw = dates.length === 1 ? dates[0] : null;
+      if (dates.length > 1) issues.push("MARIBANK_TIMESTAMP_AMBIGUOUS");
+    }
     for (const label of ["Transfer Amount", "Transfer Fee", "Total Amount"]) {
       if (lines.filter((s) => s === label).length !== 1) {
         issues.push("MARIBANK_AMOUNT_BREAKDOWN_UNREADABLE");
@@ -396,7 +408,7 @@ export function verifyMaribankDirectReceipt(
     parsed.recipient.nameRaw,
     context.expectedRecipientName || "",
   );
-  const recipientAccountComparison = compareAccount(
+  const recipientAccountComparison = parsed.source === "gcash" && /^\d{4}$/.test(parsed.recipient.accountRaw || "") ? "missing" : compareAccount(
     parsed.recipient.accountRaw,
     context.expectedRecipientNumber || "",
   );
