@@ -6905,7 +6905,8 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(45, 62, 79, .1
             <h3>Reconcile past payment</h3>
             <p>This records full payment and marks the past session completed. Check the receiving bank account first. The original receipt checks stay in the audit history.</p>
             <label for="vmReconcileReference">Bank transaction reference</label>
-            <input class="fi" id="vmReconcileReference" maxlength="100" autocomplete="off">
+            <input class="fi" id="vmReconcileReference" maxlength="100" autocomplete="off" aria-describedby="vmReconcileReferenceHint">
+            <p id="vmReconcileReferenceHint" role="status" style="font-size:12px;color:var(--muted)"></p>
             <label for="vmReconcileReason">Reconciliation reason</label>
             <textarea class="fi" id="vmReconcileReason" maxlength="1000" placeholder="Explain how you matched this receipt to money received"></textarea>
             <label><input type="checkbox" id="vmReconcileAttest"> I checked that full payment was received and this court session took place.</label>
@@ -12294,6 +12295,24 @@ async function openVerifyModal(ref, { returnFocus = null } = {}) {
   $('vmReconcileFields').hidden = !canReconcile;
   $('vmReconcileBtn').style.display = canReconcile ? '' : 'none';
   $('vmReconcileReference').value = b.gcashRef || '';
+  const referenceInput = $('vmReconcileReference');
+  referenceInput.dataset.edited = '';
+  referenceInput.oninput = () => { referenceInput.dataset.edited = '1'; };
+  const referenceHint = $('vmReconcileReferenceHint');
+  referenceHint.textContent = b.gcashRef ? 'Saved bank reference.' : '';
+  if (canReconcile && !b.gcashRef && DB.getReceiptBankReference) {
+    referenceHint.textContent = 'Reading the reference from the saved receipt…';
+    DB.getReceiptBankReference(b.primaryRef || ref).then(result => {
+      if (openToken !== _vmOpenToken || referenceInput.dataset.edited) return;
+      referenceInput.value = result?.reference || '';
+      referenceHint.textContent = result?.reference
+        ? 'Automatically read from the receipt. Check it against the bank transaction.'
+        : result?.ambiguous ? 'Receipt references conflict. Check the receipt and enter the correct bank reference.'
+        : 'The saved receipt reference could not be read clearly. Enter the reference shown on the receipt.';
+    }).catch(() => {
+      if (openToken === _vmOpenToken && !referenceInput.dataset.edited) referenceHint.textContent = 'Receipt lookup unavailable. Reopen to retry, or enter the reference shown on the receipt.';
+    });
+  }
   $('vmReconcileReason').value = '';
   $('vmReconcileAttest').checked = false;
   $('vmReconcileError').textContent = '';
@@ -20396,7 +20415,7 @@ async function checkAgreementGate(session) {
 
 <script src="supabase.min.js"></script>
 <script src="open-play-rating.js?v=20260729-head-to-head-v1"></script>
-<script src="supabase-config.js?v=20261023-payment-reconciliation"></script>
+<script src="supabase-config.js?v=20261023-receipt-reference"></script>
 <script src="qrcode.min.js?v=1.5.4"></script>
 <script src="availability-graphic.js?v=20260925-single-page-v1"></script>
 <script src="play-manager.js?v=20260909-official-logo-v1"></script>

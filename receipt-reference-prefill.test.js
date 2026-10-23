@@ -1,0 +1,12 @@
+const test=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs');
+const source=fs.readFileSync('supabase-config.js','utf8');
+const c={};vm.createContext(c);vm.runInContext(source.slice(0,source.indexOf('// =============================================')),c);
+const read=(raw,extracted={})=>c.receiptBankReferenceFromEvidence([{raw_ocr_text:raw,extracted}]);
+test('GCash column layout selects bank reference, not InstaPay invoice',()=>assert.equal(read('Sent via GCash\nInstaPay Invoice No.\nRef No.\n540.00\nOct 22,2026 05:07 PM\n7628913\n1046410675974').reference,'1046410675974'));
+test('GoTyme column layout selects reference, not trace ID',()=>assert.equal(read('GoTyme Bank\nTrace ID\nReference No.\n9.00 Go Rewards points\nP530.00\n254004\nITO261022083254004').reference,'ITO261022083254004'));
+test('native MariBank inline reference',()=>assert.equal(read('MariBank\nTransaction Reference: BC123456789012345678').reference,'BC123456789012345678'));
+test('conflicting OCR and parsed references require review',()=>{const r=read('GCash\nRef No. 1046410675974',{ref:'1046410675975'});assert.equal(r.reference,'');assert.equal(r.ambiguous,true)});
+test('never uses invoice, account or trace alone',()=>{for(const text of ['GCash\nInvoice No.\n1046410675974','GoTyme\nTrace ID\n254004','MariBank\nAccount No.\n15521507144','Ref No.\n530.00']) assert.equal(read(text).reference,'')});
+test('multiple table candidates fail closed',()=>assert.equal(read('GCash\nRef No.\n1046410675974\n1046410675975').reference,''));
+test('partial evidence may prefill reference without inferring payment approval',()=>assert.equal(read('GCash\nPending\nRef No. 1046410675974').reference,'1046410675974'));
+test('missing evidence has no invented reference',()=>assert.equal(c.receiptBankReferenceFromEvidence([]).reference,''));

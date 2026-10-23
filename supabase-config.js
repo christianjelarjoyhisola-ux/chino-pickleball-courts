@@ -1,3 +1,35 @@
+// Read-only reference recovery: never infer payment success from a readable reference.
+function receiptBankReferenceFromEvidence(evidence) {
+  const refs = new Set();
+  const add = value => {
+    const ref = String(value || '').trim().toUpperCase();
+    if (/^[A-Z0-9][A-Z0-9 -]{4,98}[A-Z0-9]$/.test(ref) && /\d/.test(ref)) refs.add(ref.replace(/[ -]/g, ''));
+  };
+  for (const item of evidence || []) {
+    const ex = item.extracted || {};
+    add(ex.ref); add(ex.bankTransfer?.reference?.value);
+    const raw = String(item.raw_ocr_text || '').replace(/\r/g, '');
+    const lines = raw.split('\n').map(line => line.trim()).filter(Boolean);
+    const label = /^(?:(?:bank|transaction)\s+)?ref(?:erence)?\s*(?:no\.?|number|#|id)?\s*[:：]?\s*(.*)$/i;
+    let labelled = false;
+    for (let i = 0; i < lines.length; i++) {
+      const match = lines[i].match(label);
+      if (!match) continue;
+      labelled = true;
+      const value = match[1] || lines[i + 1] || '';
+      // Adjacent values must be a whole reference, never an amount, date or label.
+      if (/^(?:\d{10,30}|[A-Z]{1,6}\d{6,30})$/i.test(value)) add(value);
+    }
+    if (labelled) {
+      // OCR sometimes reads all column labels before their values. Only use
+      // distinctive source-app formats; invoice/trace/account numbers differ.
+      const pattern = /GCash/i.test(raw) ? /^\d{13}$/ : /GoTyme/i.test(raw) ? /^ITO\d{15}$/i : /MariBank|SeaBank/i.test(raw) ? /^BC\d{18}$/i : null;
+      if (pattern) for (const line of lines) if (pattern.test(line)) add(line);
+    }
+  }
+  return {reference: refs.size === 1 ? [...refs][0] : '', ambiguous: refs.size > 1};
+}
+
 // =============================================
 // SUPABASE CONFIGURATION
 // Replace these with your actual project credentials.
@@ -2148,6 +2180,11 @@ window.DB = {
     if(error) throw new Error(_extractFnError(error,'Could not reconcile past payment'));
     _pbClearFastCache(['bookings']);
     return data;
+  },
+  async getReceiptBankReference(ref) {
+    const {data,error} = await _sb.rpc('get_booking_receipt_reference_evidence', {p_booking_ref:ref});
+    if(error) throw error;
+    return receiptBankReferenceFromEvidence(data);
   },
   async getPaymentReconciliation(ref) {
     const {data,error} = await _sb.from('booking_payment_reconciliations').select('reason,reconciled_at').contains('booking_refs',[ref]).order('reconciled_at',{ascending:false}).limit(1);
