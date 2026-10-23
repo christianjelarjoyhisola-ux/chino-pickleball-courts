@@ -329,6 +329,7 @@ function layoutWord(
   page: Record<string, unknown>,
   order: number,
   allowUiSymbols = false,
+  confidenceOnly = false,
 ): LayoutWord | null {
   const word = record(value);
   if (!word || !Array.isArray(word.symbols) || !word.symbols.length) {
@@ -405,9 +406,25 @@ function layoutWord(
   const top = Math.min(...points.map((point) => point.y));
   const bottom = Math.max(...points.map((point) => point.y));
   const wordHeight = bottom - top;
-  if (
-    Math.abs(a.y - b.y) > wordHeight * 0.25 ||
-    Math.abs(c.y - d.y) > wordHeight * 0.25
+  if (confidenceOnly) {
+    // Tilted words retain native scores only in original hierarchy order.
+    // They cannot define rows or crop boundaries; no text is reconstructed.
+    if (
+      typeof width !== "number" || typeof height !== "number" ||
+      !Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0
+    ) return null;
+    const topAngle = Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI;
+    const bottomAngle = Math.atan2(c.y - d.y, c.x - d.x) * 180 / Math.PI;
+    if (
+      Math.abs(topAngle) > 12 || Math.abs(bottomAngle) > 12 ||
+      Math.abs(topAngle - bottomAngle) > 2
+    ) return null;
+    const cross = (p: typeof a, q: typeof a, r: typeof a) =>
+      (q.x - p.x) * (r.y - q.y) - (q.y - p.y) * (r.x - q.x);
+    if ([cross(a, b, c), cross(b, c, d), cross(c, d, a), cross(d, a, b)].some(n => n <= 0)) return null;
+  } else if (
+    Math.abs(a.y - b.y) > wordHeight * .25 ||
+    Math.abs(c.y - d.y) > wordHeight * .25
   ) return null;
   if (
     (typeof width === "number" && points.some((point) => point.x > width)) ||
@@ -612,7 +629,7 @@ export function googleVisionNativeWordLines(annotation: Record<string, unknown> 
         const symbols=word.symbols.map(record);
         if(!symbols.length || symbols.some(s=>typeof s?.text!=='string'||!s.text))return undefined;
         const text=symbols.map(s=>s!.text as string).join('');
-        const valid=layoutWord(rawWord,page,lines.length,true);
+        const valid=layoutWord(rawWord,page,lines.length,true,true);
         // Zero boxes are unusable sentinels, not inferred geometry. No native
         // score or symbols are attached to invalid words.
         const evidence=valid || {text,left:0,right:0,top:0,bottom:0,symbols:[]};

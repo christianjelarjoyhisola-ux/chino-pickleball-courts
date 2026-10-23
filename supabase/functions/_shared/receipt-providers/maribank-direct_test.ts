@@ -398,3 +398,19 @@ Deno.test('Unicode ellipsis masks do not hide weak visible account digits', () =
   suffix.symbols[0].confidence = .5;
   assert(maribankDirectApprovalConfidence(read, parsed).confidence < .9);
 });
+
+Deno.test('native surname initial uses its observed letter confidence without promoting a weak or missing letter', () => {
+  const parsed=parseProviderReceipt('maribank_direct',native);
+  if(parsed.provider!=='maribank_direct')throw Error('parser');
+  const read=bankFixtureRead(native);
+  const initial=read.nativeLines!.flatMap(l=>l.words).find(w=>w.text==='V.')!;
+  initial.confidence=.85;
+  initial.symbols=[{text:'V',confidence:.96},{text:'.',confidence:.74}];
+  eq(maribankDirectApprovalConfidence(read,parsed).fields.recipientName.confidence,.96);
+  initial.symbols[0].confidence=.7;
+  eq(maribankDirectApprovalConfidence(read,parsed).fields.recipientName.confidence,.7);
+  initial.symbols=[{text:'.',confidence:.99}];
+  assert(maribankDirectApprovalConfidence(read,parsed).confidence<.9,'missing observed initial cannot be synthesized');
+  initial.symbols=[{text:'X',confidence:.99},{text:'.',confidence:.99}];
+  assert(maribankDirectApprovalConfidence(read,parsed).confidence<.9,'different observed letter cannot receive credit');
+});

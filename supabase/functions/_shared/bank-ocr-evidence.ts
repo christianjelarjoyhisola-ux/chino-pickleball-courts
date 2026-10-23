@@ -245,6 +245,7 @@ export function fieldEvidence(
   masked = false,
   zeroFee = false,
   moneyDigits = false,
+  initialPeriod = false,
 ): BankPaymentFieldEvidence {
   const text = String(raw || "").trim();
   const value = compact(text);
@@ -290,6 +291,12 @@ export function fieldEvidence(
         )
         : matched;
       const scores = valueWords.map((span) => {
+        // A surname initial's dot is not an identity character. Require the
+        // exact observed letter and both native symbols; never infer a letter.
+        if(initialPeriod && span === matched.at(-1) && /^[A-Za-z]\.$/.test(span.word.text)) {
+          const symbols=span.word.symbols;
+          if(symbols.length===2 && symbols.map(s=>s.text).join('')===span.word.text && score(symbols[0].confidence)) return symbols[0].confidence;
+        }
         if (moneyDigits && /^(?:PHP|₱|P|\+)?[\d,.]+$/i.test(span.word.text)) {
           const symbols = span.word.symbols?.filter(s => /[\d,.]/.test(s.text));
           if (symbols?.length && symbols.map(s=>s.text).join('')===span.word.text.replace(/^(?:PHP|₱|P|\+)/i,'') && symbols.every(s=>score(s.confidence))) return Math.min(...symbols.map(s=>s.confidence!));
@@ -588,7 +595,7 @@ export function maribankDirectApprovalConfidence(read: GoogleVisionOcrResult, pa
  const r=parsed.receipt;
  const evidenceRead={...read,nativeLines:read.nativeLines?.length ? read.nativeLines : read.nativeWordLines};
  const reconciled=r.amount.amount!=null && r.transferFee!=null && r.total!=null && Math.round(r.amount.amount*100)+Math.round(r.transferFee*100)===Math.round(r.total*100);
- const fields = Object.fromEntries(Object.entries(r.paymentFields).map(([key,value])=>[key,key==='rail'&&r.source==='gcash'?gcashTransferMethodEvidence(evidenceRead,value):fieldEvidence(evidenceRead,value,key==="recipientAccount",false,key==="total" && reconciled)]));
+ const fields = Object.fromEntries(Object.entries(r.paymentFields).map(([key,value])=>[key,key==='rail'&&r.source==='gcash'?gcashTransferMethodEvidence(evidenceRead,value):fieldEvidence(evidenceRead,value,key==="recipientAccount",false,key==="total" && reconciled,key==="recipientName" && r.source==="maribank")]));
  const complete=Object.values(fields).every(f=>score(f.confidence));
  return {confidence:complete?Math.min(...Object.values(fields).map(f=>f.confidence!)):0,source:complete?"bank_payment_fields":"none",basis:complete?"native_payment_value_words":"missing_native_payment_evidence",fields,complete};
 }

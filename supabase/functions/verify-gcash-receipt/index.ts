@@ -3691,7 +3691,7 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
       parserVersion: providerParse?.parserVersion || "legacy",
       ...(isDedicatedReceiptProvider(provider)
         ? {
-          verifierRevision: provider === "gcash" ? GCASH_VERIFIER_REVISION : provider === "maribank" ? "maribank_direct_20261023_native_v3" : BANK_VERIFIER_REVISION,
+          verifierRevision: provider === "gcash" ? GCASH_VERIFIER_REVISION : provider === "maribank" ? "maribank_direct_20261023_native_v4" : BANK_VERIFIER_REVISION,
           originalOcrConfidence: originalOcr?.confidence ?? 0,
           originalOcrConfidenceSource: originalOcr?.confidenceSource ?? "none",
           readingRecovery: readingRecovery?.audit || (gotymeFieldRecovery?.audit.attempted

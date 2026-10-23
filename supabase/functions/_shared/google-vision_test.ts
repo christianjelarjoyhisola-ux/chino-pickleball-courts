@@ -1327,3 +1327,25 @@ Deno.test("Vision repeated transient errors stop after two calls and preserve fa
     "failure audit includes retry",
   );
 });
+
+Deno.test('modest tilted words keep original native evidence without enabling geometric row repair', () => {
+  const reference='BC550000000000000001';
+  const word={...visionWord(reference,100,100,400),confidence:.97};
+  word.boundingBox.vertices[1].y+=35;
+  word.boundingBox.vertices[2].y+=35;
+  const annotation={pages:[visionPage([word])]};
+  const lines=googleVisionNativeWordLines(annotation,reference)!;
+  assertEquals(lines[0].words[0].confidence,.97,'observed score retained for five-degree tilt');
+  assertEquals(googleVisionNativeLines(annotation,reference),undefined,'tilt does not authorize row reconstruction');
+  assertEquals(googleVisionNativeWordLines(annotation,reference+'9'),undefined,'exact hierarchy text required');
+  for(const malformed of ['steep','crossed','outside','missing-size']){
+    const a=structuredClone(annotation),v=a.pages[0].blocks[0].paragraphs[0].words[0].boundingBox.vertices;
+    if(malformed==='steep'){v[1].y=350;v[2].y=370;}
+    if(malformed==='crossed'){v[2].x=50;}
+    if(malformed==='outside'){v[1].x=1500;v[2].x=1500;}
+    if(malformed==='missing-size')a.pages[0].width=0;
+    const failed=googleVisionNativeWordLines(a,reference)!;
+    assertEquals(failed[0].words[0].confidence,undefined,malformed+' remains untrusted');
+    assertEquals(failed[0].text,reference,'rejected word is never removed');
+  }
+});
