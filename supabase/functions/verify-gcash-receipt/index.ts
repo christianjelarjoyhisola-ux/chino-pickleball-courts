@@ -3000,7 +3000,7 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
       originalBankCheck = {clean: verifyProviderReceipt(providerParse, providerContext).flags.length === 0 && firstApproval.confidence >= .9, confidence: firstApproval.confidence};
       readingLayout = bankLayoutFamily("maribank_direct", bankRead.text);
       if (!originalBankCheck.clean && visionKey && !ocrError) {
-        bankReadingRecovery = await recoverBankReceipt(bytes, {read:bankRead, parsed:providerParse}, providerContext, visionKey, {ocr:readingSession.ocr});
+        bankReadingRecovery = await recoverBankReceipt(bytes, {read:bankRead, parsed:providerParse}, providerContext, visionKey, {ocr:readingSession.ocr, deadlineMs: Math.min(12_000, readingSession.remainingMs())});
         if (bankReadingRecovery.reason.startsWith("original_conflict:") || ["recovery_conflict","recovery_readings_disagree"].includes(bankReadingRecovery.reason)) flags.push("RECEIPT_READINGS_CONFLICT");
         if (bankReadingRecovery.accepted && bankReadingRecovery.selected) {
           const selected = bankReadingRecovery.selected;
@@ -3691,7 +3691,7 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
       parserVersion: providerParse?.parserVersion || "legacy",
       ...(isDedicatedReceiptProvider(provider)
         ? {
-          verifierRevision: provider === "gcash" ? GCASH_VERIFIER_REVISION : provider === "maribank" ? "maribank_direct_20261023_masked_v2" : BANK_VERIFIER_REVISION,
+          verifierRevision: provider === "gcash" ? GCASH_VERIFIER_REVISION : provider === "maribank" ? "maribank_direct_20261023_native_v3" : BANK_VERIFIER_REVISION,
           originalOcrConfidence: originalOcr?.confidence ?? 0,
           originalOcrConfidenceSource: originalOcr?.confidenceSource ?? "none",
           readingRecovery: readingRecovery?.audit || (gotymeFieldRecovery?.audit.attempted

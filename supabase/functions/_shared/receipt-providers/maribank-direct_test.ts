@@ -360,3 +360,41 @@ Deno.test('GCash decorative checkmark does not erase the table; bare suffix stay
   assert(verifyMaribankDirectReceipt(bare,context).flags.includes('RECEIVER_ACCOUNT_UNREADABLE'));
   assert(flags(native+'\nYou will be notified once this\ntransaction is successful.').includes('TRANSFER_PENDING'));
 });
+
+Deno.test('native merged rows and Greek To label preserve recipient and financial checks', () => {
+  const rows = `Transfer Result
+Transfer Successful!
+PHP 795.00
+From SAMPLE SENDER
+MariBank: 11111111111
+◆ Kristie Lou V.
+Το
+MariBank
+Acct. No.: 15521507144
+Transfer Amount PHP 795.00
+Transfer Fee FREE
+Total Amount PHP 795.00
+Reference Number BC550000000000000001
+Transaction Date & Time 06 Oct 2026, 16:20`;
+  eq(flags(rows), []);
+  assert(flags(rows.replace('15521507144', '15521509999')).includes('RECEIVER_ACCOUNT_MISMATCH'));
+  assert(flags(rows.replace('Total Amount PHP 795.00', 'Total Amount PHP 800.00')).includes('MARIBANK_TOTAL_MISMATCH'));
+  assert(flags(rows.replace('Transaction Date & Time 06 Oct 2026, 16:20', '')).includes('TIME_UNREADABLE'));
+  assert(flags(rows + '\nTo').includes('MARIBANK_RECIPIENT_SECTION_UNREADABLE'));
+});
+
+Deno.test('Unicode ellipsis masks do not hide weak visible account digits', () => {
+  const text = gcash.replace('15521507144', '……………… 7144');
+  const parsed = parseProviderReceipt('maribank_direct', text);
+  if (parsed.provider !== 'maribank_direct') throw Error('provider');
+  const read = bankFixtureRead(text);
+  const words = read.nativeLines!.flatMap(line => line.words);
+  const mask = words.find(word => word.text.includes('…'))!;
+  mask.confidence = .12;
+  mask.symbols.forEach(symbol => symbol.confidence = .12);
+  assert(maribankDirectApprovalConfidence(read, parsed).confidence >= .9);
+  const suffix = words.find(word => word.text === '7144')!;
+  suffix.confidence = .5;
+  suffix.symbols[0].confidence = .5;
+  assert(maribankDirectApprovalConfidence(read, parsed).confidence < .9);
+});

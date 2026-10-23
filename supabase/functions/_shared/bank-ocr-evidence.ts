@@ -183,7 +183,7 @@ function nativeWordConfidence(
 ): number | undefined {
   if (ignoreMasks) {
     const maskPositions = new Set<number>();
-    for (const match of word.text.matchAll(/[•‣●◦∙·*#]+|\.{2,}|X{2,}/g)) {
+    for (const match of word.text.matchAll(/[•‣●◦∙·*#…]+|\.{2,}|X{2,}/g)) {
       for (
         let index = match.index!;
         index < match.index! + match[0].length;
@@ -286,7 +286,7 @@ export function fieldEvidence(
         ? matched.filter(span => !/^(?:PHP|₱|P|\+)$/i.test(span.word.text))
         : masked
         ? matched.filter((span) =>
-          !/^(?:[•‣●◦∙·*#]+|\.{2,}|X{2,})$/.test(span.word.text)
+          !/^(?:[•‣●◦∙·*#…]+|\.{2,}|X{2,})$/.test(span.word.text)
         )
         : matched;
       const scores = valueWords.map((span) => {
@@ -545,13 +545,13 @@ export function bankFieldIdentity(key: string, value: string): string {
   }
   if (key === "recipientAccount") {
     result = result.replace(/[()+-]/g, "").replace(
-      /[•‣●◦∙·*#]+|\.{2,}|X{2,}/g,
+      /[•‣●◦∙·*#…]+|\.{2,}|X{2,}/g,
       "*",
     );
     if (/^63\d{10}$/.test(result)) result = "0" + result.slice(2);
   }
   if (key === "recipientName") {
-    result = result.replace(/[•‣●◦∙·*#]+|\.{2,}|X{2,}/g, "*").replace(
+    result = result.replace(/[•‣●◦∙·*#…]+|\.{2,}|X{2,}/g, "*").replace(
       /[.'-]/g,
       "",
     );

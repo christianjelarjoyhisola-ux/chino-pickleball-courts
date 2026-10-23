@@ -281,7 +281,7 @@ export async function recoverBankReceipt(
   } = {},
 ): Promise<BankRecoveryResult> {
   const started = Date.now();
-  const deadlineMs = Math.min(12000, Math.max(1, options.deadlineMs ?? 10000));
+  const deadlineMs = Math.min(12000, Math.max(1, options.deadlineMs ?? 12000));
   const preferredStrategy = BANK_RECOVERY_STRATEGIES.find((id) =>
     id === options.preferredStrategy
   );
@@ -373,13 +373,29 @@ export async function recoverBankReceipt(
     if (colorWidth <= contrast.width && colorHeight <= contrast.height) {
       return result("recovery_enlargement_unavailable");
     }
+    // JPEG bounds noisy photos without cropping any receipt fields.
+    // Both independent OCR readings must still agree on all payment fields.
     // Large (>4 MP) originals are downsampled once to the color bound; small
     // originals keep the existing 1.5x enlargement. The color view remains
     // larger than the contrast view in both cases.
-    const enlarged = image.resize(colorWidth, colorHeight);
+    const enlarged = image.clone().resize(colorWidth, colorHeight);
+    let colorBytes = await enlarged.encode(1);
+    for (const quality of [95, 85, 75]) {
+      if (colorBytes.length <= 4 * 1024 * 1024) break;
+      if (Date.now() - started >= deadlineMs) return result("recovery_deadline_exceeded");
+      colorBytes = await enlarged.encodeJPEG(quality);
+    }
+    if (colorBytes.length > 4 * 1024 * 1024) {
+      // Extreme camera noise: keep the full frame at 3 MP, still above the
+      // contrast view. Derive it directly from the original, never a thumbnail.
+      const boundedScale = Math.min(scale, Math.sqrt(3_000_000 / (image.width * image.height)));
+      colorBytes = await image.resize(Math.floor(image.width * boundedScale), Math.floor(image.height * boundedScale)).encodeJPEG(75);
+    }
+    let contrastBytes = await contrast.encode(1);
+    if (contrastBytes.length > 4 * 1024 * 1024) contrastBytes = await contrast.encode(3);
     prepared = {
-      bank_full_contrast_v1: await contrast.encode(1),
-      bank_full_enlarged_v1: await enlarged.encode(1),
+      bank_full_contrast_v1: contrastBytes,
+      bank_full_enlarged_v1: colorBytes,
     };
     if (Object.values(prepared).some((png) => png.length > 4 * 1024 * 1024)) {
       return result("recovery_image_too_large");

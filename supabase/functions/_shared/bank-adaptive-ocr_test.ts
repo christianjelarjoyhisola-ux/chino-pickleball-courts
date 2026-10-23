@@ -104,7 +104,7 @@ Deno.test("different full views run concurrently under one bounded deadline and 
             ),
           ),
         );
-        assert(options?.timeoutMs! <= 10000, "shared deadline");
+        assert(options?.timeoutMs! <= 12000, "shared deadline");
         eq(options?.featureType, "DOCUMENT_TEXT_DETECTION");
         if (!index) await waiting;
         else release();
@@ -425,7 +425,7 @@ Deno.test("1206 x 2567 bank download reaches both full-image rereads within exis
           "each encoded image remains bounded",
         );
         assert(
-          options?.timeoutMs! <= 10000 && options?.timeoutMs! > 0,
+          options?.timeoutMs! <= 12000 && options?.timeoutMs! > 0,
           "preparation spends the shared recovery deadline",
         );
         return bankFixtureRead(fixture.text);
@@ -644,4 +644,31 @@ Oct 06, 2026 04:20 PM
   eq(unchanged.accepted,false);
   const conflict=await recoverBankReceipt(await imageBytes(),{read:bankFixtureRead(text),parsed},context,'test',{ocr:async()=>bankFixtureRead(text.replace('\n7144\n','\n.......9999\n'))});
   eq(conflict.accepted,false);
+});
+
+Deno.test('large noisy photos use bounded full-image JPEG recovery without weakening agreement', async () => {
+  const photo = new Image(1200, 1800);
+  let seed = 12345;
+  for (let i = 0; i < photo.bitmap.length; i += 4) {
+    for (let c = 0; c < 3; c++) {
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+      photo.bitmap[i + c] = seed >>> 24;
+    }
+    photo.bitmap[i + 3] = 255;
+  }
+  let calls = 0, jpeg = false;
+  const result = await recoverBankReceipt(await photo.encodeJPEG(95), weak(), BANK_FIXTURES[0].context, 'test', {
+    ocr: async (_key, encoded) => {
+      calls++;
+      const bytes = Uint8Array.from(atob(encoded), c => c.charCodeAt(0));
+      assert(bytes.length <= 4 * 1024 * 1024, 'bounded encoded payload');
+      if (bytes[0] === 255 && bytes[1] === 216) {
+        jpeg = true;
+        const dimensions = receiptImageDimensions(bytes)!;
+        assert(dimensions.height > dimensions.width, 'full portrait image retained');
+      }
+      return bankFixtureRead(BANK_FIXTURES[0].text);
+    },
+  });
+  eq(calls, 2, result.reason); eq(jpeg, true); eq(result.accepted, true, result.reason);
 });

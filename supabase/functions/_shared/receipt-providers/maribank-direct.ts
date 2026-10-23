@@ -126,7 +126,9 @@ export function parseMaribankDirectReceipt(
   const lines = String(rawText || "").normalize("NFKC").split(/\r?\n/).map(
     (x) => x.replace(/\s+/g, " ").trim(),
   ).filter(Boolean).flatMap((line) => {
-    const m = line.match(/^(Reference Number|Transaction Date & Time)\s+(\S.*)$/);
+    // Normalize only the section label, never account/name/reference characters.
+    line = line.replace(/^[TΤ][oο](?= |$)/, "To");
+    const m = line.match(/^(From|To|Transfer Amount|Transfer Fee|Total Amount|Reference Number|Transaction Date & Time)\s+(\S.*)$/);
     return m ? [m[1], m[2]] : [line];
   });
   const text = lines.join("\n");
@@ -162,13 +164,17 @@ export function parseMaribankDirectReceipt(
     })).filter((x) => x.m);
     if (accounts.length === 1) {
       const { m, i } = accounts[0];
+      // Geometric OCR may put the left-hand To label between the name and bank.
+      const recipientLines = lines.slice(0, i).filter(s => s !== "To");
+      const recipientBank = recipientLines.at(-1) || "";
+      const recipientName = recipientLines.at(-2) || "";
       account = m![1];
       if (
-        /^(?:M )?MariBank$/.test(lines[i - 1] || "") &&
-        /^(?:[•●] )?[A-Za-z][A-Za-z .'-]+$/.test(lines[i - 2] || "")
+        /^(?:M )?MariBank$/.test(recipientBank) &&
+        /^(?:[•●◆] )?[A-Za-z][A-Za-z .'-]+$/.test(recipientName)
       ) {
-        bank = lines[i - 1];
-        name = lines[i - 2];
+        bank = recipientBank;
+        name = recipientName;
       }
       const values = lines.slice(i + 1).filter((s) =>
         !/^(?:Transfer Amount|Transfer Fee|Total Amount|Reference Number)$/
@@ -328,7 +334,7 @@ export function parseMaribankDirectReceipt(
       total: totalRaw,
       // Profile and bank logos can be read as a bullet or M. Retain them in
       // recipient raw fields, but measure confidence in the actual name/bank.
-      recipientName: source === "maribank" ? name?.replace(/^[•●] /, "") : name,
+      recipientName: source === "maribank" ? name?.replace(/^[•●◆] /, "") : name,
       recipientAccount: account,
       destination: source === "maribank" ? bank?.replace(/^M /, "") : bank,
       status: statusRaw || null,
