@@ -63,7 +63,7 @@ test('one canonical predicate expires placeholders without releasing genuine ver
   );
   assert.match(finalConflictGuard, /paddle-rage-booking-slot\|/i);
   assert.match(finalConflictGuard, /booking\.slots && new\.slots[\s\S]*?booking_occupies_slot/i);
-  assert.match(publicPage, /function isHeldVerifying\(b\)[\s\S]*?if \(!isPlaceholderBookingHold\(b\)\) return true;/i);
+  assert.match(publicPage, /function isHeldVerifying\(b\)[\s\S]*?if \(!isPlaceholderBookingHold\(b\) \|\| b\.receiptImageUrl\) return true;/i);
   assert.match(adminPage, /function bookingHoldsAdminSlot\(b\)[\s\S]*?if \(!isPlaceholderHold\(b\)\) return true;/i);
   const browserCleanup = publicPage.match(/async function expireStaleVerifyingBookings\(\)[\s\S]*?\n}/i)?.[0] || '';
   assert.match(browserCleanup, /isPlaceholderBookingHold\(b\)/i);
@@ -120,7 +120,7 @@ test('hold release atomically authorizes bearer, host, or dashboard-owned placeh
   assert.match(dataLayer, /const rows = batch\.map\(bookingToRow\)[\s\S]*?\.insert\(rows\)/i);
   assert.match(publicPage, /function releaseBookingHoldRef\(ref\)[\s\S]*?DB\.releaseBookingHold[\s\S]*?DB\.updateBooking/);
   assert.match(publicPage, /startSlotCountdown\(reservationSecondsLeft\(reserveStartedAt\)\)/);
-  assert.match(publicPage, /saved reservation expired after 10 minutes[\s\S]*?slots were released/i);
+  assert.match(publicPage, /saved reservation expired after 15 minutes[\s\S]*?slots were released/i);
 });
 
 test('Book Now shows a five-second timer guide before revealing details', () => {
@@ -128,7 +128,7 @@ test('Book Now shows a five-second timer guide before revealing details', () => 
   const introEnd = publicPage.indexOf('<div class="booking-countdown-announcer"', introStart);
   assert.ok(introStart >= 0 && introEnd > introStart, 'booking intro markup must exist');
   const introMarkup = publicPage.slice(introStart, introEnd);
-  assert.match(introMarkup, /Complete your booking within 10 minutes/i);
+  assert.match(introMarkup, /Complete your booking within 15 minutes/i);
   assert.match(introMarkup, /Keep an eye on the timer at the top of the booking form/i);
   assert.doesNotMatch(introMarkup, /\bheld\b|\breserved\b|Continue/i);
 

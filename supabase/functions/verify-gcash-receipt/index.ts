@@ -1,3 +1,4 @@
+import { canReplaceIncompleteReceipt } from "../_shared/receipt-correction.ts";
 // verify-gcash-receipt
 // ----------------------------------------------------------------------------
 // Server-side digital-payment receipt verification + fraud detection.
@@ -1053,7 +1054,8 @@ function receiptGroupIsActive(rows: Array<Record<string, unknown>>): boolean {
     return ACTIVE_RECEIPT_BOOKING_STATUSES.includes(status) &&
       ACTIVE_RECEIPT_PAYMENT_STATUSES.includes(paymentStatus) &&
       Number.isFinite(createdAt.getTime()) && ageMs >= -60_000 &&
-      ageMs <= PAYMENT_WINDOW_MINUTES * 60_000;
+      (ageMs <= PAYMENT_WINDOW_MINUTES * 60_000 ||
+        (status === "pending" && !!row.receipt_image_url && !!row.receipt_image_hash));
   });
 }
 
@@ -1391,6 +1393,8 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
         bookingRef: String(form.get("bookingRef") || ""),
         bookingAccessToken: String(form.get("bookingAccessToken") || ""),
         provider: String(form.get("provider") || "gcash"),
+        replaceReceipt: form.get("replaceReceipt") === "true",
+        expectedReceiptHash: String(form.get("expectedReceiptHash") || ""),
         stagedReceiptPath: String(form.get("stagedReceiptPath") || ""),
         contentType: uploadedImage?.type ||
           String(form.get("contentType") || "image/jpeg"),
@@ -1422,6 +1426,8 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
     try {
       const bookingRef = String(body.bookingRef || "").trim();
       const bookingAccessToken = String(body.bookingAccessToken || "");
+      const replacementRequested = body.replaceReceipt === true;
+      const mayReplace = (rows: Array<Record<string, unknown>>) => replacementRequested && rows.length > 0 && rows.every(row => canReplaceIncompleteReceipt(row, body.expectedReceiptHash, provider));
       const requestedStagedPath = String(body.stagedReceiptPath || "").trim();
       const provider = paymentMethodProvider(body.provider);
       const imageBase64 = String(body.imageBase64 || "");
@@ -1547,6 +1553,8 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
           receiptImageUrl: attached.path,
           receiptImageHash: attached.hash,
           contentType: attached.contentType,
+          receiptFlags: targetRow.receipt_flags || [],
+          canReplace: groupRows.every(row => canReplaceIncompleteReceipt(row, attached!.hash, row.payment_method)),
           receiptStatus: String(targetRow.receipt_status || "manual_review"),
           receiptVerifiedAt: targetRow.receipt_verified_at || null,
           verified,
@@ -1556,12 +1564,13 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
       }
 
       if (action === "stage") {
-        if (!receiptGroupIsActive(groupRows)) {
+        if (replacementRequested && !mayReplace(groupRows)) return json({ error: "Receipt changed or is not eligible for correction. Refresh this booking.", code: "RECEIPT_REPLACE_STALE" }, 409);
+        if (!receiptGroupIsActive(groupRows) && !mayReplace(groupRows)) {
           return json({
             error: "This booking no longer accepts receipt uploads",
           }, 409);
         }
-        if (groupRows.some(receiptEvidenceWasVerified)) {
+        if (groupRows.some(receiptEvidenceWasVerified) && !mayReplace(groupRows)) {
           return json({
             error: "Verified receipt evidence cannot be replaced",
             code: "RECEIPT_ALREADY_VERIFIED",
@@ -1625,13 +1634,13 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
           code: "RECEIPT_GROUP_INCONSISTENT",
         }, 409);
       }
-      if (groupRows.some(receiptEvidenceWasVerified)) {
+      if (groupRows.some(receiptEvidenceWasVerified) && !(action === "stage" && mayReplace(groupRows))) {
         return json({
           error: "Verified receipt evidence cannot be changed",
           code: "RECEIPT_ALREADY_VERIFIED",
         }, 409);
       }
-      if (action === "stage" && !receiptGroupIsActive(groupRows)) {
+      if (action === "stage" && !receiptGroupIsActive(groupRows) && !mayReplace(groupRows)) {
         return json({
           error: "This booking no longer accepts receipt uploads",
         }, 409);
@@ -1651,7 +1660,9 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
           code: "ATTACHED_RECEIPT_METADATA_INVALID",
         }, 409);
       }
+      if (replacementRequested && !mayReplace(groupRows)) return json({ error: "Receipt changed while the upload was starting. Refresh this booking.", code: "RECEIPT_REPLACE_STALE" }, 409);
       const previousMetadata = receiptMetadataSnapshot(targetRow);
+      const replacingReviewedReceipt = action === "stage" && mayReplace(groupRows);
 
       if (action === "discard-stage") {
         if (!attached) {
@@ -1791,6 +1802,9 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
       }
 
       const imageHash = await sha256Hex(bytes);
+      if (replacingReviewedReceipt && imageHash === attached?.hash) {
+        return json({ error: "Choose a new, complete receipt screenshot.", code: "RECEIPT_UNCHANGED" }, 409);
+      }
       const ext = contentType === "image/png"
         ? "png"
         : contentType === "image/webp"
@@ -1832,8 +1846,10 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
       )
         .in("status", ACTIVE_RECEIPT_BOOKING_STATUSES)
         .in("payment_status", ACTIVE_RECEIPT_PAYMENT_STATUSES)
-        .is("receipt_verified_at", null)
         .in("receipt_status", ["none", "manual_review"]);
+      attachQuery = replacingReviewedReceipt && targetRow.receipt_verified_at
+        ? attachQuery.eq("receipt_verified_at", targetRow.receipt_verified_at)
+        : attachQuery.is("receipt_verified_at", null);
       attachQuery = attached
         ? attachQuery.eq("receipt_image_url", attached.path).eq(
           "receipt_image_hash",
@@ -1900,7 +1916,7 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
       }
 
       let cleanupWarning: string | null = null;
-      if (attached && attached.path !== stagedReceiptPath) {
+      if (attached && attached.path !== stagedReceiptPath && !replacingReviewedReceipt) {
         const { error: priorRemoveError } = await db.storage.from("receipts")
           .remove([attached.path]);
         if (priorRemoveError) {

@@ -5568,7 +5568,9 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(45, 62, 79, .1
               <option value="host_session">Hosted Open Play Signups</option>
             </select>
             <select id="prStatus" onchange="renderPaymentReview()">
-              <option value="attention">Needs Attention</option>
+              <option value="awaiting_payment">Awaiting payment (no receipt)</option>
+              <option value="receipt_correction">Receipt needs correction</option>
+              <option value="attention" selected>Needs Attention</option>
               <option value="">All Status</option>
               <option value="manual_review">Manual Review</option>
               <option value="pending">Pending</option>
@@ -7846,8 +7848,9 @@ function renderBillingCourtBreakdown(statement, bookings = [], courts = [], feeC
     </div>
   </div>`;
 }
-function statusBdg(s){const m={pending:'bdg-p',confirmed:'bdg-c',completed:'bdg-d',verifying:'bdg-v',cancelled:'bdg-x',forfeited:'bdg-f',deleted:'bdg-x',restored:'bdg-c'};const label=s==='forfeited'?'Forfeited':s;return`<span class="bdg ${m[s]||''}">${esc(label)}</span>`;}
-function payStatusBdg(s){
+function statusBdg(s,b){if(b){const workflow=window.ReceiptWorkflow?.state(b);if(workflow)return `<span class="bdg bdg-p">${esc(workflow.label)}</span>`;}const m={pending:'bdg-p',confirmed:'bdg-c',completed:'bdg-d',verifying:'bdg-v',cancelled:'bdg-x',forfeited:'bdg-f',deleted:'bdg-x',restored:'bdg-c'};const label=s==='forfeited'?'Forfeited':s;return`<span class="bdg ${m[s]||''}">${esc(label)}</span>`;}
+function payStatusBdg(s,b){
+  if(b){const workflow=window.ReceiptWorkflow?.state(b);if(workflow)return `<span class="bdg bdg-p">${esc(workflow.label)}</span>`;}
   const v = (s || 'unpaid').toLowerCase();
   const label = v === 'paid' ? 'Fully Paid' : v === 'downpayment_paid' ? 'Balance Due' : v === 'deposit_retained' ? 'Deposit Retained' : v === 'for_verification' ? 'For Verification' : v === 'pending' ? 'Pending' : v === 'rejected' ? 'Rejected' : v === 'failed' ? 'Failed' : 'Unpaid';
   const cls = v === 'paid' ? 'bdg-c' : v === 'downpayment_paid' ? 'bdg-p' : v === 'deposit_retained' ? 'bdg-f' : v === 'for_verification' ? 'bdg-p' : (v === 'failed' || v === 'rejected') ? 'bdg-x' : 'bdg-d';
@@ -8500,7 +8503,7 @@ function hostBalanceBookingStatus(b){
   if (hostBalanceReviewState(b) === 'pending') {
     return '<div class="booking-reservation-state"><span class="bdg bdg-c">COURT RESERVED</span><small>Awaiting Payment 2 review</small></div>';
   }
-  return statusBdg(b.status);
+  return statusBdg(b.status,b);
 }
 function canViewHostPaymentHistory(){
   return ['owner','court_owner'].includes(String(sess?.role || '').toLowerCase());
@@ -8816,7 +8819,7 @@ function bookingPayStateSelect(b){
   if (isPlaceholderHold(b)) return '<span class="bdg bdg-x">NO PAYMENT EVIDENCE</span>';
   const actionRef = b.primaryRef || b.ref;
   if (b.paymentTransferId || bookingGroupRowsForPaymentGuard(b).some(row => Boolean(row?.paymentTransferId))) {
-    return `<span title="Payment state is protected by a permanent transfer audit">${payStatusBdg(b.paymentStatus)}</span>`;
+    return `<span title="Payment state is protected by a permanent transfer audit">${payStatusBdg(b.paymentStatus,b)}</span>`;
   }
   if (b.status === 'forfeited' || b.paymentStatus === 'deposit_retained') return payStatusBdg('deposit_retained');
   if (hostBalancePendingPayment(b)) {
@@ -9144,7 +9147,7 @@ async function openBookingDetails(ref) {
     body.innerHTML = `
       <div class="booking-detail-hero">
         <div><div class="booking-detail-ref">${esc(b.displayRef || b.ref)}</div><div class="booking-detail-name">${esc(b.fullName || 'Guest')}</div><div class="booking-detail-sub">${esc(b.email || '--')} · ${esc(b.contactNumber || '--')}</div></div>
-        <div class="booking-detail-badges">${hostBalanceBookingStatus(b)} ${pendingBalance ? '<span class="bdg bdg-p">PAYMENT REVIEW NEEDED</span>' : payStatusBdg(b.paymentStatus)} <span class="bdg ${bookingSlotLabel(b)==='Released'?'bdg-x':'bdg-c'}">Slot ${bookingSlotLabel(b)}</span></div>
+        <div class="booking-detail-badges">${hostBalanceBookingStatus(b)} ${pendingBalance ? '<span class="bdg bdg-p">PAYMENT REVIEW NEEDED</span>' : payStatusBdg(b.paymentStatus,b)} <span class="bdg ${bookingSlotLabel(b)==='Released'?'bdg-x':'bdg-c'}">Slot ${bookingSlotLabel(b)}</span></div>
       </div>
       <div class="booking-detail-grid">
         <div class="booking-detail-card money"><span>Total booking</span><strong>${fmt(total)}</strong></div>
@@ -10275,7 +10278,7 @@ async function renderDash(){
   $('cBar').style.width=(tot>0?Math.round(ca/tot*100):0)+'%';
   const recent=activeTxns.slice(0,5);
   $('recentBody').innerHTML=recent.length===0?'<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:24px">No bookings yet.</td></tr>':
-    recent.map(b=>`<tr><td data-label="Ref"><code style="color:var(--green);font-size:.78rem">${esc(b.displayRef || b.ref)}</code></td><td data-label="Name">${esc(b.fullName)}</td><td data-label="Court">${esc(b.courtName)}</td><td data-label="Schedule">${esc(b.scheduleLabel || b.dateLabel || fmtD(b.date))}</td><td data-label="Status">${statusBdg(b.status)}</td></tr>`).join('');
+    recent.map(b=>`<tr><td data-label="Ref"><code style="color:var(--green);font-size:.78rem">${esc(b.displayRef || b.ref)}</code></td><td data-label="Name">${esc(b.fullName)}</td><td data-label="Court">${esc(b.courtName)}</td><td data-label="Schedule">${esc(b.scheduleLabel || b.dateLabel || fmtD(b.date))}</td><td data-label="Status">${statusBdg(b.status,b)}</td></tr>`).join('');
 
   // ── Charts ──
   renderDashCharts(activeTxns,feeCfg);
@@ -11215,6 +11218,8 @@ function receivedAccountLabel(b) {
 }
 
 function bookingReviewStatus(b) {
+  const workflow = window.ReceiptWorkflow?.state(b);
+  if (workflow) return workflow.code;
   if (b.paymentStatus === 'rejected' || b.status === 'cancelled') return 'rejected';
   if (b.paymentStatus === 'deposit_retained' || b.status === 'forfeited') return 'retained';
   if (b.paymentStatus === 'paid' || b.paymentStatus === 'downpayment_paid') {
@@ -11243,7 +11248,9 @@ function openPlayReviewStatus(r) {
 
 function statusPill(status) {
   const map = {
-    manual_review: ['#b87e00', 'rgba(184,126,0,.15)', 'Manual review'],
+    manual_review: ['#b87e00', 'rgba(184,126,0,.15)', 'Awaiting owner review'],
+    awaiting_payment: ['var(--muted)', 'var(--input)', 'Awaiting payment'],
+    receipt_correction: ['#b87e00', 'rgba(184,126,0,.15)', 'Receipt needs correction'],
     pending: ['#b87e00', 'rgba(184,126,0,.15)', 'Pending'],
     auto_approved: ['var(--green)', 'rgba(var(--green-rgb),.15)', 'Auto-verified'],
     paid: ['var(--green)', 'rgba(var(--green-rgb),.15)', 'Paid'],
@@ -11267,7 +11274,7 @@ function paymentReviewAction(item) {
     if (item.status === 'retained') {
       return '<span style="color:var(--muted);font-size:.78rem;font-weight:800">Resolved</span>';
     }
-    const label = ['manual_review', 'pending'].includes(item.status) ? 'Review' : 'Details';
+    const label = ['manual_review', 'receipt_correction', 'pending'].includes(item.status) ? 'Review' : 'Details';
     return `<button class="btn btn-sm" style="background:rgba(200,160,96,.15);color:var(--yellow);border:1px solid rgba(200,160,96,.35);font-weight:700" onclick="openVerifyModal('${jsArg(item.id)}')">${label}</button>`;
   }
   if (item.type === 'open_play' && item.status !== 'paid') {
@@ -11425,7 +11432,7 @@ async function renderPaymentReview() {
     });
   const items = [...bookingItems, ...opItems, ...hostItems].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
   const counts = {
-    needsReview: items.filter(i => i.status === 'manual_review').length,
+    needsReview: items.filter(i => ['manual_review','receipt_correction'].includes(i.status)).length,
     pending: items.filter(i => i.status === 'pending').length,
     auto: items.filter(i => ['auto_approved', 'paid', 'retained'].includes(i.status)).length,
     rejected: items.filter(i => i.status === 'rejected').length,
@@ -11442,7 +11449,7 @@ async function renderPaymentReview() {
   let filtered = items;
   if (q) filtered = filtered.filter(i => [i.name, i.ref, i.courtName, i.dateLabel, i.timeLabel, i.method].join(' ').toLowerCase().includes(q));
   if (typ) filtered = filtered.filter(i => i.type === typ);
-  if (st === 'attention') filtered = filtered.filter(i => ['manual_review', 'pending', 'rejected'].includes(i.status));
+  if (st === 'attention') filtered = filtered.filter(i => ['manual_review', 'receipt_correction', 'pending', 'rejected'].includes(i.status));
   else if (st) filtered = filtered.filter(i => i.status === st);
   if ($('prQueueMeta')) {
     $('prQueueMeta').textContent = filtered.length === 1
@@ -12405,7 +12412,8 @@ async function vmPopulateReceipt(b){
   if (s === 'none' && !b.receiptImageUrl) {
     if (wrap) wrap.style.display = '';
     const emptyImage = $('vmReceiptNoImg');
-    if (emptyImage) emptyImage.style.display = '';
+    if ($('vmReceiptLink')) $('vmReceiptLink').style.display = 'none';
+    if (emptyImage) { emptyImage.style.display = ''; emptyImage.textContent = 'Awaiting payment — no receipt has been submitted. This booking cannot be reviewed as paid.'; }
     return;
   }
   if (wrap) wrap.style.display = '';
@@ -12447,18 +12455,13 @@ async function vmPopulateReceipt(b){
   const link = $('vmReceiptLink'), img = $('vmReceiptImg'), noImg = $('vmReceiptNoImg');
   if (link) link.style.display = 'none';
   if (noImg) noImg.style.display = 'none';
-  if (b.receiptImageUrl) {
-    try {
-      const url = await DB.getReceiptSignedUrl(b.receiptRef || b.ref);
-      if (loadToken !== _vmReceiptLoadToken) return;
-      if (img) img.src = url;
-      if (link) { link.href = url; link.style.display = ''; }
-    } catch(e) {
-      if (loadToken !== _vmReceiptLoadToken) return;
-      if (noImg) { noImg.style.display = ''; noImg.textContent = 'Could not load receipt image.'; }
-    }
+  if (b.receiptImageUrl && img && link && noImg) {
+    await window.ReceiptWorkflow.showImage({ image: img, link, message: noImg,
+      getUrl: () => DB.getReceiptSignedUrl(b.receiptRef || b.ref),
+      isCurrent: () => loadToken === _vmReceiptLoadToken });
   } else if (noImg) {
     noImg.style.display = '';
+    noImg.textContent = 'Awaiting payment — no receipt has been submitted.';
   }
 }
 
@@ -20415,7 +20418,8 @@ async function checkAgreementGate(session) {
 
 <script src="supabase.min.js"></script>
 <script src="open-play-rating.js?v=20260729-head-to-head-v1"></script>
-<script src="supabase-config.js?v=20261023-receipt-reference"></script>
+<script src="receipt-workflow.js?v=20261024"></script>
+<script src="supabase-config.js?v=20261024-payment-workflow"></script>
 <script src="qrcode.min.js?v=1.5.4"></script>
 <script src="availability-graphic.js?v=20260925-single-page-v1"></script>
 <script src="play-manager.js?v=20260909-official-logo-v1"></script>

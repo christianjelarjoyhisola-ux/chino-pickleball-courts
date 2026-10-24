@@ -114,6 +114,7 @@ $publicFiles = @(
   "player-live.js",
   "qrcode-LICENSE.txt",
   "qrcode.min.js",
+  "receipt-workflow.js",
   "supabase-config.js",
   "supabase.min.js"
 )

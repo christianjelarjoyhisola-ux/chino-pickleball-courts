@@ -308,7 +308,7 @@ test('admin releases decoded receipt images when review modals close', () => {
   assert.match(admin, /async function openVerifyModal[\s\S]*?\+\+_vmOpenToken[\s\S]*?await getBookingGroupByRef[\s\S]*?openToken !== _vmOpenToken/);
   assert.match(admin, /async function openOpVerifyModal[\s\S]*?\+\+_ovOpenToken[\s\S]*?await DB\.getOpenPlayRegistrations[\s\S]*?openToken !== _ovOpenToken/);
   assert.match(admin, /async function openHostSessionVerifyModal[\s\S]*?\+\+_ovOpenToken[\s\S]*?await Promise\.all[\s\S]*?openToken !== _ovOpenToken/);
-  assert.match(admin, /const loadToken = _vmReceiptLoadToken[\s\S]*?loadToken !== _vmReceiptLoadToken/);
+  assert.match(admin, /const loadToken = _vmReceiptLoadToken[\s\S]*?isCurrent: \(\) => loadToken === _vmReceiptLoadToken/);
   assert.match(admin, /const loadToken = _ovReceiptLoadToken[\s\S]*?loadToken !== _ovReceiptLoadToken/);
   assert.match(admin, /ov\.id==='opVerifyModal'\) closeModal\('opVerifyModal'\)/);
   assert.match(remittanceClose, /rmReviewReceiptWrap[\s\S]*?removeAttribute\('src'\)/);

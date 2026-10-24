@@ -433,6 +433,7 @@ async function _pbVerifyReceiptBase64Fallback(fnUrl, payload, imageFile, authHea
     provider: String(payload?.provider || 'gcash'),
     contentType: imageFile?.type || payload?.contentType || 'image/jpeg',
     imageBase64,
+    ...(payload?.replaceReceipt ? { replaceReceipt: true, expectedReceiptHash: payload.expectedReceiptHash } : {}),
     ...(payload?.bookingData ? { bookingData: payload.bookingData } : {}),
     ...(payload?.bookingAccessToken ? { bookingAccessToken: payload.bookingAccessToken } : {}),
   };
@@ -1695,7 +1696,17 @@ window.DB = {
       console.error('getBookingForManagement:', error);
       throw error;
     }
-    return (Array.isArray(data) ? data : data ? [data] : []).map(rowToBooking);
+    const rows = (Array.isArray(data) ? data : data ? [data] : []).map(rowToBooking);
+    // The lookup already proved the device token. Load receipt state through
+    // the same token-authorized endpoint; never guess 'missing' on failure.
+    await Promise.all(rows.map(async row => {
+      try {
+        const receipt = await this.recoverBookingReceipt(row.ref);
+        if (receipt) Object.assign(row, receipt, { receiptFlags: receipt.receiptFlags || [] });
+        row.receiptStateLoaded = true;
+      } catch (_) { row.receiptStateLoaded = false; }
+    }));
+    return rows;
   },
 
   async getBookingRescheduleState(ref, email) {
@@ -3100,6 +3111,8 @@ window.DB = {
     try {
       form = new FormData();
       form.append('action', 'stage');
+      if (requestPayload.replaceReceipt) form.append('replaceReceipt', 'true');
+      if (requestPayload.expectedReceiptHash) form.append('expectedReceiptHash', requestPayload.expectedReceiptHash);
       form.append('bookingRef', bookingRef);
       form.append('provider', String(requestPayload.provider || 'gcash'));
       form.append('contentType', imageFile.type || requestPayload.contentType || 'image/jpeg');

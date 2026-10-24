@@ -314,7 +314,17 @@
     focusResult();
   }
 
+  function receiptWorkflowMeta(rows) {
+    if (!rows.every(row => row.receiptStateLoaded === true)) return null;
+    const states = rows.map(row => window.ReceiptWorkflow?.state(row));
+    if (!states.every(Boolean)) return null;
+    const selected = states.find(state => state.code === 'receipt_correction') || states.find(state => state.code === 'awaiting_payment') || states[0];
+    return { ...selected, tone: 'warning' };
+  }
+
   function aggregateBookingStatus(rows) {
+    const workflow = receiptWorkflowMeta(rows);
+    if (workflow) return workflow;
     const values = unique(rows.map((row) => String(row.status || "").trim().toLowerCase()));
     if (values.length === 1 && bookingStatusMeta[values[0]]) return bookingStatusMeta[values[0]];
     if (values.includes("verifying")) return bookingStatusMeta.verifying;
@@ -329,6 +339,8 @@
   }
 
   function aggregatePaymentStatus(rows) {
+    const workflow = receiptWorkflowMeta(rows);
+    if (workflow) return workflow;
     const values = unique(rows.map((row) => String(row.paymentStatus || "").trim().toLowerCase()));
     if (values.length === 1 && paymentStatusMeta[values[0]]) return paymentStatusMeta[values[0]];
     if (values.includes("for_verification")) return paymentStatusMeta.for_verification;
@@ -1285,6 +1297,39 @@
     }
   }
 
+  function receiptCorrectionPanel(rows, reference, isOwnerResult) {
+    const section = element('section', 'booking-policy');
+    const row = rows.find(item => item.canReplace === true || (item.receiptStateLoaded && item.stagedReceiptPath && item.verified === false && item.status === 'pending' && item.paymentStatus === 'for_verification'));
+    if (!row || isOwnerResult) return null;
+    section.append(element('h3', '', 'Replace incomplete receipt'), element('p', '', 'Upload the complete original receipt, including the bank reference and transaction date/time. Do not send another payment. Your previous receipt stays in the audit history.'));
+    const input = element('input'); input.type = 'file'; input.accept = 'image/jpeg,image/png,image/webp';
+    input.setAttribute('aria-label', 'Complete receipt screenshot');
+    const button = element('button', 'reschedule-button', 'Upload and recheck receipt'); button.type = 'button';
+    const feedback = element('p', 'status-message'); feedback.setAttribute('role', 'status');
+    let stagedPath = row.canReplace ? '' : row.stagedReceiptPath;
+    if (stagedPath) { input.hidden = true; button.textContent = 'Retry receipt check'; }
+    button.addEventListener('click', async () => {
+      if (!input.files?.[0] && !stagedPath) { feedback.textContent = 'Choose a complete receipt image first.'; return; }
+      button.disabled = true; input.disabled = true;
+      try {
+        if (!stagedPath) {
+          feedback.textContent = 'Uploading your replacement receipt…';
+          const staged = await window.DB.stageBookingReceipt({ bookingRef: row.ref, provider: row.paymentMethod,
+            imageFile: input.files[0], replaceReceipt: true, expectedReceiptHash: row.receiptImageHash });
+          stagedPath = staged.stagedReceiptPath;
+        }
+        feedback.textContent = 'Receipt stored. Checking payment details; do not pay again.';
+        await window.DB.verifyGcashReceipt({ bookingRef: row.ref, provider: row.paymentMethod, stagedReceiptPath: stagedPath });
+        await submitLookup({ preventDefault() {} });
+      } catch (error) {
+        feedback.textContent = error.message || 'Could not finish checking. Please retry or contact CHINO.';
+        button.textContent = stagedPath ? 'Retry receipt check' : 'Upload and recheck receipt';
+      } finally { button.disabled = false; input.disabled = Boolean(stagedPath); }
+    });
+    section.append(input, button, feedback);
+    return section;
+  }
+
   function renderBooking(rows, requestedReference, wasLimited) {
     const bookingMeta = aggregateBookingStatus(rows);
     const paymentMeta = aggregatePaymentStatus(rows);
@@ -1330,6 +1375,8 @@
       makeSummaryItem("Payment summary", paymentSummary(rows, paymentMeta)),
     );
     root.append(summary);
+    const correction = receiptCorrectionPanel(rows, reference, isOwnerResult);
+    if (correction) root.append(correction);
 
     const scheduleSection = element("section", "schedule-section");
     scheduleSection.append(element("h3", "", rows.length > 1 ? "Booked schedules" : "Booked schedule"));

@@ -3818,15 +3818,15 @@ try {
 
     <!-- Slot reservation countdown -->
     <div id="slotCountdown">
-      <span class="scd-text">Complete your booking within <span id="scdTime" class="scd-inline-time">10:00</span></span>
-      <span class="scd-timer" id="scdTimerBig">10:00</span>
+      <span class="scd-text">Complete your booking within <span id="scdTime" class="scd-inline-time">15:00</span></span>
+      <span class="scd-timer" id="scdTimerBig">15:00</span>
     </div>
 
     <div class="booking-intro" id="bookingIntro" aria-hidden="true">
       <div class="booking-intro-card" id="bookingIntroCard" tabindex="-1" role="group" aria-labelledby="bookingIntroTitle" aria-describedby="bookingIntroCopy">
-        <div class="booking-intro-kicker">10-minute checkout</div>
-        <div class="booking-intro-title" id="bookingIntroTitle">Complete your booking within 10 minutes</div>
-        <div class="booking-intro-timer" id="bookingIntroTimer">10:00</div>
+        <div class="booking-intro-kicker">15-minute checkout</div>
+        <div class="booking-intro-title" id="bookingIntroTitle">Complete your booking within 15 minutes</div>
+        <div class="booking-intro-timer" id="bookingIntroTimer">15:00</div>
         <p class="booking-intro-copy" id="bookingIntroCopy">Keep an eye on the timer at the top of the booking form.</p>
       </div>
     </div>
@@ -6682,7 +6682,7 @@ let _reservationIntroTimeout = null;
 let _reservationIntroFinishTimeout = null;
 let _reservationIntroToken = 0;
 let _bookingLaunchInFlight = false;
-const RESERVATION_MINUTES = 10;
+const RESERVATION_MINUTES = 15;
 const RESERVATION_INTRO_MS = 5000;
 const RESERVATION_INTRO_EXIT_MS = 1000;
 const GUEST_RESUME_KEY = 'pb_guest_booking_resume_v1';
@@ -6815,11 +6815,22 @@ async function maybeResumeGuestBooking() {
   if (!resume) return;
 
   if (reservationSecondsLeft(resume.startedAt) <= 0) {
+    // Do not describe durable payment evidence as an expired empty hold.
+    try {
+      const receipts = await Promise.all(resume.refs.map(ref => DB.recoverBookingReceipt(ref)));
+      if (receipts.some(receipt => receipt?.stagedReceiptPath)) {
+        toast('Your receipt is safely stored. Contact CHINO with your booking reference to finish this interrupted checkout. Do not pay again.', 'inf');
+        return;
+      }
+    } catch (_) {
+      toast('We could not check your saved receipt. Please retry before making another payment.', 'inf');
+      return;
+    }
     await Promise.allSettled(resume.refs.map(ref =>
       releaseBookingHoldRef(ref).catch(() => {})
     ));
     clearGuestBookingResume();
-    toast('Your saved reservation expired after 10 minutes, so the slots were released. Please select a time again.', 'inf');
+    toast('Your saved reservation expired after 15 minutes, so the slots were released. Please select a time again.', 'inf');
     return;
   }
 
@@ -7000,7 +7011,7 @@ function showBookingIntro() {
   setBookingIntroContentInert(true);
   intro.setAttribute('aria-hidden', 'false');
   const announcement = $('bookingCountdownAnnouncement');
-  if (announcement) announcement.textContent = 'Complete your booking within 10 minutes. Keep an eye on the timer at the top of the booking form.';
+  if (announcement) announcement.textContent = 'Complete your booking within 15 minutes. Keep an eye on the timer at the top of the booking form.';
   requestAnimationFrame(() => card.focus({ preventScroll: true }));
   const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
   const introPauseMs = reducedMotion
@@ -7055,8 +7066,8 @@ function isPlaceholderBookingHold(b) {
 function isHeldVerifying(b) {
   if (b.status !== 'verifying') return false;
   // Genuine customer rows may stay verifying while receipt processing finishes.
-  // Only the temporary checkout identity is allowed to age out after 10 minutes.
-  if (!isPlaceholderBookingHold(b)) return true;
+  // Only the temporary checkout identity is allowed to age out after 15 minutes.
+  if (!isPlaceholderBookingHold(b) || b.receiptImageUrl) return true;
   if (!b.createdAt) return true; // no timestamp → treat as fresh hold
   return (Date.now() - new Date(b.createdAt).getTime()) < RESERVATION_MINUTES * 60 * 1000;
 }
@@ -7455,6 +7466,14 @@ function startSlotCountdown(initialSeconds = null) {
       if (announcement) announcement.textContent = 'One minute remains. Complete your booking now.';
     }
     if (secsLeft <= 0) {
+      // An upload/verification in flight must finish before deciding whether
+      // a hold is disposable. Never close a durable evidence checkpoint.
+      if (_bookingSubmissionInFlight || _receiptUploadState?.status === 'uploading') return;
+      if (_receiptUploadState?.result?.stagedReceiptPath) {
+        stopSlotCountdown();
+        if (announcement) announcement.textContent = 'Your receipt is stored. Continue to verify it; do not pay again.';
+        return;
+      }
       stopSlotCountdown();
       banner.style.display = 'none';
       if (announcement) announcement.textContent = 'Time expired. Your booking was not completed.';
@@ -11882,7 +11901,7 @@ async function submitOpenPlay() {
 }
 </script>
 <script src="supabase.min.js"></script>
-<script src="supabase-config.js?v=20261023-receipt-reference"></script>
+<script src="supabase-config.js?v=20261024-payment-workflow"></script>
 
 <!-- MOBILE STICKY BOOK NOW BAR -->
 <div id="mobileBookBar" class="mobile-book-bar" style="display:none">
