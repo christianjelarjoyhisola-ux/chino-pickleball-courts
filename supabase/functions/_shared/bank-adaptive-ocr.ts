@@ -37,6 +37,8 @@ export const BANK_RECOVERY_STRATEGIES = [
   "bank_full_contrast_v1",
   "bank_full_enlarged_v1",
   "bank_full_detail_v1",
+  "bank_full_gray_padded_v1",
+  "bank_full_color_padded_v1",
 ] as const;
 export type BankRecoveryStrategy = typeof BANK_RECOVERY_STRATEGIES[number];
 export type BankRecoveryOriginal = {
@@ -272,6 +274,22 @@ function toBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
+/** Add a white margin outside the complete image; never paint over receipt
+ * pixels (including phone overlays). Small downloads retain their fine strokes. */
+async function paddedReceiptView(image: Image, scale: number, gray: boolean, padding: number): Promise<Uint8Array> {
+  const factor = Math.min(scale, Math.sqrt(4_000_000 / (image.width * image.height)), (4096-padding*2)/image.width, (8192-padding*2)/image.height);
+  let view = image.clone().resize(Math.max(1, Math.floor(image.width*factor)), Math.max(1, Math.floor(image.height*factor)));
+  if (gray) for (let i=0;i<view.bitmap.length;i+=4) {
+    const a=view.bitmap[i+3]/255;
+    const value=Math.round((.299*view.bitmap[i]+.587*view.bitmap[i+1]+.114*view.bitmap[i+2])*a+255*(1-a));
+    view.bitmap[i]=view.bitmap[i+1]=view.bitmap[i+2]=value; view.bitmap[i+3]=255;
+  }
+  if (padding) view = new Image(view.width+padding*2,view.height+padding*2).fill(0xffffffff).composite(view,padding,padding);
+  let bytes=await view.encodeJPEG(95);
+  if (bytes.length>4*1024*1024) bytes=await view.encodeJPEG(80);
+  return bytes;
+}
+
 /** Both full images include every status/destination/fee; majority never overrides
  * a known mismatch. Caller retains duplicate lookup and atomic finalization. */
 export async function recoverBankReceipt(
@@ -337,6 +355,13 @@ export async function recoverBankReceipt(
   let prepared: Partial<Record<BankRecoveryStrategy, Uint8Array>>;
   try {
     const image = await Image.decode(bytes);
+    if (original.parsed.provider === "maribank_direct" && ["gcash","gotyme"].includes(original.parsed.receipt.source)) {
+      prepared = {
+        bank_full_gray_padded_v1: await paddedReceiptView(image,3,true,32),
+        bank_full_color_padded_v1: await paddedReceiptView(image,2,false,48),
+        bank_full_detail_v1: await paddedReceiptView(image,2,true,0),
+      };
+    } else {
     // Original bank downloads can exceed 2 MP (for example 1206 x 2567).
     // Derive each view directly from the original pixels: shrinking a shared
     // base before enlarging it would discard small account/reference strokes.
@@ -412,6 +437,7 @@ export async function recoverBankReceipt(
         detail.bitmap[i] = detail.bitmap[i + 1] = detail.bitmap[i + 2] = gray; detail.bitmap[i + 3] = 255;
       }
       prepared.bank_full_detail_v1 = await detail.encodeJPEG(95);
+    }
     }
     if (Object.values(prepared).some((png) => png.length > 4 * 1024 * 1024)) {
       return result("recovery_image_too_large");

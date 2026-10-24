@@ -650,6 +650,7 @@ Oct 06, 2026 04:20 PM
   let calls=0;
   const result=await recoverBankReceipt(await imageBytes(),{read:bankFixtureRead(text),parsed},context,'test',{ocr:async()=>{calls++;return bankFixtureRead(text.replace('\n7144\n','\n.......7144\n'));}});
   eq(calls,3);eq(result.accepted,true,JSON.stringify(result.audit));
+  eq(result.audit.readings.map(r=>r.strategy),['bank_full_detail_v1','bank_full_gray_padded_v1','bank_full_color_padded_v1']);
   const unchanged=await recoverBankReceipt(await imageBytes(),{read:bankFixtureRead(text),parsed},context,'test',{ocr:async()=>bankFixtureRead(text)});
   eq(unchanged.accepted,false);
   const conflict=await recoverBankReceipt(await imageBytes(),{read:bankFixtureRead(text),parsed},context,'test',{ocr:async()=>bankFixtureRead(text.replace('\n7144\n','\n.......9999\n'))});

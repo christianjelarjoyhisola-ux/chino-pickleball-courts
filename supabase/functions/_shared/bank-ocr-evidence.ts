@@ -550,6 +550,7 @@ function moneyIdentity(value: string): string {
 export function bankFieldIdentity(key: string, value: string): string {
   if (/^(?:amount|fee|total)/.test(key)) return moneyIdentity(value);
   let result = compact(value);
+  if (key === "rail" && /^INSTA[PF]AYINSTANT$/.test(result)) return "INSTAPAYINSTANT";
   if (key === "reference" || key === "secondaryReference") {
     return result.replace(/[^A-Z0-9]/g, "");
   }
@@ -591,6 +592,23 @@ function gcashTransferMethodEvidence(read: GoogleVisionOcrResult, raw: string | 
  return fieldEvidence(read,raw);
 }
 
+/** GoTyme renders the P in the InstaPay logo as a graphic. The parser already
+ * accepts its observed P/F variant. Require every other letter and 'Instant'
+ * at native confidence; this exception never applies to payment identifiers. */
+function gotymeLogoEvidence(read: GoogleVisionOcrResult, raw: string | null | undefined): BankPaymentFieldEvidence {
+  const fallback=fieldEvidence(read,raw);
+  if (!/^insta[pf]ay Instant$/i.test(raw || '')) return fallback;
+  const rows=(read.nativeLines||[]).filter(line=>compact(line.text)===compact(raw||''));
+  if(rows.length!==1 || rows[0].words.length!==2) return fallback;
+  const [logo,instant]=rows[0].words;
+  if(!/^insta[pf]ay$/i.test(logo.text)||instant.text!=='Instant'||logo.symbols.map(s=>s.text).join('')!==logo.text||logo.symbols.length!==8)return fallback;
+  const letters=logo.symbols.filter((_,i)=>i!==5).map(s=>s.confidence);
+  const suffix=nativeWordConfidence(instant,false);
+  if(!letters.every(score)||!score(suffix))return fallback;
+  const confidence=Math.min(...letters as number[],suffix);
+  return {text:raw!,occurrences:1,confidence,occurrenceConfidences:[confidence]};
+}
+
 export function maribankDirectApprovalConfidence(read: GoogleVisionOcrResult, parsed: Extract<ProviderReceiptParse,{provider:"maribank_direct"}>): BankApprovalConfidence {
  // The currency glyph is often read as P or +. Require native confidence in
  // every total digit and punctuation, plus exact principal + fee arithmetic.
@@ -598,7 +616,15 @@ export function maribankDirectApprovalConfidence(read: GoogleVisionOcrResult, pa
  const r=parsed.receipt;
  const evidenceRead={...read,nativeLines:read.nativeLines?.length ? read.nativeLines : read.nativeWordLines};
  const reconciled=r.amount.amount!=null && r.transferFee!=null && r.total!=null && Math.round(r.amount.amount*100)+Math.round(r.transferFee*100)===Math.round(r.total*100);
- const fields = Object.fromEntries(Object.entries(r.paymentFields).map(([key,value])=>[key,key==='rail'&&r.source==='gcash'?gcashTransferMethodEvidence(evidenceRead,value):fieldEvidence(evidenceRead,value,key==="recipientAccount",false,key==="total" && reconciled,key==="recipientName" && r.source==="maribank")]));
+ const fields = Object.fromEntries(Object.entries(r.paymentFields).map(([key,value])=>[key,key==='rail'&&r.source==='gcash'?gcashTransferMethodEvidence(evidenceRead,value):key==='rail'&&r.source==='gotyme'?gotymeLogoEvidence(evidenceRead,value):fieldEvidence(evidenceRead,value,key==="recipientAccount" || (key==="recipientName" && r.source==="gotyme" && /\*/.test(value||"")),false,key==="total" && reconciled,key==="recipientName" && r.source==="maribank")]));
+ const optionalFields: NonNullable<BankApprovalConfidence['optionalFields']> = {};
+ // Same reconciled-zero rule used by the existing GoTyme destination parser:
+ // require observed zero plus independently strong, equal principal and total.
+ if(r.source==='gotyme' && r.transferFee===0 && r.amount.amount!=null && r.total===r.amount.amount &&
+    /^(?:PHP|₱|P)?\s*0\.00$/i.test(fields.fee?.text||'') &&
+    (fields.amount?.confidence??0)>=.9 && (fields.total?.confidence??0)>=.9){
+   optionalFields.fee={...fields.fee,optionalReason:'zero_fee_reconciled'};delete fields.fee;
+ }
  const complete=Object.values(fields).every(f=>score(f.confidence));
- return {confidence:complete?Math.min(...Object.values(fields).map(f=>f.confidence!)):0,source:complete?"bank_payment_fields":"none",basis:complete?"native_payment_value_words":"missing_native_payment_evidence",fields,complete};
+ return {confidence:complete?Math.min(...Object.values(fields).map(f=>f.confidence!)):0,source:complete?"bank_payment_fields":"none",basis:complete?"native_payment_value_words":"missing_native_payment_evidence",fields,optionalFields,complete};
 }

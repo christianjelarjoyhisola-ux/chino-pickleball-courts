@@ -139,3 +139,50 @@ Deno.test("GoTyme preserves actual masks and needs complete reference, date and 
   );
   ok(check(gotyme).e.dedupeKeys.some((k) => k.key === "instapay:927015"));
 });
+
+Deno.test('GoTyme masked name confidence uses observed letters, never mask glyphs or expected names',()=>{
+ const {p}=check(gotyme); const read=bankFixtureRead(gotyme);
+ for(const line of read.nativeLines!) for(const word of line.words) if(word.text.includes('*')) {
+   word.confidence=.4; for(const symbol of word.symbols) if(symbol.text==='*')symbol.confidence=.2;
+ }
+ const score=maribankDirectApprovalConfidence(read,p);ok(score.fields.recipientName.confidence!>=.9);
+ for(const line of read.nativeLines!) for(const word of line.words) if(word.text.startsWith('V')) for(const symbol of word.symbols) if(symbol.text==='V')symbol.confidence=.4;
+ ok(maribankDirectApprovalConfidence(read,p).confidence<.9,'weak visible surname initial must block');
+});
+Deno.test('a matching but obscured date must retain low native confidence',()=>{
+ const {p}=check(gotyme);const read=bankFixtureRead(gotyme);
+ for(const line of read.nativeLines!) if(line.text.startsWith('Date'))for(const word of line.words)if(word.text==='24'){word.confidence=.5;for(const symbol of word.symbols)symbol.confidence=.5;}
+ ok(maribankDirectApprovalConfidence(read,p).fields.dateTime.confidence!<.9);
+});
+
+Deno.test('GoTyme logo graphic is isolated from real letters and financial references',()=>{
+ const text=gotyme.replace('instaPay','instaFay');const {p}=check(text);const read=bankFixtureRead(text);
+ const logo=read.nativeLines!.flatMap(l=>l.words).find(w=>w.text==='instaFay')!;
+ logo.confidence=.6;logo.symbols[5].confidence=.2;
+ ok(maribankDirectApprovalConfidence(read,p).fields.rail.confidence!>=.9);
+ logo.symbols[2].confidence=.4;
+ ok(maribankDirectApprovalConfidence(read,p).fields.rail.confidence!<.9,'other visible brand letters stay required');
+ const ref=read.nativeLines!.flatMap(l=>l.words).find(w=>w.text==='ITO261024081927015')!;ref.confidence=.4;
+ ok(maribankDirectApprovalConfidence(read,p).fields.reference.confidence!<.9);
+});
+Deno.test('GoTyme zero fee exception requires observed zero and strong agreeing principal and total',()=>{
+ const {p}=check(gotyme);const read=bankFixtureRead(gotyme);
+ const fee=read.nativeLines!.flatMap(l=>l.words).find(w=>w.text==='P0.00')!;fee.confidence=.4;
+ const evidence=maribankDirectApprovalConfidence(read,p);ok(evidence.optionalFields?.fee.optionalReason==='zero_fee_reconciled');ok(!evidence.fields.fee);
+ const altered=check(gotyme.replace('Fee P0.00','Fee P1.00')).p;ok(maribankDirectApprovalConfidence(bankFixtureRead(gotyme.replace('Fee P0.00','Fee P1.00')),altered).fields.fee);
+ const total=read.nativeLines!.find(l=>l.text.startsWith('Total'))!;for(const word of total.words)word.confidence=.4;
+ ok(maribankDirectApprovalConfidence(read,p).fields.fee,'weak total cannot reconcile a weak zero fee');
+});
+
+Deno.test('complete GoTyme receipt survives weak decorative glyphs but never an obscured date',()=>{
+ const text=gotyme.replace('instaPay','instaFay');const {p,e}=check(text);ok(e.flags.length===0);
+ const read=bankFixtureRead(text);
+ for(const line of read.nativeLines!)for(const word of line.words){
+  if(word.text.includes('*')){word.confidence=.4;for(const symbol of word.symbols)if(symbol.text==='*')symbol.confidence=.2;}
+  if(word.text==='P0.00')word.confidence=.4;
+  if(word.text==='instaFay'){word.confidence=.4;word.symbols[5].confidence=.2;}
+ }
+ ok(maribankDirectApprovalConfidence(read,p).confidence>=.9);
+ for(const line of read.nativeLines!)if(line.text.startsWith('Date'))for(const word of line.words)if(word.text==='24')word.confidence=.5;
+ ok(maribankDirectApprovalConfidence(read,p).confidence<.9);
+});
