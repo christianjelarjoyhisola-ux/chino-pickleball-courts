@@ -11220,11 +11220,12 @@ function receivedAccountLabel(b) {
 function bookingReviewStatus(b) {
   const workflow = window.ReceiptWorkflow?.state(b);
   if (workflow) return workflow.code;
-  if (b.paymentStatus === 'rejected' || b.status === 'cancelled') return 'rejected';
+  if (b.paymentStatus === 'rejected') return 'rejected';
   if (b.paymentStatus === 'deposit_retained' || b.status === 'forfeited') return 'retained';
   if (b.paymentStatus === 'paid' || b.paymentStatus === 'downpayment_paid') {
-    return b.receiptStatus === 'auto_approved' ? 'auto_approved' : 'paid';
+    return b.receiptStatus === 'auto_approved' ? 'auto_approved' : b.paymentStatus === 'downpayment_paid' ? 'deposit_manual' : 'paid_manual';
   }
+  if (b.status === 'cancelled') return 'rejected';
   if (b.receiptStatus === 'manual_review') return 'manual_review';
   if (
     b.paymentStatus === 'for_verification' ||
@@ -11240,7 +11241,7 @@ function bookingReviewStatus(b) {
 
 function openPlayReviewStatus(r) {
   if (r.payment_status === 'rejected') return 'rejected';
-  if (r.payment_status === 'paid') return r.receipt_status === 'auto_approved' ? 'auto_approved' : 'paid';
+  if (r.payment_status === 'paid') return r.receipt_status === 'auto_approved' ? 'auto_approved' : 'paid_manual';
   if (r.receipt_status === 'manual_review') return 'manual_review';
   if (r.receipt_status === 'rejected') return 'rejected';
   return 'pending';
@@ -11254,6 +11255,8 @@ function statusPill(status) {
     pending: ['#b87e00', 'rgba(184,126,0,.15)', 'Pending'],
     auto_approved: ['var(--green)', 'rgba(var(--green-rgb),.15)', 'Auto-verified'],
     paid: ['var(--green)', 'rgba(var(--green-rgb),.15)', 'Paid'],
+    deposit_manual: ['var(--green)', 'rgba(var(--green-rgb),.15)', 'Deposit paid — manually confirmed'],
+    paid_manual: ['var(--green)', 'rgba(var(--green-rgb),.15)', 'Paid — manually confirmed'],
     retained: ['#e67e22', 'rgba(230,126,34,.14)', 'Deposit retained'],
     rejected: ['#e53935', 'rgba(229,57,53,.12)', 'Rejected'],
     unpaid: ['var(--muted)', 'var(--input)', 'Unpaid'],
@@ -11434,7 +11437,7 @@ async function renderPaymentReview() {
   const counts = {
     needsReview: items.filter(i => ['manual_review','receipt_correction'].includes(i.status)).length,
     pending: items.filter(i => i.status === 'pending').length,
-    auto: items.filter(i => ['auto_approved', 'paid', 'retained'].includes(i.status)).length,
+    auto: items.filter(i => ['auto_approved', 'paid', 'paid_manual', 'deposit_manual', 'retained'].includes(i.status)).length,
     rejected: items.filter(i => i.status === 'rejected').length,
   };
   if ($('prNeedsReview')) $('prNeedsReview').textContent = counts.needsReview;
@@ -11450,6 +11453,7 @@ async function renderPaymentReview() {
   if (q) filtered = filtered.filter(i => [i.name, i.ref, i.courtName, i.dateLabel, i.timeLabel, i.method].join(' ').toLowerCase().includes(q));
   if (typ) filtered = filtered.filter(i => i.type === typ);
   if (st === 'attention') filtered = filtered.filter(i => ['manual_review', 'receipt_correction', 'pending', 'rejected'].includes(i.status));
+  else if (st === 'paid') filtered = filtered.filter(i => ['paid', 'paid_manual', 'deposit_manual'].includes(i.status));
   else if (st) filtered = filtered.filter(i => i.status === st);
   if ($('prQueueMeta')) {
     $('prQueueMeta').textContent = filtered.length === 1
@@ -12435,7 +12439,7 @@ async function vmPopulateReceipt(b){
   } else if (paymentState === 'paid' || paymentState === 'downpayment_paid') {
     [c,bg,lbl] = s === 'auto_approved'
       ? map.auto_approved
-      : ['var(--green)','rgba(var(--green-rgb),.12)','Payment manually confirmed · parser result kept for audit'];
+      : ['var(--green)','rgba(var(--green-rgb),.12)',`${paymentState === 'downpayment_paid' ? 'Deposit paid' : 'Paid'} — manually confirmed · original automated check kept for audit`];
   } else if (paymentState === 'rejected' || bookingState === 'cancelled') {
     [c,bg,lbl] = ['#e53935','rgba(229,57,53,.1)','Payment rejected · booking slot released'];
   } else if (s === 'rejected') {
@@ -18665,7 +18669,7 @@ async function ovPopulateReceipt(r, receiptType = 'open_play') {
   if (paymentState === 'paid') {
     [c,bg,lbl] = s === 'auto_approved'
       ? map.auto_approved
-      : ['var(--green)','rgba(var(--green-rgb),.12)','Payment manually confirmed · parser result kept for audit'];
+      : ['var(--green)','rgba(var(--green-rgb),.12)',`${paymentState === 'downpayment_paid' ? 'Deposit paid' : 'Paid'} — manually confirmed · original automated check kept for audit`];
   } else if (paymentState === 'rejected') {
     [c,bg,lbl] = ['#e53935','rgba(229,57,53,.1)','Payment rejected'];
   }

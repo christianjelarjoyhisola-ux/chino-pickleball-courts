@@ -604,7 +604,17 @@ Transaction Date & Time
   for(const line of read.nativeLines!) for(const word of line.words) if(word.text==='FREE') word.confidence=.6;
   let calls=0;
   const recovered=await recoverBankReceipt(await imageBytes(),{read,parsed},context,'test',{ocr:async()=>{calls++;return bankFixtureRead(text);}});
-  eq(calls,2);eq(recovered.accepted,true,JSON.stringify(recovered.audit));
+  eq(calls,3);eq(recovered.accepted,true,JSON.stringify(recovered.audit));
+  let partialCalls=0;
+  const partial=await recoverBankReceipt(await imageBytes(),{read,parsed},context,'test',{ocr:async()=>bankFixtureRead(++partialCalls===1?text.replace('BC550000000000000001',''):text)});
+  eq(partial.accepted,true,JSON.stringify(partial.audit));
+  let singleCalls=0;
+  const single=await recoverBankReceipt(await imageBytes(),{read,parsed},context,'test',{ocr:async()=>bankFixtureRead(++singleCalls===1?text:text.replace('BC550000000000000001',''))});
+  eq(single.accepted,false);
+  let conflictingCalls=0;
+  const disagree=await recoverBankReceipt(await imageBytes(),{read,parsed},context,'test',{ocr:async()=>bankFixtureRead(++conflictingCalls===1?text.replace('BC550000000000000001','BC550000000000000002'):text)});
+  eq(disagree.accepted,false);
+
   const changed=await recoverBankReceipt(await imageBytes(),{read,parsed},context,'test',{ocr:async()=>bankFixtureRead(text.replaceAll('795.00','800.00'))});
   eq(changed.accepted,false);
 });
@@ -639,7 +649,7 @@ Oct 06, 2026 04:20 PM
   const context={expectedAmount:795,pricingAvailable:true,amountTolerance:.01,expectedRecipientName:'KRISTIE LOU VILLANUEVA',expectedRecipientNumber:'15521507144',bookingStartedAt:'2026-10-06T08:18:00Z',bookingStartedDate:'2026-10-06',paymentWindowMinutes:15,earlyToleranceMinutes:2};
   let calls=0;
   const result=await recoverBankReceipt(await imageBytes(),{read:bankFixtureRead(text),parsed},context,'test',{ocr:async()=>{calls++;return bankFixtureRead(text.replace('\n7144\n','\n.......7144\n'));}});
-  eq(calls,2);eq(result.accepted,true,JSON.stringify(result.audit));
+  eq(calls,3);eq(result.accepted,true,JSON.stringify(result.audit));
   const unchanged=await recoverBankReceipt(await imageBytes(),{read:bankFixtureRead(text),parsed},context,'test',{ocr:async()=>bankFixtureRead(text)});
   eq(unchanged.accepted,false);
   const conflict=await recoverBankReceipt(await imageBytes(),{read:bankFixtureRead(text),parsed},context,'test',{ocr:async()=>bankFixtureRead(text.replace('\n7144\n','\n.......9999\n'))});

@@ -1187,7 +1187,7 @@ test('receipt review displays missing amounts and parser diagnostics honestly', 
   const bookingReview = functionSource(admin, 'vmPopulateReceipt');
   const registrationReview = functionSource(admin, 'ovPopulateReceipt');
   for (const source of [bookingReview, registrationReview]) {
-    assert.match(source, /Payment manually confirmed · parser result kept for audit/);
+    assert.match(source, /manually confirmed · original automated check kept for audit/);
     assert.doesNotMatch(source, /Payment confirmed by staff/);
   }
 });

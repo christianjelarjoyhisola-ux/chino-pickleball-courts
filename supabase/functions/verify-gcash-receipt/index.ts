@@ -3012,6 +3012,7 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
     }
     if (providerParse?.provider === "maribank_direct" && originalOcr) {
       bankRead = {...originalOcr,text:originalOcr.originalText ?? originalOcr.text};
+      providerParse = parseProviderReceipt("maribank_direct", bankOcrText(bankRead), {typedReference: providerContext.typedReference}) as typeof providerParse;
       const firstApproval = maribankDirectApprovalConfidence(bankRead, providerParse);
       originalBankCheck = {clean: verifyProviderReceipt(providerParse, providerContext).flags.length === 0 && firstApproval.confidence >= .9, confidence: firstApproval.confidence};
       readingLayout = bankLayoutFamily("maribank_direct", bankRead.text);
@@ -3707,7 +3708,7 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
       parserVersion: providerParse?.parserVersion || "legacy",
       ...(isDedicatedReceiptProvider(provider)
         ? {
-          verifierRevision: provider === "gcash" ? GCASH_VERIFIER_REVISION : provider === "maribank" ? "maribank_direct_20261023_native_v4" : BANK_VERIFIER_REVISION,
+          verifierRevision: provider === "gcash" ? GCASH_VERIFIER_REVISION : provider === "maribank" ? "maribank_direct_20261024_incoming_v5" : BANK_VERIFIER_REVISION,
           originalOcrConfidence: originalOcr?.confidence ?? 0,
           originalOcrConfidenceSource: originalOcr?.confidenceSource ?? "none",
           readingRecovery: readingRecovery?.audit || (gotymeFieldRecovery?.audit.attempted
@@ -3733,7 +3734,7 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
           feedback: {
             version: "receipt_feedback_v1",
             layout: readingLayout,
-            parserRevision: provider === "gcash" ? GCASH_VERIFIER_REVISION : provider === "maribank" ? "maribank_direct_20261023_masked_v2" : BANK_VERIFIER_REVISION,
+            parserRevision: provider === "gcash" ? GCASH_VERIFIER_REVISION : provider === "maribank" ? "maribank_direct_20261024_incoming_v5" : BANK_VERIFIER_REVISION,
             durationMs: ocrMetrics.durationMs,
             ocrCalls: ocrMetrics.calls,
             strategies: feedbackStrategies,

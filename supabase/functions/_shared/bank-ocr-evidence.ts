@@ -147,6 +147,9 @@ export function bankLayoutFamily(provider: string, text: string): string {
         ? "gotyme_transfer_success_v1"
         : "unknown";
     case "maribank_direct":
+      if (has(/^Transaction Receipt$/im) && has(/^Receipt generated from MariBank app$/im)) return "maribank_download_v1";
+      if (has(/^Sent via BPI$/im) && has(/^Transfer successful!$/im)) return "bpi_to_maribank_v1";
+      if (has(/GoTyme Bank/i) && has(/^Transferred$/im) && has(/^Reference No\./im)) return "gotyme_to_maribank_v1";
       return has(/^Sent via GCash$/im) && has(/^Bank Transfer Complete$/im) ? "gcash_to_maribank_v1"
         : has(/^Transfer Result$/im) && has(/^Transfer Successful!$/im) ? "maribank_direct_v1" : "unknown";
     case "maribank":

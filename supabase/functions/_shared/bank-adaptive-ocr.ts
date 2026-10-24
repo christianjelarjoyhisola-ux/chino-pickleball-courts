@@ -36,6 +36,7 @@ export type {
 export const BANK_RECOVERY_STRATEGIES = [
   "bank_full_contrast_v1",
   "bank_full_enlarged_v1",
+  "bank_full_detail_v1",
 ] as const;
 export type BankRecoveryStrategy = typeof BANK_RECOVERY_STRATEGIES[number];
 export type BankRecoveryOriginal = {
@@ -240,7 +241,11 @@ export function evaluateBankRecoveryRead(
     bankReceiptHasIncompleteStatus(bankOcrText(read));
   const hardConflict = adverseStatus || vetoes.includes("COMPETING_PROVIDER") ||
     (!!read.nativeLines?.length &&
-      (vetoes.length > 0 || conservation.length > 0));
+      (vetoes.length > 0 || (original.parsed.provider !== "maribank_direct" ? conservation.length > 0 : conservation.some(flag => {
+        const key = flag.replace(/^ORIGINAL_/, '').replace(/_CONFLICT$/, '').toLowerCase().replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+        const observed = conservedFields(approval)[key];
+        return !!observed?.text && (nativeScore(observed.confidence) || observed.occurrenceConfidences?.some(nativeScore));
+      }))));
   return {
     selected,
     reading: {
@@ -329,7 +334,7 @@ export async function recoverBankReceipt(
   if (
     !visionKey || !receiptImageSafeToDecode(bytes, undefined, 8_000_000, 4096)
   ) return result("recovery_image_unavailable");
-  let prepared: Record<BankRecoveryStrategy, Uint8Array>;
+  let prepared: Partial<Record<BankRecoveryStrategy, Uint8Array>>;
   try {
     const image = await Image.decode(bytes);
     // Original bank downloads can exceed 2 MP (for example 1206 x 2567).
@@ -397,6 +402,17 @@ export async function recoverBankReceipt(
       bank_full_contrast_v1: contrastBytes,
       bank_full_enlarged_v1: colorBytes,
     };
+    if (original.parsed.provider === "maribank_direct") {
+      const detailScale = Math.min(2, Math.sqrt(4_000_000 / (image.width * image.height)));
+      const detail = image.clone().resize(Math.max(1, Math.floor(image.width * detailScale)), Math.max(1, Math.floor(image.height * detailScale)));
+      // Preserve faint mask and date strokes instead of thresholding them away.
+      for (let i = 0; i < detail.bitmap.length; i += 4) {
+        const a = detail.bitmap[i + 3] / 255;
+        const gray = Math.round((.299 * detail.bitmap[i] + .587 * detail.bitmap[i + 1] + .114 * detail.bitmap[i + 2]) * a + 255 * (1 - a));
+        detail.bitmap[i] = detail.bitmap[i + 1] = detail.bitmap[i + 2] = gray; detail.bitmap[i + 3] = 255;
+      }
+      prepared.bank_full_detail_v1 = await detail.encodeJPEG(95);
+    }
     if (Object.values(prepared).some((png) => png.length > 4 * 1024 * 1024)) {
       return result("recovery_image_too_large");
     }
@@ -406,13 +422,13 @@ export async function recoverBankReceipt(
   const remaining = deadlineMs - (Date.now() - started);
   if (remaining <= 0) return result("recovery_deadline_exceeded");
   const ocr = options.ocr || googleVisionOcr;
-  const strategies = [...BANK_RECOVERY_STRATEGIES].sort((a, b) =>
+  const strategies = BANK_RECOVERY_STRATEGIES.filter(id => prepared[id]).sort((a, b) =>
     a === preferredStrategy ? -1 : b === preferredStrategy ? 1 : 0
   );
   const candidates = await Promise.all(strategies.map(async (strategy) => {
     const readingStarted = Date.now();
     try {
-      const read = await ocr(visionKey, toBase64(prepared[strategy]), {
+      const read = await ocr(visionKey, toBase64(prepared[strategy]!), {
         featureType: "DOCUMENT_TEXT_DETECTION",
         timeoutMs: remaining,
       });
@@ -454,14 +470,14 @@ export async function recoverBankReceipt(
   const clean = candidates.filter((candidate) =>
     candidate.selected && candidate.reading.outcome === "clean"
   );
-  if (clean.length !== 2) {
+  if (clean.length < 2) {
     return result(
       candidates.some((candidate) => candidate.reading.outcome === "error")
         ? "transport_unavailable"
         : "recovery_incomplete",
     );
   }
-  if (signature(clean[0].selected!) !== signature(clean[1].selected!)) {
+  if (clean.some(candidate => signature(candidate.selected!) !== signature(clean[0].selected!))) {
     return result("recovery_readings_disagree");
   }
   const chosen =

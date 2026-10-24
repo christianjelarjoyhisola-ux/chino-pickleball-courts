@@ -1,3 +1,4 @@
+import { parseAdditionalMaribankReceipt, maskedMaribankNameMatches } from "./maribank-incoming.ts";
 import { extractReceiptAmount } from "../receipt-amount.ts";
 import { readReceiptTransferStatus } from "./transfer-status.ts";
 import { compareAccount, compareName, parseTimestamp } from "./securitybank.ts";
@@ -123,6 +124,8 @@ export function parseMaribankDirectReceipt(
   rawText: string,
   options: { typedReference?: string } = {},
 ) {
+  const additional = parseAdditionalMaribankReceipt(rawText, options.typedReference);
+  if (additional) return additional;
   const lines = String(rawText || "").normalize("NFKC").split(/\r?\n/).map(
     (x) => x.replace(/\s+/g, " ").trim(),
   ).filter(Boolean).flatMap((line) => {
@@ -411,11 +414,12 @@ export function verifyMaribankDirectReceipt(
     Math.round(parsed.amount.amount * 100) !==
       Math.round(context.expectedAmount * 100)
   ) add("AMOUNT_MISMATCH");
-  const recipientComparison = compareName(
+  const recipientComparison = parsed.source === "gotyme" && maskedMaribankNameMatches(parsed.recipient.nameRaw, context.expectedRecipientName || "") ? "initial_compatible" : compareName(
     parsed.recipient.nameRaw,
     context.expectedRecipientName || "",
   );
-  const recipientAccountComparison = parsed.source === "gcash" && /^\d{4}$/.test(parsed.recipient.accountRaw || "") ? "missing" : compareAccount(
+  const bpiShortAccount = parsed.source === "bpi" && /^[xX*•]{8}\d{3}$/.test(parsed.recipient.accountRaw || "") && /^\d{11}$/.test(context.expectedRecipientNumber || "") && context.expectedRecipientNumber!.endsWith(parsed.recipient.accountRaw!.slice(-3));
+  const recipientAccountComparison = bpiShortAccount ? "suffix_match" : parsed.source === "gcash" && /^\d{4}$/.test(parsed.recipient.accountRaw || "") ? "missing" : compareAccount(
     parsed.recipient.accountRaw,
     context.expectedRecipientNumber || "",
   );
@@ -470,6 +474,10 @@ export function verifyMaribankDirectReceipt(
         duplicateFlag: "DUPLICATE_REF",
       });
     }
+  }
+  if ((parsed.source === "bpi" || parsed.source === "gotyme") && parsed.reference.value) {
+    dedupeKeys.push({key: parsed.source + ':' + parsed.reference.value, providerKey: parsed.source, duplicateFlag: 'DUPLICATE_REF'});
+    if (parsed.secondaryReference) dedupeKeys.push({key: (parsed.source === 'bpi' ? 'bpi_transaction:' : 'instapay:') + parsed.secondaryReference, providerKey: parsed.source === 'bpi' ? 'bpi_transaction' : 'instapay', duplicateFlag: 'DUPLICATE_INSTAPAY_REF'});
   }
   if (parsed.invoice.value) {
     dedupeKeys.push({

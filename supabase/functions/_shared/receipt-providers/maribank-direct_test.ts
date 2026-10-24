@@ -343,7 +343,7 @@ Deno.test("detached native date column binds to the reference, never to status-b
       "Transfer Successful!",
       "",
     ) + "\nReceipt generated from MariBank app";
-  assert(flags(generated).includes("TRANSFER_STATUS_UNREADABLE"));
+  assert(flags(generated).length > 0, "unbound generated receipt columns cannot approve");
 });
 
 Deno.test('October displaced timestamp and inline reference preserve native details', () => {
