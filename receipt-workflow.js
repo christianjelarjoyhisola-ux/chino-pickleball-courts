@@ -6,6 +6,9 @@
     if (!['pending', 'verifying'].includes(status) || ['paid', 'downpayment_paid', 'rejected', 'deposit_retained'].includes(pay)) return null;
     if (!row.receiptImageUrl) return { code: 'awaiting_payment', label: 'Awaiting payment', message: 'No receipt has been submitted. This is not a confirmed booking.' };
     const flags = row.receiptFlags || [];
+    if (row.receiptStatus === 'manual_review' && flags.includes('RECEIPT_TOP_CROPPED')) {
+      return { code: 'receipt_correction', label: 'Full screenshot needed', message: 'The screenshot is cut off at the top, so the "Bank Transfer Complete" line is missing. Upload the full screenshot from GCash. Do not pay again.' };
+    }
     if (row.receiptStatus === 'manual_review' && flags.some(flag => /UNREADABLE|LOW_OCR_CONFIDENCE|OCR_FAILED|OCR_UNAVAILABLE/.test(flag))) {
       return { code: 'receipt_correction', label: 'Receipt needs correction', message: 'Upload a complete, clear receipt showing the recipient, amount, bank reference, and transaction date/time. Do not pay again.' };
     }

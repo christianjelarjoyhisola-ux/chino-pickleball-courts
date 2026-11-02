@@ -11,6 +11,8 @@ test('stored incomplete evidence and owner review are separate', () => {
   const row = { ...pending, receiptImageUrl: 'private/path', receiptStatus: 'manual_review' };
   assert.equal(workflow.state(row).code, 'manual_review');
   assert.equal(workflow.state({ ...row, receiptFlags: ['REF_UNREADABLE'] }).code, 'receipt_correction');
+  const cropped = workflow.state({ ...row, receiptFlags: ['RECEIPT_TOP_CROPPED', 'TRANSFER_STATUS_UNREADABLE'] });
+  assert.equal(cropped.code, 'receipt_correction'); assert.match(cropped.message, /cut off at the top/); assert.match(cropped.message, /Do not pay again/);
   for (const paymentStatus of ['paid', 'downpayment_paid', 'rejected']) assert.equal(workflow.state({ ...row, paymentStatus }), null);
   for (const status of ['cancelled', 'completed', 'forfeited']) assert.equal(workflow.state({ ...row, status }), null);
 });

@@ -135,7 +135,12 @@ export function parseMaribankDirectReceipt(
     return m ? [m[1], m[2]] : [line];
   });
   const text = lines.join("\n");
-  const source = /^Sent via GCash$/im.test(text)
+  // A screenshot cut off above "Sent via GCash" still shows the GCash body.
+  // Every marker is required; the missing header and status keep it in review.
+  const gcashBody = /\bin your GCash\b/i.test(text) &&
+    /^Receipt sent to\b/m.test(text) && /^InstaPay Invoice No\./m.test(text) &&
+    /^Powered by insta[PF]ay$/im.test(text);
+  const source = /^Sent via GCash$/im.test(text) || gcashBody
     ? "gcash" as const
     : "maribank" as const;
   const status = readReceiptTransferStatus(text);
@@ -296,6 +301,11 @@ export function parseMaribankDirectReceipt(
   const statusRaw = source === "gcash"
     ? lines.find((s) => /^Bank Transfer Complete$/i.test(s))
     : lines.find((s) => /^Transfer Successful!$/i.test(s));
+  // Lets the player be asked for the full screenshot instead of waiting.
+  if (
+    source === "gcash" && !statusRaw && !status.failureStatus &&
+    !status.pendingStatus
+  ) issues.push("RECEIPT_TOP_CROPPED");
   return {
     provider: "maribank_direct" as const,
     destinationProvider: "maribank" as const,

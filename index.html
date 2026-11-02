@@ -6268,6 +6268,7 @@ function receiptReasonFromFlags(flags) {
     TRANSFER_PENDING: 'Transfer is still processing or pending',
     TRANSFER_STATUS_INVALID: 'Transfer failed, was cancelled, or was reversed',
     TRANSFER_STATUS_UNREADABLE: 'Transfer completion could not be read',
+    RECEIPT_TOP_CROPPED: 'Screenshot cut off at the top',
     PROVIDER_REVIEW_REQUIRED: 'This payment method needs owner review',
     AMOUNT_UNREADABLE: 'Amount unreadable',
     AMOUNT_REVIEW: 'Amount needs owner review',
@@ -10009,6 +10010,7 @@ function showInvoice(b) {
   let badge = isDigitalPay ? 'Pending Review' : 'Payment Due';
   let badgeClass = isDigitalPay ? 'inv-status-review' : 'inv-status-pending';
   let icon = '✓';
+  let forceReceiptCorrection = false;
   let timelineSteps = isDigitalPay ? [
     ['Submitted', 'done'],
     ['Under review', 'active'],
@@ -10060,6 +10062,15 @@ function showInvoice(b) {
       badgeClass = 'inv-status-confirmed';
       timelineSteps = [['Submitted', 'done'], ['Verified', 'done'], ['Confirmation', 'active']];
       statusSummary = 'Keep your PB booking reference while the owner completes final confirmation.';
+    } else if ((b._receiptResult.flags || []).includes('RECEIPT_TOP_CROPPED')) {
+      // Ask now, while the player still has the GCash receipt open.
+      title = 'Upload the Full Screenshot';
+      subtitle = 'Your screenshot is cut off at the top, so we cannot see "Bank Transfer Complete".';
+      badge = 'Full Screenshot Needed';
+      timelineSteps = [['Submitted', 'done'], ['Full screenshot', 'active'], ['Confirmation', 'pending']];
+      statusSummary = 'Your slot is held. Do not pay again. Open your booking and upload the complete GCash receipt screenshot, top to bottom.';
+      amountNote = 'Tip: take the screenshot from the GCash receipt screen without cropping, so "Bank Transfer Complete" is visible.';
+      forceReceiptCorrection = true;
     }
   }
 
@@ -10080,7 +10091,9 @@ function showInvoice(b) {
   set('iStatusSummary', statusSummary);
   const manageBookingBtn = $('iManageBookingBtn');
   if (manageBookingBtn) {
-    manageBookingBtn.textContent = isRejected
+    manageBookingBtn.textContent = forceReceiptCorrection
+      ? 'Upload full screenshot →'
+      : isRejected
       ? 'View booking record →'
       : isConfirmed
       ? 'Manage confirmed booking →'

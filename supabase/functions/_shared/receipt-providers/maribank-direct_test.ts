@@ -414,3 +414,44 @@ Deno.test('native surname initial uses its observed letter confidence without pr
   initial.symbols=[{text:'X',confidence:.99},{text:'.',confidence:.99}];
   assert(maribankDirectApprovalConfidence(read,parsed).confidence<.9,'different observed letter cannot receive credit');
 });
+Deno.test("weak total separators are ignored only when strong principal + fee prove the digits", () => {
+  const text = gcash.replace("P 805.00", "P805.00");
+  const parsed = parseProviderReceipt("maribank_direct", text);
+  if (parsed.provider !== "maribank_direct") throw Error();
+  const read = bankFixtureRead(text);
+  const words = read.nativeLines!.flatMap((l) => l.words);
+  const total = words.find((w) => w.text === "P805.00")!;
+  total.confidence = .6;
+  total.symbols[4].confidence = .6; // decimal point
+  assert(maribankDirectApprovalConfidence(read, parsed).confidence >= .9, "weak decimal point blocked a reconciled total");
+  const principal = words.find((w) => w.text === "795.00")!;
+  principal.confidence = .6;
+  principal.symbols[0].confidence = .6;
+  assert(maribankDirectApprovalConfidence(read, parsed).confidence < .9, "weak principal cannot vouch for the total");
+  const mismatch = text.replace("\n10.00\n", "\n15.00\n");
+  const unreconciled = parseProviderReceipt("maribank_direct", mismatch);
+  if (unreconciled.provider !== "maribank_direct") throw Error();
+  const mismatchRead = bankFixtureRead(mismatch);
+  const mismatchTotal = mismatchRead.nativeLines!.flatMap((l) => l.words).find((w) => w.text === "P805.00")!;
+  mismatchTotal.confidence = .6;
+  mismatchTotal.symbols[4].confidence = .6;
+  assert(maribankDirectApprovalConfidence(mismatchRead, unreconciled).confidence < .9, "unreconciled total used digits-only confidence");
+});
+Deno.test("GCash receipt cut off above the header is read fully but stays in review", () => {
+  const body = "You will receive an\nupdate about this transaction in your GCash Inbox.\n";
+  const cropped = body + gcash.replace("Bank Transfer Complete\nSent via GCash\n", "");
+  const parsed = parseMaribankDirectReceipt(cropped);
+  eq(parsed.source, "gcash");
+  eq(parsed.reference.value, "1234567890123");
+  eq(parsed.amount.amount, 795);
+  const result = flags(cropped);
+  assert(result.includes("RECEIPT_TOP_CROPPED") && result.includes("TRANSFER_STATUS_UNREADABLE"));
+  assert(!result.some((f) => /AMOUNT|REF_|RECEIVER|DESTINATION/.test(f)), result.join());
+  const p = parseProviderReceipt("maribank_direct", cropped);
+  if (p.provider !== "maribank_direct") throw Error();
+  assert(maribankDirectApprovalConfidence(bankFixtureRead(cropped), p).confidence < .9, "missing status/source must block approval");
+  // Without every GCash body marker the text is not treated as a GCash receipt.
+  eq(parseMaribankDirectReceipt(cropped.replace("Powered by instaPay", "")).source, "maribank");
+  assert(!flags(gcash).includes("RECEIPT_TOP_CROPPED"));
+  assert(!flags(gcash.replace("Bank Transfer Complete", "Bank Transfer Pending")).includes("RECEIPT_TOP_CROPPED"));
+});

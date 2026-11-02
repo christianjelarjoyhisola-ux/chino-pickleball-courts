@@ -247,7 +247,7 @@ export function fieldEvidence(
   raw: string | null | undefined,
   masked = false,
   zeroFee = false,
-  moneyDigits = false,
+  moneyDigits: boolean | "digits" = false,
   initialPeriod = false,
 ): BankPaymentFieldEvidence {
   const text = String(raw || "").trim();
@@ -301,8 +301,13 @@ export function fieldEvidence(
           if(symbols.length===2 && symbols.map(s=>s.text).join('')===span.word.text && score(symbols[0].confidence)) return symbols[0].confidence;
         }
         if (moneyDigits && /^(?:PHP|₱|P|\+)?[\d,.]+$/i.test(span.word.text)) {
-          const symbols = span.word.symbols?.filter(s => /[\d,.]/.test(s.text));
-          if (symbols?.length && symbols.map(s=>s.text).join('')===span.word.text.replace(/^(?:PHP|₱|P|\+)/i,'') && symbols.every(s=>score(s.confidence))) return Math.min(...symbols.map(s=>s.confidence!));
+          // "digits": separators are excluded only by callers that already
+          // proved the value through exact arithmetic with strong fields.
+          const glyph = moneyDigits === "digits" ? /\d/ : /[\d,.]/;
+          const symbols = span.word.symbols?.filter(s => glyph.test(s.text));
+          const value = span.word.text.replace(/^(?:PHP|₱|P|\+)/i,'');
+          const expected = moneyDigits === "digits" ? value.replace(/\D/g,'') : value;
+          if (symbols?.length && symbols.map(s=>s.text).join('')===expected && symbols.every(s=>score(s.confidence))) return Math.min(...symbols.map(s=>s.confidence!));
         }
         return nativeWordConfidence(
           span.word,
@@ -617,6 +622,14 @@ export function maribankDirectApprovalConfidence(read: GoogleVisionOcrResult, pa
  const evidenceRead={...read,nativeLines:read.nativeLines?.length ? read.nativeLines : read.nativeWordLines};
  const reconciled=r.amount.amount!=null && r.transferFee!=null && r.total!=null && Math.round(r.amount.amount*100)+Math.round(r.transferFee*100)===Math.round(r.total*100);
  const fields = Object.fromEntries(Object.entries(r.paymentFields).map(([key,value])=>[key,key==='rail'&&r.source==='gcash'?gcashTransferMethodEvidence(evidenceRead,value):key==='rail'&&r.source==='gotyme'?gotymeLogoEvidence(evidenceRead,value):fieldEvidence(evidenceRead,value,key==="recipientAccount" || (key==="recipientName" && r.source==="gotyme" && /\*/.test(value||"")),false,key==="total" && reconciled,key==="recipientName" && r.source==="maribank")]));
+ // A thousands comma or decimal point carries no value once the total's
+ // digits equal principal + fee, both read at native confidence. The
+ // total's digits still need native confidence; separators may not.
+ const strong=(f:BankPaymentFieldEvidence|undefined)=>!!f && score(f.confidence) && f.confidence>=.9;
+ if(reconciled && fields.total && !strong(fields.total) && strong(fields.amount) && strong(fields.fee)){
+   const digits=fieldEvidence(evidenceRead,r.paymentFields.total,false,false,"digits");
+   if(score(digits.confidence)) fields.total=digits;
+ }
  const optionalFields: NonNullable<BankApprovalConfidence['optionalFields']> = {};
  // Same reconciled-zero rule used by the existing GoTyme destination parser:
  // require observed zero plus independently strong, equal principal and total.
