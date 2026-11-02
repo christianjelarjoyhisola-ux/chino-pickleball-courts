@@ -8,6 +8,8 @@ export function canReplaceIncompleteReceipt(
     row.receipt_status === "manual_review" && !!row.receipt_image_url &&
     /^[a-f0-9]{64}$/.test(String(expectedHash || "")) &&
     row.receipt_image_hash === expectedHash && row.payment_method === provider &&
-    flags.some(flag => /UNREADABLE|LOW_OCR_CONFIDENCE|OCR_FAILED|OCR_UNAVAILABLE/.test(flag)) &&
+    // Details that were read, only below the confidence bar, go to the owner;
+    // the player is asked again only when a detail could not be read at all.
+    flags.some(flag => /UNREADABLE|OCR_FAILED|OCR_UNAVAILABLE/.test(flag)) &&
     !flags.some(flag => /DUPLICATE|TAMPER|REUSED|ACCOUNT_MISMATCH|RECIPIENT_MISMATCH/.test(flag));
 }

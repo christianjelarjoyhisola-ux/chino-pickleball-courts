@@ -7,7 +7,7 @@ Deno.test('incomplete receipt can be corrected with exact current evidence and p
     { status: 'cancelled' }, { status: 'confirmed' }, { status: 'completed' },
     { payment_status: 'paid' }, { payment_status: 'downpayment_paid' },
     { receipt_status: 'auto_approved' }, { receipt_status: 'rejected' },
-    { receipt_image_url: null }, { receipt_flags: [] },
+    { receipt_image_url: null }, { receipt_flags: [] }, { receipt_flags: ['LOW_OCR_CONFIDENCE'] },
     { receipt_flags: ['REF_UNREADABLE', 'DUPLICATE_REFERENCE'] },
     { receipt_flags: ['REF_UNREADABLE', 'RECIPIENT_MISMATCH'] },
   ]) if (canReplaceIncompleteReceipt({ ...row, ...change }, hash, 'maribank')) throw new Error(JSON.stringify(change));

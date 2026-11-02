@@ -472,10 +472,6 @@ export function verifyMaribankDirectReceipt(
       !Number.isFinite(now) || at > now + context.earlyToleranceMinutes * 60000
     ) add("TIME_FUTURE");
   }
-  // A cropped screenshot that still fails a check gets a specific prompt.
-  if ("headerCropped" in parsed.indicators && parsed.indicators.headerCropped && flags.length) {
-    add("RECEIPT_TOP_CROPPED");
-  }
   const dedupeKeys: ReceiptDedupeKey[] = [];
   if (parsed.reference.value) {
     dedupeKeys.push({

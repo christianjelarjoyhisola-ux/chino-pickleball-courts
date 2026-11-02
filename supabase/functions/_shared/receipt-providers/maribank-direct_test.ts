@@ -451,15 +451,13 @@ Deno.test("GCash receipt cut off above the header is accepted only when every de
   assert(maribankDirectApprovalConfidence(bankFixtureRead(cropped), p).confidence >= .9, "verified cropped receipt was blocked");
   // Status cut off but "Sent via GCash" visible: still measured.
   eq(flags(gcash.replace("Bank Transfer Complete\n", "")), []);
-  // A cropped receipt that fails another check gets the full-screenshot prompt.
+  // Cropping never hides a failed check, and players are never asked to re-crop.
   const wrongAmount = flags(cropped, { expectedAmount: 900 });
-  assert(wrongAmount.includes("AMOUNT_MISMATCH") && wrongAmount.includes("RECEIPT_TOP_CROPPED"), wrongAmount.join());
+  assert(wrongAmount.includes("AMOUNT_MISMATCH") && !wrongAmount.includes("RECEIPT_TOP_CROPPED"), wrongAmount.join());
   // Visible pending or failed wording is never treated as a crop.
   for (const word of ["Pending", "Failed"]) {
-    const result = flags(cropped + "\n" + word);
-    assert(result.length && !result.includes("RECEIPT_TOP_CROPPED"), word + ": " + result.join());
+    assert(flags(cropped + "\n" + word).length, word + " was accepted");
   }
   // Without every GCash body marker the text is not treated as a GCash receipt.
   eq(parseMaribankDirectReceipt(cropped.replace("Powered by instaPay", "")).source, "maribank");
-  assert(!flags(gcash).includes("RECEIPT_TOP_CROPPED"));
 });
