@@ -33,3 +33,10 @@ test('checkout clock is 15 minutes and protects upload and durable evidence', ()
   assert.ok(tick.indexOf('_bookingSubmissionInFlight') < tick.indexOf('closeBookModal'));
   assert.ok(tick.indexOf('stagedReceiptPath') < tick.indexOf('closeBookModal'));
 });
+test('owner re-read that auto-approves sends the player confirmation once', () => {
+  const page = fs.readFileSync('admin.html', 'utf8');
+  const reread = page.slice(page.indexOf('async function rereadStoredReceipt'), page.indexOf('function clearBookingPaymentRejectReceipt'));
+  assert.match(reread, /outcome\.status === 'auto_approved'\) \{[\s\S]*sendBookingConfirmationNotice\(confirmed\)/);
+  assert.match(reread, /confirmationEmailSentAt/);
+  assert.match(reread, /notifyBookingUpdateSafe\(confirmed, 'payment_verified'/);
+});

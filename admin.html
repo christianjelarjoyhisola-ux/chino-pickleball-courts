@@ -12547,6 +12547,17 @@ async function rereadStoredReceipt() {
     toast(outcome.status === 'auto_approved'
       ? 'Receipt verified and booking confirmed.'
       : 'Receipt re-read completed. Review the updated checks.', outcome.status === 'auto_approved' ? 'ok' : 'inf');
+    if (outcome.status === 'auto_approved') {
+      // Same player notices as a manual confirmation; skip if already emailed.
+      const confirmed = await getBookingGroupByRef(ref);
+      const items = confirmed?.allItems || confirmed?.items || [confirmed];
+      if (confirmed?.status === 'confirmed' && !items.some(item => item?.confirmationEmailSentAt)) {
+        await Promise.all([
+          sendBookingConfirmationNotice(confirmed),
+          notifyBookingUpdateSafe(confirmed, 'payment_verified', 'Receipt re-read and verified automatically.'),
+        ]);
+      }
+    }
     await Promise.allSettled([renderBookings(), renderDash(), renderPaymentReview()]);
     await openVerifyModal(ref, { returnFocus: _verifyModalLastFocus });
   } catch (error) {
