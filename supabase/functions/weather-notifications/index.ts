@@ -47,8 +47,27 @@ Deno.serve(async (req) => {
         if (!isEmailAddress(replacement.customer_email || "")) throw new Error("No valid player email. Use Copy player link to help this player.");
         const { data: items, error: itemError } = await db.from("weather_replacement_items").select("*").eq("replacement_id", replacement.id);
         if (itemError || !items?.length) throw new Error("Booking details unavailable");
+        if (job.kind === "revoked") {
+          const item = items.find((entry) => entry.id === job.item_id);
+          if (!item) throw new Error("Booking details unavailable");
+          const peso = item.refund_amount == null ? "" : `₱${Number(item.refund_amount).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+          const refund = [peso, item.refund_reference ? `Reference ${item.refund_reference}` : ""].filter(Boolean).join(" · ");
+          const title = "Your weather credit was replaced by a refund";
+          const intro = "As you requested, CHINO refunded this booking instead of moving it to a new time. The weather credit for this booking is now closed, and its rescheduling link no longer works.";
+          const details = `${item.court_name || "Court"} · ${item.booking_ref}\nOriginal booking: ${schedule(item.old_date, item.old_slots)}${refund ? `\nRefund: ${refund}` : ""}`;
+          const note = "If you did not ask for a refund or have not received it, reply to this email and we will help.";
+          await sendMailerooEmail({
+            to: replacement.customer_email, toName: replacement.customer_name, subject: `Weather credit refunded · ${item.booking_ref} | CHINO`,
+            plain: `Hi ${replacement.customer_name},\n\n${intro}\n\n${details}\n\n${note}\n\nCHINO Pickleball Courts`,
+            html: `<div style="background:#edf2f7;padding:28px 12px;font-family:Arial,sans-serif;color:#172b42"><div style="max-width:580px;margin:auto;background:#fff;border-radius:20px;overflow:hidden"><div style="padding:30px;background:#142c47;color:white"><p style="letter-spacing:3px;font-size:12px;color:#a8c9e8">CHINO · PICKLEBALL COURTS</p><h1 style="font-size:27px;line-height:1.25">${escapeHtml(title)}</h1></div><div style="padding:30px"><p>Hi ${escapeHtml(replacement.customer_name)},</p><p style="line-height:1.7">${escapeHtml(intro)}</p><div style="padding:20px;background:#f0f5fa;border-radius:12px;line-height:1.8;white-space:pre-line">${escapeHtml(details)}</div><p style="font-size:14px;line-height:1.7">${escapeHtml(note)}</p></div></div></div>`,
+            tags: { message_type: "weather-revoked" },
+          });
+          sent++;
+        } else {
         const confirmation = job.kind === "confirmation";
-        const selected = confirmation ? items.filter((item) => item.id === job.item_id) : items;
+        // A refunded credit has no new time to choose, so resent invitations skip it.
+        const selected = confirmation ? items.filter((item) => item.id === job.item_id) : items.filter((item) => item.status !== "revoked");
+        if (!selected.length) throw new Error("No weather credits remain on this invitation");
         const site = (Deno.env.get("APP_PUBLIC_URL") || "https://chinopickleballcourt.com").replace(/\/$/, "");
         const link = `${site}/weather-reschedule#${replacement.access_token}`;
         const title = confirmation ? "Your new court time is confirmed" : "A rain check for your next game";
@@ -65,6 +84,7 @@ Deno.serve(async (req) => {
           tags: { message_type: `weather-${job.kind}` },
         });
         sent++;
+        }
       } catch (error) {
         failure = error instanceof Error ? error.message.slice(0, 250) : "Email delivery failed";
         failed++;
