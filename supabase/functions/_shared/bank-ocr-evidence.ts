@@ -150,8 +150,10 @@ export function bankLayoutFamily(provider: string, text: string): string {
       if (has(/^Transaction Receipt$/im) && has(/^Receipt generated from MariBank app$/im)) return "maribank_download_v1";
       if (has(/^Sent via BPI$/im) && has(/^Transfer successful!$/im)) return "bpi_to_maribank_v1";
       if (has(/GoTyme Bank/i) && has(/^Transferred$/im) && has(/^Reference No\./im)) return "gotyme_to_maribank_v1";
-      return has(/^Sent via GCash$/im) && has(/^Bank Transfer Complete$/im) ? "gcash_to_maribank_v1"
-        : has(/^Transfer Result$/im) && has(/^Transfer Successful!$/im) ? "maribank_direct_v1" : "unknown";
+      if (has(/^Sent via GCash$/im) && has(/^Bank Transfer Complete$/im)) return "gcash_to_maribank_v1";
+      // Same GCash body markers the parser requires for a screenshot cut off above the header.
+      if (has(/\bin your GCash\b/i) && has(/^Receipt sent to\b/m) && has(/^InstaPay Invoice No\./m) && has(/^Powered by insta[PF]ay$/im)) return "gcash_to_maribank_cropped_v1";
+      return has(/^Transfer Result$/im) && has(/^Transfer Successful!$/im) ? "maribank_direct_v1" : "unknown";
     case "maribank":
       return has(/\bMariBank\b/i) && has(/^Money sent\b/im) &&
           has(/^Recipient\b/im) && has(/^Reference No\b/im)

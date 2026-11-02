@@ -301,11 +301,12 @@ export function parseMaribankDirectReceipt(
   const statusRaw = source === "gcash"
     ? lines.find((s) => /^Bank Transfer Complete$/i.test(s))
     : lines.find((s) => /^Transfer Successful!$/i.test(s));
-  // Lets the player be asked for the full screenshot instead of waiting.
-  if (
-    source === "gcash" && !statusRaw && !status.failureStatus &&
-    !status.pendingStatus
-  ) issues.push("RECEIPT_TOP_CROPPED");
+  // Owner policy: a GCash screenshot cut off above the status line is
+  // accepted when the complete transfer table verifies and nothing visible
+  // says pending or failed. Every payment field below still needs evidence.
+  const headerCropped = source === "gcash" && !statusRaw &&
+    !status.failureStatus && !status.pendingStatus;
+  const sentViaGcash = lines.find((s) => /^Sent via GCash$/i.test(s));
   return {
     provider: "maribank_direct" as const,
     destinationProvider: "maribank" as const,
@@ -350,11 +351,12 @@ export function parseMaribankDirectReceipt(
       recipientName: source === "maribank" ? name?.replace(/^[•●◆] /, "") : name,
       recipientAccount: account,
       destination: source === "maribank" ? bank?.replace(/^M /, "") : bank,
-      status: statusRaw || null,
+      // A cropped header has no status or source text to measure.
+      ...(headerCropped ? {} : { status: statusRaw || null }),
       ...(source === "gcash"
         ? {
           secondaryReference: invoiceRaw,
-          source: "Sent via GCash",
+          ...(sentViaGcash || !headerCropped ? { source: "Sent via GCash" } : {}),
           rail: method,
         }
         : {}),
@@ -364,8 +366,9 @@ export function parseMaribankDirectReceipt(
         (/\bMariBank\b/.test(text) && /^Transfer Result$/m.test(text)),
       competingProviderBrand: source === "maribank" &&
         /GoTyme|Sent via BPI|Security Bank/i.test(text),
-      transferSuccess: !!statusRaw && !status.failureStatus &&
-        !status.pendingStatus,
+      transferSuccess: (!!statusRaw || headerCropped) &&
+        !status.failureStatus && !status.pendingStatus,
+      headerCropped,
       destinationMaribank: /^(?:M )?MariBank$/.test(bank || ""),
       instaPay: /^instapay$/i.test(method || ""),
       ...status,
@@ -468,6 +471,10 @@ export function verifyMaribankDirectReceipt(
     if (
       !Number.isFinite(now) || at > now + context.earlyToleranceMinutes * 60000
     ) add("TIME_FUTURE");
+  }
+  // A cropped screenshot that still fails a check gets a specific prompt.
+  if ("headerCropped" in parsed.indicators && parsed.indicators.headerCropped && flags.length) {
+    add("RECEIPT_TOP_CROPPED");
   }
   const dedupeKeys: ReceiptDedupeKey[] = [];
   if (parsed.reference.value) {
