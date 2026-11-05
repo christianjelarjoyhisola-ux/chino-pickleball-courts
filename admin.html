@@ -10740,6 +10740,8 @@ async function autoCompleteBookings(bks) {
   const now = new Date();
   const toComplete = bks.filter(b => {
     if (b.status !== 'confirmed') return false;
+    // A weather-affected booking still has an unused rebooking credit.
+    if (b.weatherAffected) return false;
     if (!b.date || !b.endTime) return false;
     const [time, period] = String(b.endTime).trim().split(/\s+/);
     if (!time || !period) return false;

@@ -26,3 +26,15 @@ test('modified HTML scripts parse without syntax errors', () => {
     }
   }
 });
+
+test('admin auto-complete never completes a booking that still has a weather credit', () => {
+  const page = fs.readFileSync('admin.html', 'utf8');
+  const source = page.slice(page.indexOf('let autoCompleteRan = false;'), page.indexOf('let _bookingRenderSeq'));
+  const updated = [];
+  const context = { DB: { updateBooking: async ref => { updated.push(ref); } }, Date };
+  vm.runInNewContext(source + '\nthis.run = autoCompleteBookings;', context);
+  const past = { status: 'confirmed', date: '2020-01-01', endTime: '11:00 PM' };
+  return context.run([{ ...past, ref: 'PLAYED' }, { ...past, ref: 'WEATHER', weatherAffected: true }]).then(() => {
+    assert.deepEqual(updated, ['PLAYED']);
+  });
+});
