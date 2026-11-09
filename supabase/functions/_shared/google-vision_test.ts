@@ -1125,6 +1125,61 @@ Deno.test("GCash layout preserves rotated Android navigation glyphs without acce
   );
 });
 
+Deno.test("sideways or upside-down screenshots keep native word scores without crop regions", async () => {
+  const rows = [["Bank", "Transfer", "Complete"], ["Sent", "via", "GCash"],
+    ["Ref", "No.", "1234567890123"], ["Amount", "795.00"], ["Total", "805.00"]];
+  const upright = rows.flatMap((row, r) => {
+    let x = 20;
+    return row.map((text) => {
+      const word = {
+        ...visionWord(text, x, 100 + r * 60),
+        confidence: .96,
+        symbols: [...text].map((symbol) => ({ text: symbol, confidence: .96 })),
+      };
+      x += text.length * 8 + 12;
+      return word;
+    });
+  });
+  const text = rows.map((row) => row.join(" ")).join("\n");
+  const read = (words: typeof upright, width: number, height: number) =>
+    googleVisionOcr("test", "test", {
+      fetcher: async () => Response.json({ responses: [{ fullTextAnnotation: {
+        text, pages: [{ width, height, blocks: [{ paragraphs: [{ words }] }] }],
+      } }] }),
+    });
+  const turn = (map: (p: { x: number; y: number }) => { x: number; y: number }) =>
+    upright.map((word) => ({
+      ...word,
+      boundingBox: { vertices: word.boundingBox.vertices.map(map) },
+    }));
+  const straight = await read(upright, 1000, 2000);
+  assertEquals(straight.pageOrientation, undefined, "upright page is untouched");
+  const rowsText = straight.nativeLines?.map((line) => line.text).join("\n");
+  assertEquals(rowsText, text, "upright rows");
+  for (
+    const [orientation, words, width, height] of [
+      [270, turn((p) => ({ x: p.y, y: 1000 - p.x })), 2000, 1000],
+      [90, turn((p) => ({ x: 2000 - p.y, y: p.x })), 2000, 1000],
+      [180, turn((p) => ({ x: 1000 - p.x, y: 2000 - p.y })), 1000, 2000],
+    ] as const
+  ) {
+    const result = await read(words, width, height);
+    assertEquals(result.pageOrientation, orientation, `${orientation} detected`);
+    assertEquals(result.text, text, "raw OCR text never changes");
+    assertEquals(result.nativeLines?.map((line) => line.text).join("\n"), rowsText, `${orientation} rows`);
+    assertEquals(result.nativeLines?.[2].words[2].confidence, .96, "native score retained");
+    assertEquals(result.recipientRegion, undefined, "no crop from rotated pixels");
+    assertEquals(result.recipientCropEvidence, undefined, "no crop evidence");
+  }
+  // A few rotated words on an upright page are not a sideways page.
+  const mixed = upright.map((word, index) =>
+    index < 3
+      ? { ...word, boundingBox: { vertices: word.boundingBox.vertices.map((p) => ({ x: p.y, y: 1000 - p.x })) } }
+      : word
+  );
+  assertEquals((await read(mixed, 1000, 2000)).pageOrientation, undefined, "mixed page untouched");
+});
+
 Deno.test("native layout retains a small footer chevron without accepting rotated payment text", async () => {
   const nav = visionWord("Λ", 900, 1860);
   nav.boundingBox.vertices = [{ x: 920, y: 1860 }, { x: 920, y: 1890 },

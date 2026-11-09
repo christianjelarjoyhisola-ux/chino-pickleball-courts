@@ -683,3 +683,66 @@ Deno.test('large noisy photos use bounded full-image JPEG recovery without weake
   });
   eq(calls, 2, result.reason); eq(jpeg, true); eq(result.accepted, true, result.reason);
 });
+
+Deno.test("MariBank: agreeing reads may cover each other's single weak field, never below the floor", async () => {
+  const { corroboratedMaribankReading, CORROBORATION_FIELD_FLOOR } = await import("./bank-adaptive-ocr.ts");
+  const { parseProviderReceipt } = await import("./receipt-providers/index.ts");
+  const { maribankDirectApprovalConfidence } = await import("./bank-ocr-evidence.ts");
+  const text = `Bank Transfer Complete
+Sent via GCash
+Bank MariBank
+Account No. .......7144
+Account Name KRISTIE LOU V.
+Transfer Method InstaPay
+Transfer Amount 795.00
++Fee 10.00
+Total P 805.00
+Date Oct 06, 2026 04:20 PM
+InstaPay Invoice No. 1234567
+Ref No. 1234567890123
+Powered by instaPay`;
+  const context = {
+    expectedAmount: 795, pricingAvailable: true, amountTolerance: .01,
+    expectedRecipientName: "KRISTIE LOU VILLANUEVA", expectedRecipientNumber: "15521507144",
+    bookingStartedAt: "2026-10-06T08:18:00Z", bookingStartedDate: "2026-10-06",
+    paymentWindowMinutes: 15, earlyToleranceMinutes: 2,
+  };
+  const reading = (source: string, weakWord?: string, score = .89) => {
+    const read = bankFixtureRead(source);
+    for (const word of read.nativeLines!.flatMap((line) => line.words)) {
+      if (word.text === weakWord) {
+        word.confidence = score;
+        word.symbols.forEach((symbol) => symbol.confidence = score);
+      }
+    }
+    const parsed = parseProviderReceipt("maribank_direct", source) as never;
+    return { read, parsed, approval: maribankDirectApprovalConfidence(read, parsed) };
+  };
+  const candidate = (r: ReturnType<typeof reading>, strategy = "bank_full_detail_v1") => ({
+    selected: { ...r, strategy } as never,
+    reading: { strategy, outcome: "uncertain", flags: ["PAYMENT_FIELD_CONFIDENCE_INCOMPLETE"], elapsedMs: 0 } as never,
+  });
+  const original = reading(text, ".......7144");
+  assert(original.approval.confidence < .9, "fixture: original account is weak");
+  const reread = reading(text, "KRISTIE", .87);
+  const accepted = corroboratedMaribankReading(
+    { read: original.read, parsed: original.parsed }, original.approval, [candidate(reread)], context as never,
+  );
+  assert(accepted, "agreeing reads were rejected");
+  eq(accepted.approval.basis, "corroborated_native_readings");
+  assert(accepted.approval.confidence >= .9 && accepted.approval.complete, "approval confidence");
+  eq(accepted.read, reread.read, "the chosen read's own text is used");
+
+  const below = reading(text, "KRISTIE", CORROBORATION_FIELD_FLOOR - .05);
+  eq(corroboratedMaribankReading({ read: original.read, parsed: original.parsed }, original.approval, [candidate(below)], context as never), null, "below floor");
+  const bothWeak = reading(text, ".......7144", .88);
+  eq(corroboratedMaribankReading({ read: original.read, parsed: original.parsed }, original.approval, [candidate(bothWeak)], context as never), null, "no read reaches 0.9");
+  const other = reading(text.replace("1234567890123", "1234567890124"), "KRISTIE", .87);
+  eq(corroboratedMaribankReading({ read: original.read, parsed: original.parsed }, original.approval, [candidate(other)], context as never), null, "different reference");
+  const unparsed = reading("Transfer Successful!");
+  eq(corroboratedMaribankReading({ read: unparsed.read, parsed: unparsed.parsed }, unparsed.approval, [candidate(reread)], context as never), null, "a lone reread");
+  eq(corroboratedMaribankReading({ read: original.read, parsed: original.parsed }, original.approval, [{
+    ...candidate(reread), reading: { strategy: "bank_full_detail_v1", outcome: "uncertain", flags: ["PAYMENT_FIELD_CONFIDENCE_INCOMPLETE", "AMOUNT_MISMATCH"], elapsedMs: 0 } as never,
+  }], context as never), null, "reread with a failed check");
+  eq(corroboratedMaribankReading({ read: original.read, parsed: original.parsed }, original.approval, [candidate(reread)], { ...context, expectedAmount: 900 } as never), null, "original fails a check");
+});

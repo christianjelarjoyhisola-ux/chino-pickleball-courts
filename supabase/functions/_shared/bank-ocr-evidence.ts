@@ -53,7 +53,8 @@ export type BankApprovalConfidence = {
   basis:
     | "native_payment_value_words"
     | "native_whole_image"
-    | "missing_native_payment_evidence";
+    | "missing_native_payment_evidence"
+    | "corroborated_native_readings";
   fields: Record<string, BankPaymentFieldEvidence>;
   /** Actual observed evidence retained for audit but excluded from the minimum
    * only by an explicit recipient policy or independently reconciled zero fee. */
@@ -551,7 +552,8 @@ export function bankApprovalConfidence(
 }
 
 function moneyIdentity(value: string): string {
-  return compact(value).replace(/^(?:PHP|₱|P|\+)/, "").replace(/,/g, "");
+  // A thousands separator read as "." ("1.070.00") is the same observed value.
+  return compact(value).replace(/^(?:PHP|₱|P|\+)/, "").replace(/[.,](?=\d{3}(?:[.,]|$))/g, "");
 }
 /** OCR evidence signature preserves visible masks instead of filling them. */
 export function bankFieldIdentity(key: string, value: string): string {
@@ -623,7 +625,7 @@ export function maribankDirectApprovalConfidence(read: GoogleVisionOcrResult, pa
  const r=parsed.receipt;
  const evidenceRead={...read,nativeLines:read.nativeLines?.length ? read.nativeLines : read.nativeWordLines};
  const reconciled=r.amount.amount!=null && r.transferFee!=null && r.total!=null && Math.round(r.amount.amount*100)+Math.round(r.transferFee*100)===Math.round(r.total*100);
- const fields = Object.fromEntries(Object.entries(r.paymentFields).map(([key,value])=>[key,key==='rail'&&r.source==='gcash'?gcashTransferMethodEvidence(evidenceRead,value):key==='rail'&&r.source==='gotyme'?gotymeLogoEvidence(evidenceRead,value):fieldEvidence(evidenceRead,value,key==="recipientAccount" || (key==="recipientName" && r.source==="gotyme" && /\*/.test(value||"")),false,key==="total" && reconciled,key==="recipientName" && r.source==="maribank")]));
+ const fields = Object.fromEntries(Object.entries(r.paymentFields).map(([key,value])=>[key,key==='rail'&&r.source==='gcash'?gcashTransferMethodEvidence(evidenceRead,value):key==='rail'&&r.source==='gotyme'?gotymeLogoEvidence(evidenceRead,value):fieldEvidence(evidenceRead,value,key==="recipientAccount" || (key==="recipientName" && r.source==="gotyme" && /\*/.test(value||"")),false,key==="total" && reconciled,key==="recipientName" && (r.source==="maribank" || r.source==="gcash"))]));
  // A thousands comma or decimal point carries no value once the total's
  // digits equal principal + fee, both read at native confidence. The
  // total's digits still need native confidence; separators may not.

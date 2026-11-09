@@ -266,6 +266,78 @@ export function evaluateBankRecoveryRead(
   };
 }
 
+/** Minimum native score any agreeing reading may give a field. */
+export const CORROBORATION_FIELD_FLOOR = 0.8;
+
+/**
+ * MariBank receipts: separate Vision reads of one image often score a
+ * different field just under 0.9 each time. Accept only when at least two
+ * reads (one of them a reread) produce the identical payment signature with
+ * every hard check passing, every field reaches 0.9 in some read, and no read
+ * scores any field below the floor. Text is never combined across reads; the
+ * chosen read's own text is used. Expected values never enter extraction.
+ */
+export function corroboratedMaribankReading(
+  original: BankRecoveryOriginal,
+  originalApproval: BankApprovalConfidence,
+  candidates: Array<{ selected: BankRecoverySelected | null; reading: BankRecoveryReading }>,
+  context: ReceiptVerificationContext,
+): BankRecoverySelected | null {
+  const confidenceOnly = (flags: string[]) =>
+    flags.every((flag) => flag === "PAYMENT_FIELD_CONFIDENCE_INCOMPLETE");
+  const rereads = candidates.flatMap((candidate) =>
+    candidate.selected && candidate.reading.outcome !== "conflict" &&
+      confidenceOnly(candidate.reading.flags)
+      ? [candidate.selected]
+      : []
+  );
+  if (!rereads.length) return null;
+  const originalMember = verifyProviderReceipt(original.parsed, context).flags.length === 0
+    ? { approval: originalApproval }
+    : null;
+  let best: { members: BankApprovalConfidence[]; chosen: BankRecoverySelected } | null = null;
+  for (const anchor of rereads) {
+    const key = signature(anchor);
+    const agreeing = rereads.filter((candidate) => signature(candidate) === key);
+    const members = agreeing.map((candidate) => candidate.approval);
+    if (
+      originalMember &&
+      signature({ ...anchor, parsed: original.parsed, approval: originalApproval }) === key
+    ) members.push(originalMember.approval);
+    if (members.length < 2 || (best && best.members.length >= members.length)) continue;
+    best = {
+      members,
+      chosen: [...agreeing].sort((a, b) => b.approval.confidence - a.approval.confidence)[0],
+    };
+  }
+  if (!best) return null;
+  const keys = Object.keys(conservedFields(best.chosen.approval));
+  const fields: Record<string, BankApprovalConfidence["fields"][string]> = {};
+  for (const key of keys) {
+    const observed = best.members.map((approval) => conservedFields(approval)[key]);
+    const scores = observed.map((field) => field?.confidence).filter(
+      (value): value is number => typeof value === "number" && Number.isFinite(value),
+    );
+    if (!scores.length || Math.max(...scores) < .9 || Math.min(...scores) < CORROBORATION_FIELD_FLOOR) {
+      return null;
+    }
+    const strongest = observed.find((field) => field?.confidence === Math.max(...scores))!;
+    fields[key] = strongest;
+  }
+  if (!keys.length) return null;
+  return {
+    ...best.chosen,
+    approval: {
+      ...best.chosen.approval,
+      confidence: Math.min(...keys.map((key) => fields[key].confidence!)),
+      source: "bank_payment_fields",
+      basis: "corroborated_native_readings",
+      fields,
+      complete: true,
+    },
+  };
+}
+
 function toBase64(bytes: Uint8Array): string {
   let binary = "";
   for (let offset = 0; offset < bytes.length; offset += 0x8000) {
@@ -497,6 +569,10 @@ export async function recoverBankReceipt(
     candidate.selected && candidate.reading.outcome === "clean"
   );
   if (clean.length < 2) {
+    const corroborated = original.parsed.provider === "maribank_direct"
+      ? corroboratedMaribankReading(original, originalApproval, candidates, context)
+      : null;
+    if (corroborated) return result("corroborated_readings_agree", corroborated);
     return result(
       candidates.some((candidate) => candidate.reading.outcome === "error")
         ? "transport_unavailable"

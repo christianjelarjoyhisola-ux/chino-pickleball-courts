@@ -15,6 +15,8 @@ export type GoogleVisionOcrResult = {
   nativeLines?: GoogleVisionNativeLine[];
   /** Original hierarchy order, for value confidence only; never layout repair. */
   nativeWordLines?: GoogleVisionNativeLine[];
+  /** Set only when a sideways/upside-down page was measured in the upright frame. */
+  pageOrientation?: GoogleVisionPageOrientation;
   requestMetrics?: GoogleVisionRequestMetrics;
 };
 
@@ -571,6 +573,77 @@ function googleVisionLayout(
     }).join("\n")
   ).join("\n\f\n");
   return { text, pageRows };
+}
+
+export type GoogleVisionPageOrientation = 90 | 180 | 270;
+
+/**
+ * A screenshot saved sideways is read correctly by Vision, but every word box
+ * is rotated, so upright-only row geometry discards all native word scores.
+ * When nearly every word shares one quarter-turn orientation, rotate the box
+ * coordinates (never the text, symbols or scores) into the upright frame.
+ * Returns null for upright, mixed or unmeasurable pages: behavior unchanged.
+ */
+export function uprightGoogleVisionAnnotation(
+  annotation: Record<string, unknown> | null,
+): { annotation: Record<string, unknown>; orientation: GoogleVisionPageOrientation } | null {
+  if (!Array.isArray(annotation?.pages) || annotation.pages.length !== 1) return null;
+  const page = record(annotation.pages[0]);
+  const width = page?.width, height = page?.height;
+  if (
+    !page || !Array.isArray(page.blocks) ||
+    typeof width !== "number" || !Number.isFinite(width) || width <= 0 ||
+    typeof height !== "number" || !Number.isFinite(height) || height <= 0
+  ) return null;
+  const counts = new Map<number, number>();
+  let measured = 0;
+  for (const block of page.blocks) {
+    for (const paragraph of (record(block)?.paragraphs as unknown[]) || []) {
+      for (const word of (record(paragraph)?.words as unknown[]) || []) {
+        const box = record(record(word)?.boundingBox);
+        const vertices = Array.isArray(box?.vertices) ? box!.vertices : box?.normalizedVertices;
+        if (!Array.isArray(vertices) || vertices.length !== 4) continue;
+        const [a, b] = vertices.map((v) => {
+          const p = record(v);
+          return { x: Number(p?.x ?? 0), y: Number(p?.y ?? 0) };
+        });
+        if (![a.x, a.y, b.x, b.y].every(Number.isFinite) || (a.x === b.x && a.y === b.y)) continue;
+        const quarter = (Math.round(Math.atan2(b.y - a.y, b.x - a.x) / (Math.PI / 2)) + 4) % 4;
+        counts.set(quarter, (counts.get(quarter) || 0) + 1);
+        measured++;
+      }
+    }
+  }
+  const [quarter, count] = [...counts.entries()].sort((x, y) => y[1] - x[1])[0] || [0, 0];
+  // quarter: 1 = text runs down the image, 2 = upside down, 3 = text runs up.
+  if (!quarter || measured < 10 || count / measured < 0.8) return null;
+  const turn = (x: number, y: number, w: number, h: number) =>
+    quarter === 3 ? { x: h - y, y: x } : quarter === 1 ? { x: y, y: w - x } : { x: w - x, y: h - y };
+  const copy = structuredClone(annotation) as Record<string, unknown>;
+  const rotate = (node: unknown): void => {
+    if (Array.isArray(node)) return node.forEach(rotate);
+    const item = record(node);
+    if (!item) return;
+    const box = record(item.boundingBox);
+    if (box) {
+      for (const [key, w, h] of [["vertices", width, height], ["normalizedVertices", 1, 1]] as const) {
+        if (!Array.isArray(box[key])) continue;
+        box[key] = (box[key] as unknown[]).map((v) => {
+          const p = record(v);
+          if (!p) return v;
+          const x = typeof p.x === "number" ? p.x : 0, y = typeof p.y === "number" ? p.y : 0;
+          return turn(x, y, w, h);
+        });
+      }
+    }
+    for (const key of ["blocks", "paragraphs", "words", "symbols"]) {
+      if (Array.isArray(item[key])) rotate(item[key]);
+    }
+  };
+  const uprightPage = record((copy.pages as unknown[])[0])!;
+  rotate(uprightPage.blocks);
+  if (quarter !== 2) [uprightPage.width, uprightPage.height] = [height, width];
+  return { annotation: copy, orientation: quarter === 1 ? 90 : quarter === 2 ? 180 : 270 };
 }
 
 export function googleVisionLayoutText(
@@ -1263,23 +1336,31 @@ export async function googleVisionOcr(
     ? textAnnotations[0].description
     : "";
 
-  const confidence = googleVisionConfidenceDetails(fullText, text);
-  const layout = googleVisionLayout(fullText, text);
+  // Sideways screenshots: measure geometry in the upright frame. Image crop
+  // regions would then describe rotated pixels, so none are offered.
+  const upright = uprightGoogleVisionAnnotation(fullText);
+  const annotation = upright?.annotation ?? fullText;
+  const confidence = googleVisionConfidenceDetails(annotation, text);
+  const layout = googleVisionLayout(annotation, text);
+  const gcashEvidence = gcashEvidenceFromLayout(
+    annotation,
+    layout || googleVisionLayout(annotation, text, true),
+  );
   return {
     text,
     layoutText: layout?.text,
-    recipientRegion: recipientRegionFromLayout(fullText, layout),
+    recipientRegion: upright ? undefined : recipientRegionFromLayout(annotation, layout),
     confidence: confidence.confidence,
     confidenceSource: confidence.source,
-    gcashEvidence: gcashEvidenceFromLayout(
-      fullText,
-      layout || googleVisionLayout(fullText, text, true),
-    ),
-    recipientCropEvidence: recipientCropEvidenceFromLayout(layout),
+    gcashEvidence: upright && gcashEvidence
+      ? { ...gcashEvidence, recipientRegion: undefined }
+      : gcashEvidence,
+    recipientCropEvidence: upright ? undefined : recipientCropEvidenceFromLayout(layout),
     nativeLines: nativeLinesFromLayout(
-      layout || googleVisionLayout(fullText, text, true),
+      layout || googleVisionLayout(annotation, text, true),
     ),
-    nativeWordLines: googleVisionNativeWordLines(fullText, text),
+    nativeWordLines: googleVisionNativeWordLines(annotation, text),
+    ...(upright ? { pageOrientation: upright.orientation } : {}),
     requestMetrics: requestMetrics(),
   };
 }

@@ -109,6 +109,116 @@ function gcashBankFields(input: string[]) {
     referenceRaw,
   };
 }
+const GCASH_DATE = /^[A-Za-z]+ \d{1,2},?\s*\d{4} \d{1,2}:\d{2}(?::\d{2})? (?:AM|PM)$/i;
+/** The ₱ glyph is often read as P, +, - or an arrow; a thousands separator
+ * may be read as a period. Only used where principal + fee = total proves it. */
+const GCASH_LENIENT_MONEY =
+  /^(?:PHP|₱|P|\+|-|→|—|–)?\s*((?:\d{1,3}(?:[.,]\d{3})+|\d+)\.\d{2})$/i;
+function lenientMoney(raw: string): number | null {
+  const m = raw.match(GCASH_LENIENT_MONEY);
+  if (!m) return null;
+  const digits = m[1].replace(/[.,](?=\d{3}(?:[.,]|$))/g, "");
+  return /^\d+\.\d{2}$/.test(digits) ? Number(digits) : null;
+}
+/**
+ * Fallback for the GCash bank-transfer table when Vision splits labels
+ * ("Account" / "Name ..."), emits values before their labels, or drops the
+ * optional email. Each value is found by its own type and must be the only
+ * one of its type; money roles are assigned only by exact principal + fee =
+ * total. The recipient name must sit between the account and transfer method.
+ * Expected merchant values never enter extraction; anything ambiguous → null.
+ */
+function gcashBankFieldsByType(input: string[]) {
+  const inlineLabels = [
+    "InstaPay Invoice No.",
+    "Transfer Method",
+    "Transfer Amount",
+    "Receipt sent to",
+    "Account Name",
+    "Account No.",
+    "Ref No.",
+    "+Fee",
+    "Total",
+    "Date",
+    "Name",
+    "No.",
+  ];
+  const lines = input.flatMap((line) => {
+    if (/^Bank[: ]+MariBank$/i.test(line)) return ["Bank", line.replace(/^Bank[: ]+/i, "")];
+    const label = inlineLabels.find((label) => line.startsWith(label + " ") || line.startsWith(label + ":"));
+    return label ? [label, line.slice(label.length).replace(/^:/, "").trim()].filter(Boolean) : [line];
+  });
+  const once = (label: string) => lines.filter((line) => line === label).length === 1;
+  const none = (label: string) => !lines.includes(label);
+  if (
+    !["Bank", "Transfer Method", "Transfer Amount", "+Fee", "Total", "Date", "InstaPay Invoice No.", "Ref No."]
+      .every(once)
+  ) return null;
+  // Every recipient label must be visible, whole or split by Vision into
+  // "Account" + "Name" / "Account" + "No." (one shared "Account" word).
+  const accountName = once("Account Name") && none("Name");
+  const accountNo = once("Account No.") && none("No.");
+  const splitName = once("Name") && none("Account Name");
+  const splitNo = once("No.") && none("Account No.");
+  const accountWords = lines.filter((line) => line === "Account").length;
+  if (
+    !((accountName && accountNo && accountWords === 0) ||
+      (accountName && splitNo && accountWords === 1) ||
+      (splitName && accountNo && accountWords === 1))
+  ) return null;
+  const only = (test: (line: string) => boolean) => {
+    const found = lines.map((line, index) => ({ line, index })).filter(({ line }) => test(line));
+    return found.length === 1 ? found[0] : null;
+  };
+  const bank = only((line) => /^MariBank$/i.test(line));
+  const accountLine = only((line) =>
+    /^(?:\d{11}|[*•●⚫·.xX][*•●⚫·.xX\s]*\d{4}(?:\s+\d{4})?)$/.test(line)
+  );
+  const methodLine = only((line) => /^insta ?pay$/i.test(line));
+  const dateLine = only((line) => GCASH_DATE.test(line));
+  const referenceLine = only((line) => /^\d{13}$/.test(line));
+  // Not 11 digits: that is an unmasked MariBank account number.
+  const invoiceLine = only((line) => /^\d{5,10}$/.test(line));
+  if (!bank || !accountLine || !methodLine || !dateLine || !referenceLine || !invoiceLine) return null;
+  // A repeated visible suffix ("....... • 7144 7144") is one account, never a longer one.
+  const accountMatch = accountLine.line.match(/^(.*?)(\d{4})(?:\s+(\d{4}))?$/)!;
+  if (accountMatch[3] && accountMatch[3] !== accountMatch[2]) return null;
+  const account = (accountMatch[1] + accountMatch[2]).replace(/\s/g, "");
+  if (!/^(?:\d{11}|[*•●⚫·.xX]{2,}\d{4})$/.test(account)) return null;
+  const structural = new Set([
+    ...inlineLabels, "Bank", "Account", "Bank Transfer", "Bank Transfer Complete",
+    "Sent via GCash", "Download", "Share",
+  ]);
+  if (accountLine.index >= methodLine.index) return null;
+  const names = lines.slice(accountLine.index + 1, methodLine.index).filter((line) =>
+    !structural.has(line) && /^[A-Za-z][A-Za-z .'-]+$/.test(line)
+  );
+  if (names.length !== 1) return null;
+  const amounts = lines.flatMap((line) => {
+    const value = lenientMoney(line);
+    return value === null ? [] : [{ line, value }];
+  });
+  if (amounts.length !== 3) return null;
+  const cents = (value: number) => Math.round(value * 100);
+  const [total, ...addends] = [...amounts].sort((a, b) => b.value - a.value);
+  if (cents(addends[0].value) + cents(addends[1].value) !== cents(total.value)) return null;
+  const [principal, fee] = addends;
+  if (money(principal.line) === null || money(fee.line) === null || principal.value === fee.value) return null;
+  return {
+    bank: bank.line,
+    account,
+    name: names[0],
+    method: methodLine.line,
+    principal: principal.line,
+    fee: fee.line,
+    // The digits Vision observed; any misread currency glyph is not evidence.
+    totalRaw: total.line.match(GCASH_LENIENT_MONEY)![1],
+    totalValue: total.value,
+    dateRaw: dateLine.line,
+    invoiceRaw: invoiceLine.line,
+    referenceRaw: referenceLine.line,
+  };
+}
 function nativeTimestamp(raw: string | null): BankReceiptTimestamp {
   const m = raw?.match(/^(\d{1,2}) ([A-Za-z]{3}) (\d{4}), (\d{2}):(\d{2})$/);
   if (!m || Number(m[4]) > 23 || Number(m[5]) > 59) return parseTimestamp([]);
@@ -159,6 +269,7 @@ export function parseMaribankDirectReceipt(
     invoiceRaw: string | null = null,
     dateRaw: string | null = null;
   let method: string | null = null;
+  let gcashTypedTotal: number | null = null;
   if (source === "maribank") {
     let breakdownReference: string | null = null;
     let breakdownDate: string | null = null;
@@ -255,7 +366,9 @@ export function parseMaribankDirectReceipt(
       )
     ) issues.push("MARIBANK_AMOUNT_CONFLICT");
   } else {
-    const fields = gcashBankFields(lines);
+    const typed = gcashBankFields(lines) ? null : gcashBankFieldsByType(lines);
+    const fields = gcashBankFields(lines) || typed;
+    if (typed) gcashTypedTotal = typed.totalValue;
     if (!fields) issues.push("MARIBANK_AMBIGUOUS_FIELDS");
     if (fields) {
       ({
@@ -274,7 +387,7 @@ export function parseMaribankDirectReceipt(
   }
   const transferAmount = money(principal),
     transferFee = money(fee),
-    total = money(totalRaw?.replace(/^\+\s*/, "P") || null);
+    total = gcashTypedTotal ?? money(totalRaw?.replace(/^\+\s*/, "P") || null);
   if (transferAmount === null || transferFee === null || total === null) {
     issues.push("MARIBANK_AMOUNT_BREAKDOWN_UNREADABLE");
   } else if (

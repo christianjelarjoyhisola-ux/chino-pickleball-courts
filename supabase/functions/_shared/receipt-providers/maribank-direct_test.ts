@@ -461,3 +461,118 @@ Deno.test("GCash receipt cut off above the header is accepted only when every de
   // Without every GCash body marker the text is not treated as a GCash receipt.
   eq(parseMaribankDirectReceipt(cropped.replace("Powered by instaPay", "")).source, "maribank");
 });
+
+// Layouts below are the shapes Vision produced for real GCash-to-MariBank
+// receipts that the strict table reader could not follow (customer details
+// replaced). Each value is still found only by its own type.
+const valuesAfterLabels = `Bank Transfer Complete
+Sent via GCash
+Bank
+Account No.
+Account Name
+Transfer Method
+Receipt sent to
+MariBank
+.......7144
+KRISTIE LOU V.
+Instapay
+player
+.com
+Transfer Amount
+795.00
++Fee
+10.00
+Total
+Date
+InstaPay Invoice No.
+Ref No.
+→ 805.00
+Oct 06,2026 04:20 PM
+1234567
+1234567890123
+Powered by instaPay`;
+const splitLabels = `Bank Transfer Complete
+Sent via GCash
+MariBank
+Bank
+.......7144
+Account No.
+Name KRISTIE LOU V.
+Account
+Transfer Method Instapay
+Transfer Amount 795.00
++Fee 10.00
+Total - 805.00
+Date Oct 06,2026 04:20 PM
+InstaPay Invoice No. 1234567
+Ref No.
+1234567890123
+Powered by instaPay`;
+const valuesBeforeLabels = `Bank Transfer Complete
+Sent via GCash
+Bank MariBank
+No. ....... • 7144 7144
+Account
+KRISTIE LOU V.
+Account Name
+Transfer Method Instapay
+Transfer Amount 795.00
+10.00
++Fee
+Total P 805.00
+Oct 06,2026 04:20 PM
+Date
+InstaPay Invoice No. 1234567
+Ref No. 1234567890123
+Powered by instaPay`;
+
+Deno.test("GCash receipts with split, reordered or glyph-damaged labels verify every field by type", () => {
+  for (const text of [valuesAfterLabels, splitLabels, valuesBeforeLabels]) {
+    const parsed = parseMaribankDirectReceipt(text);
+    eq(parsed.source, "gcash");
+    eq(parsed.reference.value, "1234567890123");
+    eq(parsed.invoice.value, "1234567");
+    eq([parsed.amount.amount, parsed.transferFee, parsed.total], [795, 10, 805]);
+    eq(parsed.recipient.nameRaw, "KRISTIE LOU V.");
+    eq(flags(text), []);
+    const p = parseProviderReceipt("maribank_direct", text);
+    if (p.provider !== "maribank_direct") throw Error();
+    eq(maribankDirectApprovalConfidence(bankFixtureRead(text), p).confidence, .97);
+  }
+  // A thousands separator read as a period is accepted only because
+  // principal + fee reproduces it exactly.
+  const large = splitLabels.replace("795.00", "1,060.00").replace("- 805.00", "P 1.070.00");
+  const parsed = parseMaribankDirectReceipt(large);
+  eq([parsed.amount.amount, parsed.transferFee, parsed.total], [1060, 10, 1070]);
+  eq(flags(large, { expectedAmount: 1060 }), []);
+});
+
+Deno.test("type-based GCash reading stays blocked on any ambiguity or missing label", () => {
+  for (
+    const [why, text] of [
+      ["second reference", splitLabels + "\n9999999999999"],
+      ["total does not add up", splitLabels.replace("- 805.00", "- 905.00")],
+      ["extra amount on screen", splitLabels + "\nP 50.00"],
+      ["name outside recipient block", splitLabels.replace("Name KRISTIE LOU V.\n", "Name\n") + "\nKRISTIE LOU V."],
+      ["conflicting repeated suffix", valuesBeforeLabels.replace("7144 7144", "7144 9999")],
+      ["name label missing", splitLabels.replace("Account\n", "")],
+      ["method label missing", splitLabels.replace("Transfer Method Instapay", "Instapay")],
+      ["second date", splitLabels + "\nOct 07,2026 04:20 PM"],
+    ]
+  ) assert(flags(text).length > 0, why);
+  // Expected merchant values never fill a gap: a wrong name stays a mismatch.
+  assert(flags(splitLabels.replace("KRISTIE LOU V.", "JUAN DELA CRUZ")).includes("RECEIVER_NAME_MISMATCH"), "wrong name");
+});
+
+Deno.test("GCash name initial period is not identity evidence; its letters must be strong", () => {
+  const text = splitLabels;
+  const p = parseProviderReceipt("maribank_direct", text);
+  if (p.provider !== "maribank_direct") throw Error();
+  const read = bankFixtureRead(text);
+  const initial = read.nativeLines!.flatMap((l) => l.words).find((w) => w.text === "V.")!;
+  initial.symbols[1].confidence = .7;
+  initial.confidence = .83;
+  eq(maribankDirectApprovalConfidence(read, p).confidence, .97);
+  initial.symbols[0].confidence = .6;
+  assert(maribankDirectApprovalConfidence(read, p).confidence < .9, "weak initial letter accepted");
+});
