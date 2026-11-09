@@ -1145,7 +1145,10 @@ function ocrCriticalGaps(
         (parsed.receipt.amount.conflictingPrimaryAmounts ||
           !parsed.receipt.amount.matchingPrimaryAmountDisplays))
     ) gaps.push("amount");
-    if (receipt.timestamp.completeness !== "date_time") gaps.push("date");
+    if (
+      receipt.timestamp.completeness !== "date_time" &&
+      !("screenClock" in receipt && receipt.screenClock)
+    ) gaps.push("date");
     return gaps;
   }
   const gaps: string[] = [];
@@ -2791,6 +2794,38 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
     const bookingStartedDate = bookingStartedWallClock
       ? bookingStartedWallClock.toISOString().slice(0, 10)
       : null;
+    // MariBank's "Transfer Result" screen prints no date. Its recency evidence
+    // is the highest MariBank reference claimed before this booking started
+    // and when this exact image was first submitted. Lookup errors leave it
+    // undefined, which keeps such receipts in owner review.
+    let maribankRecency: ReceiptVerificationContext["maribankRecency"];
+    if (provider === "maribank" && bookingStartedInstant) {
+      const [prior, firstSeen] = await Promise.all([
+        db.from("used_gcash_refs").select("gcash_ref")
+          .like("gcash_ref", "maribank:BC%")
+          .lt("used_at", bookingStartedInstant.toISOString())
+          .order("gcash_ref", { ascending: false }).limit(1),
+        db.from("receipt_verifications").select("created_at")
+          .eq("booking_ref", bookingRef).eq("image_hash", imageHash)
+          .order("created_at", { ascending: true }).limit(1),
+      ]);
+      if (!prior.error && !firstSeen.error) {
+        const priorKey = String(prior.data?.[0]?.gcash_ref || "");
+        maribankRecency = {
+          priorReference: priorKey.startsWith("maribank:")
+            ? priorKey.slice("maribank:".length)
+            : null,
+          firstSubmittedAt: String(
+            firstSeen.data?.[0]?.created_at || new Date().toISOString(),
+          ),
+        };
+      } else {
+        console.error(
+          "maribank recency lookup failed:",
+          errMsg(prior.error || firstSeen.error),
+        );
+      }
+    }
     const providerContext: ReceiptVerificationContext = {
       typedReference: typedRef,
       expectedAmount: pricingError ? null : expectedAmount,
@@ -2810,6 +2845,7 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
       bookingStartedDate,
       paymentWindowMinutes: PAYMENT_WINDOW_MINUTES,
       earlyToleranceMinutes: PAYMENT_EARLY_TOLERANCE_MINUTES,
+      ...(maribankRecency ? { maribankRecency } : {}),
     };
     const readingSession = createReceiptReadingSession();
     let originalOcr: OcrResult | null = null;
@@ -3499,7 +3535,10 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
       amountExtraction?.reliable === true &&
       amountExtraction.ambiguous !== true;
     const timestampValid =
-      providerParse?.receipt.timestamp.completeness === "date_time" &&
+      (providerParse?.receipt.timestamp.completeness === "date_time" ||
+        (providerVerification?.provider === "maribank_direct" &&
+          providerVerification.timeBasis ===
+            "reference_order_and_screen_clock")) &&
       !flags.some((flag) =>
         [
           "DATE_UNREADABLE",
@@ -3588,6 +3627,14 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
       duplicateClear,
       destinationProvider: providerParse?.destinationProvider || null,
       ...(provider === "gotyme" ? { recipientVerificationPolicy: providerContext.gotymeRecipientPolicy } : {}),
+      ...(providerVerification?.provider === "maribank_direct"
+        ? {
+          timeBasis: providerVerification.timeBasis,
+          ...(providerVerification.screenClockCheck
+            ? { screenClockCheck: providerVerification.screenClockCheck }
+            : {}),
+        }
+        : {}),
     };
 
     const ocrMetrics = readingSession.metrics();

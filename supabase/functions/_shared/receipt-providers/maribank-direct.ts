@@ -8,6 +8,19 @@ import type {
   ReceiptVerificationContext,
 } from "./bank-to-gcash.ts";
 
+/** A phone status-bar clock: hours and minutes with no digit, colon or
+ * decimal attached (so "3:57.1" or "12:30:45" never qualify). */
+const STATUS_BAR_CLOCK = /(?<![\d:.,])((?:[01]?\d|2[0-3]):[0-5]\d)(?![\d:.,])/g;
+/** Any visible calendar date means the receipt is not a no-date screen. */
+const ANY_DATE =
+  /\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2}\b|\b\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\b|\b\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}\b|\b20\d{2}\b/i;
+export type MaribankScreenClock = {
+  raw: string;
+  hour: number;
+  minute: number;
+  /** 1-12 is read as a 12-hour clock; 0 or 13-23 only as a 24-hour clock. */
+  twelveHour: boolean;
+};
 const MONEY = /^(?:PHP|₱|P)?\s*((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})$/i;
 function money(raw: string | null): number | null {
   if (raw === "FREE") return 0;
@@ -270,6 +283,7 @@ export function parseMaribankDirectReceipt(
     dateRaw: string | null = null;
   let method: string | null = null;
   let gcashTypedTotal: number | null = null;
+  let screenClock: MaribankScreenClock | null = null;
   if (source === "maribank") {
     let breakdownReference: string | null = null;
     let breakdownDate: string | null = null;
@@ -347,6 +361,31 @@ export function parseMaribankDirectReceipt(
       const dates = lines.filter(s => nativeTimestamp(s).completeness === "date_time");
       dateRaw = dates.length === 1 ? dates[0] : null;
       if (dates.length > 1) issues.push("MARIBANK_TIMESTAMP_AMBIGUOUS");
+    }
+    // The "Transfer Result" screen prints no date. Its phone status bar clock
+    // is the only time shown; keep it only when the receipt has no date row
+    // at all and exactly one clock appears above the screen title.
+    const title = lines.filter((s) => s === "Transfer Result").length === 1
+      ? lines.indexOf("Transfer Result")
+      : -1;
+    if (
+      title > 0 && di < 0 && !dateRaw &&
+      !lines.some((s) =>
+        nativeTimestamp(s).completeness !== "missing" || ANY_DATE.test(s)
+      )
+    ) {
+      const clocks = lines.slice(0, title).flatMap((s) =>
+        [...s.matchAll(STATUS_BAR_CLOCK)].map((m) => m[1])
+      );
+      if (clocks.length === 1) {
+        const [hour, minute] = clocks[0].split(":").map(Number);
+        screenClock = {
+          raw: clocks[0],
+          hour,
+          minute,
+          twelveHour: hour >= 1 && hour <= 12,
+        };
+      }
     }
     for (const label of ["Transfer Amount", "Transfer Fee", "Total Amount"]) {
       if (lines.filter((s) => s === label).length !== 1) {
@@ -453,9 +492,13 @@ export function parseMaribankDirectReceipt(
     total,
     timestamp,
     recipient: { nameRaw: name, accountRaw: account, bankRaw: bank },
+    screenClock,
     paymentFields: {
       reference: referenceRaw,
-      dateTime: timestamp.raw,
+      // A no-date MariBank screen proves its time with the status-bar clock.
+      ...(screenClock
+        ? { screenClock: screenClock.raw }
+        : { dateTime: timestamp.raw }),
       amount: principal,
       fee,
       total: totalRaw,
@@ -569,7 +612,13 @@ export function verifyMaribankDirectReceipt(
   }
   const at = Date.parse(parsed.timestamp.instant || ""),
     start = Date.parse(context.bookingStartedAt || "");
-  if (
+  const screenClock = "screenClock" in parsed ? parsed.screenClock : null;
+  const clockCheck = screenClock
+    ? checkMaribankScreenClock(parsed, screenClock, context)
+    : null;
+  if (clockCheck) {
+    if (!clockCheck.accepted) add("TIME_UNREADABLE");
+  } else if (
     !Number.isFinite(at) || !Number.isFinite(start) ||
     !context.bookingStartedDate
   ) add("TIME_UNREADABLE");
@@ -620,6 +669,75 @@ export function verifyMaribankDirectReceipt(
     recipientComparison,
     recipientAccountComparison,
     dedupeKeys,
+    timeBasis: clockCheck?.accepted
+      ? "reference_order_and_screen_clock" as const
+      : "receipt_timestamp" as const,
+    ...(clockCheck ? { screenClockCheck: clockCheck } : {}),
+  };
+}
+
+/** Upper bound for the first submission of a no-date MariBank screenshot. */
+export const MARIBANK_CLOCK_SUBMISSION_MINUTES = 30;
+
+/** Owner policy (2026-11-09): MariBank's "Transfer Result" screen prints no
+ * date. It may stand in for one only when all three hold:
+ * 1. its BC reference is above every MariBank reference claimed at the court
+ *    before this booking (references were observed to rise with time), so an
+ *    older genuine screenshot cannot pass;
+ * 2. the phone's status-bar clock falls in the payment window on the clock
+ *    face (12-hour clocks compare modulo 12 hours);
+ * 3. this exact image was first submitted shortly after the booking started.
+ * Any missing input fails closed. */
+export function checkMaribankScreenClock(
+  parsed: { reference: { value: string | null } },
+  clock: MaribankScreenClock,
+  context: ReceiptVerificationContext & { now?: string },
+) {
+  const reasons: string[] = [];
+  const reference = parsed.reference.value || "";
+  const prior = context.maribankRecency?.priorReference || "";
+  if (!context.maribankRecency) reasons.push("recency_unavailable");
+  else if (!/^BC\d{18}$/.test(prior)) reasons.push("no_prior_reference");
+  else if (!/^BC\d{18}$/.test(reference) || reference <= prior) {
+    reasons.push("reference_not_newer");
+  }
+  const start = Date.parse(context.bookingStartedAt || "");
+  let clockMinutes: number | null = null;
+  if (!Number.isFinite(start)) reasons.push("booking_time_missing");
+  else {
+    // Philippine wall clock (UTC+8, no daylight saving).
+    const wall = new Date(start + 8 * 3600_000);
+    const startMinute = wall.getUTCHours() * 60 + wall.getUTCMinutes() +
+      wall.getUTCSeconds() / 60;
+    const cycle = clock.twelveHour ? 720 : 1440;
+    const face = (clock.hour % (cycle / 60)) * 60 + clock.minute;
+    let diff = ((face - startMinute) % cycle + cycle) % cycle;
+    if (diff > cycle / 2) diff -= cycle;
+    clockMinutes = Math.round(diff * 10) / 10;
+    // The booking start keeps its seconds, so a payment in the booking's own
+    // minute is less than one minute "early" on the clock face.
+    if (
+      diff < -context.earlyToleranceMinutes ||
+      diff > context.paymentWindowMinutes
+    ) reasons.push("clock_outside_window");
+  }
+  const submitted = Date.parse(context.maribankRecency?.firstSubmittedAt || "");
+  if (!Number.isFinite(submitted) || !Number.isFinite(start)) {
+    reasons.push("submission_time_missing");
+  } else {
+    const age = (submitted - start) / 60000;
+    if (
+      age < -context.earlyToleranceMinutes ||
+      age > MARIBANK_CLOCK_SUBMISSION_MINUTES
+    ) reasons.push("submitted_late");
+  }
+  return {
+    accepted: reasons.length === 0,
+    reasons,
+    clock: clock.raw,
+    clockMinutesAfterBooking: clockMinutes,
+    reference: reference || null,
+    priorReference: prior || null,
   };
 }
 export type MaribankDirectReceiptVerificationEvidence = ReturnType<

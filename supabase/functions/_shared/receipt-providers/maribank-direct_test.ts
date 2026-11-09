@@ -576,3 +576,108 @@ Deno.test("GCash name initial period is not identity evidence; its letters must 
   initial.symbols[0].confidence = .6;
   assert(maribankDirectApprovalConfidence(read, p).confidence < .9, "weak initial letter accepted");
 });
+
+// MariBank's "Transfer Result" screen with no date row: the status-bar clock
+// plus reference order stand in for a date (owner policy 2026-11-09).
+const noDate = native.replace("Transaction Date & Time\n06 Oct 2026, 16:20\n", "");
+const recency = {
+  maribankRecency: {
+    priorReference: "BC549999999999999999",
+    firstSubmittedAt: "2026-10-06T08:25:00Z",
+  },
+};
+const noDateCheck = (
+  text: string,
+  override: Partial<ReceiptVerificationContext> = {},
+) =>
+  verifyMaribankDirectReceipt(parseMaribankDirectReceipt(text), {
+    ...context,
+    ...recency,
+    ...override,
+  });
+
+Deno.test("no-date MariBank screen passes on a newer reference and an in-window phone clock", () => {
+  const p = parseMaribankDirectReceipt(noDate);
+  if (!("screenClock" in p)) throw Error("wrong parser");
+  eq(p.screenClock, { raw: "4:21", hour: 4, minute: 21, twelveHour: true });
+  eq((p.paymentFields as Record<string, unknown>).dateTime, undefined);
+  eq((p.paymentFields as Record<string, unknown>).screenClock, "4:21");
+  const v = noDateCheck(noDate);
+  eq(v.flags, []);
+  eq(v.timeBasis, "reference_order_and_screen_clock");
+  // Every observed status-bar style seen on real receipts.
+  for (const header of ["4:20 AM \"", "4:21 M", "SMART 4:21", "16:21", "4:33 S", "4:17"]) {
+    const v = noDateCheck(noDate.replace("4:21 PM", header));
+    assert(v.flags.length === 0, `${header}: ${v.flags}`);
+  }
+  // Geometric reading can place the From/To labels above the clock.
+  const reordered = noDateCheck(noDate.replace(
+    "4:21 PM\nTransfer Result\nFrom\nTo",
+    "From\nTo\n4:21\nTransfer Result",
+  ));
+  assert(reordered.flags.length === 0, `reordered: ${reordered.flags}`);
+  const prov = parseProviderReceipt("maribank_direct", noDate);
+  if (prov.provider !== "maribank_direct") throw Error("wrong parser");
+  eq(verifyProviderReceipt(prov, { ...context, ...recency }).flags, []);
+});
+
+Deno.test("no-date MariBank screen stays manual without every piece of recency evidence", () => {
+  const blocked = (text: string, override: Partial<ReceiptVerificationContext>, reason: string) => {
+    const v = noDateCheck(text, override);
+    assert(v.flags.includes("TIME_UNREADABLE"), `${reason} approved`);
+    eq(v.timeBasis, "receipt_timestamp");
+    assert(v.screenClockCheck?.reasons.includes(reason), `${reason} missing: ${JSON.stringify(v.screenClockCheck)}`);
+  };
+  blocked(noDate, { maribankRecency: undefined }, "recency_unavailable");
+  blocked(noDate, { maribankRecency: { ...recency.maribankRecency, priorReference: null } }, "no_prior_reference");
+  blocked(noDate, { maribankRecency: { ...recency.maribankRecency, priorReference: "BC550000000000000001" } }, "reference_not_newer");
+  blocked(noDate, { maribankRecency: { ...recency.maribankRecency, priorReference: "BC550000000000000009" } }, "reference_not_newer");
+  blocked(noDate, { maribankRecency: { ...recency.maribankRecency, firstSubmittedAt: "2026-10-06T08:49:00Z" } }, "submitted_late");
+  blocked(noDate, { maribankRecency: { ...recency.maribankRecency, firstSubmittedAt: null } }, "submission_time_missing");
+  blocked(noDate.replace("4:21 PM", "4:34 PM"), {}, "clock_outside_window");
+  blocked(noDate.replace("4:21 PM", "4:15 PM"), {}, "clock_outside_window");
+  blocked(noDate.replace("4:21 PM", "10:21 PM"), {}, "clock_outside_window");
+  blocked(noDate.replace("4:21 PM", "04:21"), { bookingStartedAt: "2026-10-06T14:18:00Z" }, "clock_outside_window");
+  blocked(noDate.replace("4:21 PM", "16:21"), { bookingStartedAt: "2026-10-06T20:18:00Z" }, "clock_outside_window");
+  blocked(noDate, { bookingStartedAt: null }, "booking_time_missing");
+});
+
+Deno.test("no-date path needs exactly one clean clock above the title and no visible date", () => {
+  for (const text of [
+    noDate.replace("4:21 PM", "4:21 PM 4:22"),
+    noDate.replace("4:21 PM", "3:57.1"),
+    noDate.replace("4:21 PM", "4:21:09"),
+    noDate.replace("4:21 PM", ""),
+    noDate.replace("4:21 PM\nTransfer Result", "Transfer Result\n4:21 PM"),
+    noDate.replace("Share", "06 Oct 2026"),
+    noDate.replace("Share", "Oct 6"),
+    noDate.replace("Share", "10/06/26"),
+    noDate.replace("Share", "Transaction Date & Time"),
+    noDate.replace("Transfer Result", "Transfer Result\nTransfer Result"),
+  ]) {
+    const p = parseMaribankDirectReceipt(text);
+    eq("screenClock" in p ? p.screenClock : null, null);
+    assert(noDateCheck(text).flags.includes("TIME_UNREADABLE"), text);
+  }
+  // A dated receipt never switches to the clock rule.
+  const dated = parseMaribankDirectReceipt(native);
+  eq("screenClock" in dated ? dated.screenClock : null, null);
+  eq(noDateCheck(native).timeBasis, "receipt_timestamp");
+});
+
+Deno.test("no-date approval needs native confidence in the status-bar clock", () => {
+  const p = parseProviderReceipt("maribank_direct", noDate);
+  if (p.provider !== "maribank_direct") throw Error("wrong parser");
+  const read = bankFixtureRead(noDate);
+  const approval = maribankDirectApprovalConfidence(read, p);
+  assert(approval.complete && approval.confidence >= .9, JSON.stringify(approval));
+  assert(approval.fields?.screenClock, "clock field missing");
+  const weak = bankFixtureRead(noDate);
+  for (const word of weak.nativeLines!.flatMap((l) => l.words)) {
+    if (word.text === "4:21") {
+      word.confidence = .5;
+      word.symbols.forEach((s) => s.confidence = .5);
+    }
+  }
+  assert(maribankDirectApprovalConfidence(weak, p).confidence < .9, "weak clock accepted");
+});
