@@ -113,7 +113,8 @@ export function compareAccount(
   if (!raw) return "missing";
   const value = raw.replace(/[\s-]/g, "");
   if (/^\d{8,30}$/.test(value)) return value === full ? "exact" : "mismatch";
-  const mask = value.match(/^[*•●·.xX]{2,}(\d{4})$/);
+  // A visible mask: two or more mask glyphs, or one solid dot ("⚫7144").
+  const mask = value.match(/^(?:[*•●⚫·.xX]{2,}|[•●⚫])(\d{4})$/);
   return mask && full.endsWith(mask[1]) ? "suffix_match" : "mismatch";
 }
 

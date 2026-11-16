@@ -21,6 +21,10 @@ export type MaribankScreenClock = {
   /** 1-12 is read as a 12-hour clock; 0 or 13-23 only as a 24-hour clock. */
   twelveHour: boolean;
 };
+/** A full 11-digit MariBank account, or a visible mask before the last four
+ * digits. GCash's mask may be read as one solid dot ("⚫7144"); a single
+ * period, x or bare four digits never count as a mask. */
+const MASKED_OR_FULL_ACCOUNT = /^(?:\d{11}|[*•●⚫·.xX]{2,}\d{4}|[•●⚫]\d{4})$/;
 const MONEY = /^(?:PHP|₱|P)?\s*((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})$/i;
 function money(raw: string | null): number | null {
   if (raw === "FREE") return 0;
@@ -73,7 +77,7 @@ function gcashBankFields(input: string[]) {
     accounts.push(values[i++]);
   }
   const validAccount = (s: string) =>
-    /^(?:\d{11}|[*•●⚫·.xX]{2,}\d{4})$/.test(s.replace(/\s/g, ""));
+    MASKED_OR_FULL_ACCOUNT.test(s.replace(/\s/g, ""));
   let account = accounts.join("").replace(/\s/g, "");
   if (!validAccount(account)) {
     // A duplicate OCR line may repeat the same masked suffix. Conflicting
@@ -197,7 +201,7 @@ function gcashBankFieldsByType(input: string[]) {
   const accountMatch = accountLine.line.match(/^(.*?)(\d{4})(?:\s+(\d{4}))?$/)!;
   if (accountMatch[3] && accountMatch[3] !== accountMatch[2]) return null;
   const account = (accountMatch[1] + accountMatch[2]).replace(/\s/g, "");
-  if (!/^(?:\d{11}|[*•●⚫·.xX]{2,}\d{4})$/.test(account)) return null;
+  if (!MASKED_OR_FULL_ACCOUNT.test(account)) return null;
   const structural = new Set([
     ...inlineLabels, "Bank", "Account", "Bank Transfer", "Bank Transfer Complete",
     "Sent via GCash", "Download", "Share",
@@ -300,7 +304,12 @@ export function parseMaribankDirectReceipt(
       // Geometric OCR may put the left-hand To label between the name and bank.
       const recipientLines = lines.slice(0, i).filter(s => s !== "To");
       const recipientBank = recipientLines.at(-1) || "";
-      const recipientName = recipientLines.at(-2) || "";
+      // The profile icon may be read as a bullet stuck to the name
+      // ("•Kristie Lou V."); separate it exactly as "• Kristie Lou V.".
+      const recipientName = (recipientLines.at(-2) || "").replace(
+        /^([•●◆])(?=[A-Za-z])/,
+        "$1 ",
+      );
       account = m![1];
       if (
         /^(?:M )?MariBank$/.test(recipientBank) &&
@@ -682,8 +691,8 @@ export const MARIBANK_CLOCK_SUBMISSION_MINUTES = 30;
 /** Owner policy (2026-11-09): MariBank's "Transfer Result" screen prints no
  * date. It may stand in for one only when all three hold:
  * 1. its BC reference is above every MariBank reference claimed at the court
- *    before this booking (references were observed to rise with time), so an
- *    older genuine screenshot cannot pass;
+ *    at least two hours before this booking (references rise with time, give
+ *    or take about half an hour), so an older genuine screenshot cannot pass;
  * 2. the phone's status-bar clock falls in the payment window on the clock
  *    face (12-hour clocks compare modulo 12 hours);
  * 3. this exact image was first submitted shortly after the booking started.

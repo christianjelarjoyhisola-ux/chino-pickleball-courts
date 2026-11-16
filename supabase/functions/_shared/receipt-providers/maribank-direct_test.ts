@@ -681,3 +681,35 @@ Deno.test("no-date approval needs native confidence in the status-bar clock", ()
   }
   assert(maribankDirectApprovalConfidence(weak, p).confidence < .9, "weak clock accepted");
 });
+
+Deno.test("GCash mask read as one solid dot still proves a masked MariBank account", async () => {
+  const { compareAccount } = await import("./securitybank.ts");
+  const { bankFieldIdentity } = await import("../bank-ocr-evidence.ts");
+  const solid = gcash.replace("15521507144", "⚫7144").replace("KRISTIE LOU VILLANUEVA", "KRISTIE LOU V.");
+  const p = parseMaribankDirectReceipt(solid);
+  eq(p.recipient.accountRaw, "⚫7144");
+  eq(flags(solid), []);
+  eq(compareAccount("⚫7144", "15521507144"), "suffix_match");
+  eq(compareAccount("•7144", "15521507144"), "suffix_match");
+  for (const weak of [".7144", "x7144", "7144", "⚫7145"]) {
+    assert(compareAccount(weak, "15521507144") !== "suffix_match", weak);
+  }
+  // A bare suffix or a single period is not a visible mask.
+  for (const account of ["7144", ".7144"]) {
+    assert(flags(gcash.replace("15521507144", account)).length > 0, account);
+  }
+  // Rereads that write the same mask differently still agree.
+  eq(bankFieldIdentity("recipientAccount", ".......•7144"), bankFieldIdentity("recipientAccount", ".......7144"));
+  eq(bankFieldIdentity("recipientAccount", "⚫7144"), bankFieldIdentity("recipientAccount", ".......7144"));
+  assert(bankFieldIdentity("recipientAccount", ".......7145") !== bankFieldIdentity("recipientAccount", ".......7144"));
+});
+
+Deno.test("MariBank profile bullet stuck to the recipient name is still the recipient", () => {
+  for (const name of ["•Kristie Lou V.", "• Kristie Lou V.", "●Kristie Lou V."]) {
+    const text = native.replace("Kristie Lou V.", name);
+    const p = parseMaribankDirectReceipt(text);
+    eq(p.paymentFields.recipientName, "Kristie Lou V.");
+    eq(flags(text), []);
+  }
+  assert(flags(native.replace("Kristie Lou V.", "•Gloria Maris P.")).length > 0, "other recipient accepted");
+});

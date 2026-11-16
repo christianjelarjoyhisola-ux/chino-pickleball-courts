@@ -189,7 +189,7 @@ function nativeWordConfidence(
 ): number | undefined {
   if (ignoreMasks) {
     const maskPositions = new Set<number>();
-    for (const match of word.text.matchAll(/[•‣●◦∙·*#…]+|\.{2,}|X{2,}/g)) {
+    for (const match of word.text.matchAll(/[•‣●◦∙·*#…⚫]+|\.{2,}|X{2,}/g)) {
       for (
         let index = match.index!;
         index < match.index! + match[0].length;
@@ -293,7 +293,7 @@ export function fieldEvidence(
         ? matched.filter(span => !/^(?:PHP|₱|P|\+)$/i.test(span.word.text))
         : masked
         ? matched.filter((span) =>
-          !/^(?:[•‣●◦∙·*#…]+|\.{2,}|X{2,})$/.test(span.word.text)
+          !/^(?:[•‣●◦∙·*#…⚫]+|\.{2,}|X{2,})$/.test(span.word.text)
         )
         : matched;
       const scores = valueWords.map((span) => {
@@ -314,7 +314,7 @@ export function fieldEvidence(
         }
         return nativeWordConfidence(
           span.word,
-          masked && /[•‣●◦∙·*#]|\.{2,}|X{2,}/.test(text),
+          masked && /[•‣●◦∙·*#⚫]|\.{2,}|X{2,}/.test(text),
         );
       });
       const zeroConfidence = zeroFee && /^(?:PHP|₱|P)?\s*0\.00$/i.test(text)
@@ -564,8 +564,9 @@ export function bankFieldIdentity(key: string, value: string): string {
     return result.replace(/[^A-Z0-9]/g, "");
   }
   if (key === "recipientAccount") {
+    // Any run of mask glyphs is one mask: "......•7144" and "......7144" agree.
     result = result.replace(/[()+-]/g, "").replace(
-      /[•‣●◦∙·*#…]+|\.{2,}|X{2,}/g,
+      /(?:[•‣●◦∙·*#…⚫]|\.{2,}|X{2,})+/g,
       "*",
     );
     if (/^63\d{10}$/.test(result)) result = "0" + result.slice(2);

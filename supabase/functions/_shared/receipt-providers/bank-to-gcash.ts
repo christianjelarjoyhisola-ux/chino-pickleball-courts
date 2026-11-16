@@ -108,7 +108,8 @@ export type ReceiptVerificationContext = {
   /** Server-owned evidence for MariBank app receipts that print no date.
    * Missing values keep those receipts in owner review. */
   maribankRecency?: {
-    /** Highest MariBank app reference claimed before this booking started. */
+    /** Highest MariBank app reference claimed at least two hours before this
+     * booking started. */
     priorReference: string | null;
     /** When this exact image was first submitted for this booking. */
     firstSubmittedAt: string | null;

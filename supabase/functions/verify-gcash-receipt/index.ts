@@ -104,6 +104,8 @@ const PAYMENT_WINDOW_MINUTES = 15;
 // OCR usually reads only minute-level timestamps. A receipt paid during the
 // same minute as the hold can look a few seconds "before" the booking.
 const PAYMENT_EARLY_TOLERANCE_MINUTES = 2;
+// MariBank no-date receipts: the reference floor ignores claims this recent.
+const MARIBANK_REFERENCE_FLOOR_BUFFER_MINUTES = 120;
 const GCASH_VERIFIER_REVISION = "gcash_amount_pair_20260915_v1";
 const BANK_VERIFIER_REVISION = "bank_name_policy_20260910";
 
@@ -2801,9 +2803,18 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
     let maribankRecency: ReceiptVerificationContext["maribankRecency"];
     if (provider === "maribank" && bookingStartedInstant) {
       const [prior, firstSeen] = await Promise.all([
+        // References are only roughly in time order (a 7:06 PM payment was
+        // seen below a 6:52 PM one), so compare against references claimed
+        // at least two hours before the booking started.
         db.from("used_gcash_refs").select("gcash_ref")
           .like("gcash_ref", "maribank:BC%")
-          .lt("used_at", bookingStartedInstant.toISOString())
+          .lt(
+            "used_at",
+            new Date(
+              bookingStartedInstant.getTime() -
+                MARIBANK_REFERENCE_FLOOR_BUFFER_MINUTES * 60_000,
+            ).toISOString(),
+          )
           .order("gcash_ref", { ascending: false }).limit(1),
         db.from("receipt_verifications").select("created_at")
           .eq("booking_ref", bookingRef).eq("image_hash", imageHash)
