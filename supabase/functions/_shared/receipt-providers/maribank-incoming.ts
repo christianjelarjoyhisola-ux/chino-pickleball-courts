@@ -6,6 +6,12 @@ import {
   parseGotymeToGcashReceipt,
 } from "./gotyme.ts";
 import { parseTimestamp } from "./securitybank.ts";
+import {
+  isMbFundTransferReceipt,
+  isUnionbankReceipt,
+  parseMbFundTransferToMaribank,
+  parseUnionbankToMaribank,
+} from "./maribank-other-banks.ts";
 
 // These are destination-specific formats. Sender branding is not evidence of
 // a wrong destination. Extraction never receives configured account details.
@@ -24,6 +30,10 @@ export function parseAdditionalMaribankReceipt(
   const text = lines.join("\n");
   const source = /^Sent via BPI$/im.test(text)
     ? "bpi" as const
+    : isUnionbankReceipt(text)
+    ? "unionbank" as const
+    : isMbFundTransferReceipt(text)
+    ? "mb_fund_transfer" as const
     : /\bGoTyme Bank\b/i.test(text)
     ? "gotyme" as const
     : /^Transaction Receipt$/im.test(text) &&
@@ -57,6 +67,7 @@ export function parseAdditionalMaribankReceipt(
     secondary: string | null = null,
     statusRaw: string | null = null;
   let timestamp = parseTimestamp([]);
+  let extraFields: Record<string, string | null> = {};
   const to = lines.findIndex((s) => /^(?:Transfer to|To)(?:\s|$)/i.test(s));
   const recipientBlock = to < 0 ? [] : lines.slice(
     to,
@@ -70,7 +81,13 @@ export function parseAdditionalMaribankReceipt(
         /^(?:From|Transfer from|Transfer Amount|Amount)(?:\s|$)/i.test(s)
       ),
   );
-  if (source === "bpi") {
+  if (source === "unionbank" || source === "mb_fund_transfer") {
+    const read = source === "unionbank"
+      ? parseUnionbankToMaribank(lines)
+      : parseMbFundTransferToMaribank(lines);
+    ({ name, account, bank, principal, fee, reference, secondary, statusRaw, timestamp, extraFields } = read);
+    issues.push(...read.issues);
+  } else if (source === "bpi") {
     const existing = parseBpiToGcashReceipt(
       text.replace(/(\d{4});(?=\s+\d{1,2}:)/g, "$1,"),
     );
@@ -182,7 +199,11 @@ export function parseAdditionalMaribankReceipt(
     transferFee = money(fee),
     total = money(totalRaw);
   if (
-    amount === null || (source !== "maribank" && transferFee === null) ||
+    amount === null ||
+    // UnionBank shows no fee; the MB app's service charge may be cut off.
+    // Neither changes the amount credited to the recipient.
+    (!["maribank", "unionbank", "mb_fund_transfer"].includes(source) &&
+      transferFee === null) ||
     (source === "gotyme" && total === null)
   ) issues.push("MARIBANK_AMOUNT_BREAKDOWN_UNREADABLE");
   if (
@@ -234,7 +255,9 @@ export function parseAdditionalMaribankReceipt(
       status: statusRaw,
       ...(fee !== null ? { fee } : {}),
       ...(totalRaw !== null ? { total: totalRaw } : {}),
-      ...(source === "maribank"
+      ...(source === "unionbank" || source === "mb_fund_transfer"
+        ? { ...extraFields, secondaryReference: secondary }
+        : source === "maribank"
         ? { source: "Receipt generated from MariBank app" }
         : source === "bpi"
         ? { source: "Sent via BPI", secondaryReference: secondary }
@@ -248,14 +271,20 @@ export function parseAdditionalMaribankReceipt(
     } as Record<string, string | null>,
     indicators: {
       providerBrand: true,
-      competingProviderBrand: source === "bpi"
+      competingProviderBrand: source === "unionbank" || source === "mb_fund_transfer"
+        ? /Sent via BPI|GoTyme|Sent via GCash/i.test(text)
+        : source === "bpi"
         ? /GoTyme|Sent via GCash/i.test(text)
         : source === "gotyme"
         ? /Sent via BPI|Sent via GCash/i.test(text)
         : /Sent via BPI|GoTyme|Sent via GCash/i.test(text),
       transferSuccess: !!statusRaw && !adverse.failureStatus &&
         !adverse.pendingStatus,
-      destinationMaribank: source === "bpi"
+      destinationMaribank: source === "unionbank"
+        ? /^MariBank$/i.test(bank || "")
+        : source === "mb_fund_transfer"
+        ? /^MariBank Philippines Inc\.?$/i.test(bank || "")
+        : source === "bpi"
         ? /^MARIBANK PHILIPPINES INC\. \(A RURAL BANK\)$/i.test(bank || "")
         : /^(?:M )?MariBank(?: Philippines(?: \(SeaBank\))?)?$/i.test(
           bank || "",

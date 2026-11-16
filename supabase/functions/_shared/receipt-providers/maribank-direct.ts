@@ -663,6 +663,15 @@ export function verifyMaribankDirectReceipt(
     dedupeKeys.push({key: parsed.source + ':' + parsed.reference.value, providerKey: parsed.source, duplicateFlag: 'DUPLICATE_REF'});
     if (parsed.secondaryReference) dedupeKeys.push({key: (parsed.source === 'bpi' ? 'bpi_transaction:' : 'instapay:') + parsed.secondaryReference, providerKey: parsed.source === 'bpi' ? 'bpi_transaction' : 'instapay', duplicateFlag: 'DUPLICATE_INSTAPAY_REF'});
   }
+  // Each sending bank's own InstaPay reference also blocks reuse of the same
+  // payment through another booking.
+  if ((parsed.source === "unionbank" || parsed.source === "mb_fund_transfer") && parsed.secondaryReference) {
+    dedupeKeys.push({
+      key: `${parsed.source}_instapay:${parsed.secondaryReference}`,
+      providerKey: `${parsed.source}_instapay`,
+      duplicateFlag: "DUPLICATE_INSTAPAY_REF",
+    });
+  }
   if (parsed.invoice.value) {
     dedupeKeys.push({
       key: `gcash_instapay_invoice:${parsed.invoice.value}`,

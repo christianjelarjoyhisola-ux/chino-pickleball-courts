@@ -150,6 +150,8 @@ export function bankLayoutFamily(provider: string, text: string): string {
     case "maribank_direct":
       if (has(/^Transaction Receipt$/im) && has(/^Receipt generated from MariBank app$/im)) return "maribank_download_v1";
       if (has(/^Sent via BPI$/im) && has(/^Transfer successful!$/im)) return "bpi_to_maribank_v1";
+      if (has(/Thank you for using UnionBank Online/i) && has(/^UB\d{6,12}$/m)) return "unionbank_to_maribank_v1";
+      if (has(/Your transaction has been\s+processed\./i) && has(/^MB[A-Z]{3}\d{20}$/m)) return "mb_fund_transfer_to_maribank_v1";
       if (has(/GoTyme Bank/i) && has(/^Transferred$/im) && has(/^Reference No\./im)) return "gotyme_to_maribank_v1";
       if (has(/^Sent via GCash$/im) && has(/^Bank Transfer Complete$/im)) return "gcash_to_maribank_v1";
       // Same GCash body markers the parser requires for a screenshot cut off above the header.
@@ -626,7 +628,7 @@ export function maribankDirectApprovalConfidence(read: GoogleVisionOcrResult, pa
  const r=parsed.receipt;
  const evidenceRead={...read,nativeLines:read.nativeLines?.length ? read.nativeLines : read.nativeWordLines};
  const reconciled=r.amount.amount!=null && r.transferFee!=null && r.total!=null && Math.round(r.amount.amount*100)+Math.round(r.transferFee*100)===Math.round(r.total*100);
- const fields = Object.fromEntries(Object.entries(r.paymentFields).map(([key,value])=>[key,key==='rail'&&r.source==='gcash'?gcashTransferMethodEvidence(evidenceRead,value):key==='rail'&&r.source==='gotyme'?gotymeLogoEvidence(evidenceRead,value):fieldEvidence(evidenceRead,value,key==="recipientAccount" || (key==="recipientName" && r.source==="gotyme" && /\*/.test(value||"")),false,key==="total" && reconciled,key==="recipientName" && (r.source==="maribank" || r.source==="gcash"))]));
+ const fields = Object.fromEntries(Object.entries(r.paymentFields).map(([key,value])=>[key,key==='rail'&&r.source==='gcash'?gcashTransferMethodEvidence(evidenceRead,value):key==='rail'&&r.source==='gotyme'?gotymeLogoEvidence(evidenceRead,value):fieldEvidence(evidenceRead,value,key==="recipientAccount" || (key==="recipientName" && r.source==="gotyme" && /\*/.test(value||"")),false,key==="total" && reconciled,key==="recipientName" && ["maribank","gcash","unionbank","mb_fund_transfer"].includes(r.source))]));
  // A thousands comma or decimal point carries no value once the total's
  // digits equal principal + fee, both read at native confidence. The
  // total's digits still need native confidence; separators may not.
