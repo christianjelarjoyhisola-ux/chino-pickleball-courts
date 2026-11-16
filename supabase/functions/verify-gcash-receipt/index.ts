@@ -49,6 +49,7 @@ import {
 import { rereadGcashRecipient } from "../_shared/gcash-recipient-ocr.ts";
 import { recoverGcashReceipt, gcashReceiptHasIncompleteStatus } from "../_shared/gcash-adaptive-ocr.ts";
 import { recoverBankReceipt } from "../_shared/bank-adaptive-ocr.ts";
+import { isMaribankBookingPaidToGcash, MARIBANK_PAID_TO_GCASH_ROUTE } from "../_shared/receipt-providers/maribank-paid-to-gcash.ts";
 import { recoverGotymeNativeFields } from "../_shared/gotyme-native-fusion.ts";
 import { recoverGotymeFields } from "../_shared/gotyme-field-recovery.ts";
 import { maribankDirectApprovalConfidence, bankApprovalConfidence, bankLayoutFamily, bankOcrText, isBankAdaptiveProvider } from "../_shared/bank-ocr-evidence.ts";
@@ -2672,8 +2673,8 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
       settings[r.key] = r.value;
     });
     const expectedMerchant = expectedMerchantForProvider(settings, provider);
-    const expectedNumber = expectedMerchant.number;
-    const expectedName = expectedMerchant.name;
+    let expectedNumber = expectedMerchant.number;
+    let expectedName = expectedMerchant.name;
     let pricingError = "";
     let expectedAmount = 0;
     let expectedTotal = 0;
@@ -2916,7 +2917,47 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
       // send it to manual review rather than auto-cancelling a paid customer.
       flags.push("IMAGE_UNREADABLE");
     }
-    if (provider === "gcash" && gcashReceiptHasIncompleteStatus(ocrOriginalText)) {
+    // Owner policy (2026-11-16): a MariBank booking paid from the GCash app to
+    // the court's own configured GCash account is checked by the full GCash
+    // verifier against the GCash merchant settings, then settles through the
+    // dedicated "maribank_paid_to_gcash" route. Only a clear GCash app receipt
+    // qualifies: GCash-to-MariBank layouts keep the MariBank verifier, and
+    // MariBank-app-to-GCash screens (no date, recycled 6-digit reference)
+    // cannot prove they are new, so they stay with owner review.
+    let receiptProvider: PaymentProvider = provider;
+    if (provider === "maribank" && ocrText && !ocrError && originalOcr) {
+      const gcashLayoutText = originalOcr.gcashEvidence?.layoutText?.trim()
+        ? recoverGcashTimestampText(
+          recoverGcashReferenceText(
+            originalOcr.gcashEvidence.layoutText,
+            ocrOriginalText,
+          ),
+          ocrOriginalText,
+        )
+        : ocrOriginalText;
+      if (
+        isMaribankBookingPaidToGcash({
+          provider,
+          originalText: ocrOriginalText,
+          gcashLayoutText,
+          gcashMerchantNumber: settings.gcash_merchant_number || "",
+          typedReference: typedRef,
+        })
+      ) {
+        receiptProvider = "gcash";
+        ocrText = gcashLayoutText;
+        ocrLayoutApplied = gcashLayoutText !== ocrOriginalText;
+        readingLayout = "gcash_unknown";
+        const gcashMerchant = expectedMerchantForProvider(settings, "gcash");
+        expectedNumber = gcashMerchant.number;
+        expectedName = gcashMerchant.name;
+        providerContext.expectedRecipientNumber = gcashMerchant.number;
+        providerContext.expectedRecipientName = gcashMerchant.name;
+        providerContext.expectedRecipientAccount = "";
+        delete providerContext.maribankRecency;
+      }
+    }
+    if (receiptProvider === "gcash" && gcashReceiptHasIncompleteStatus(ocrOriginalText)) {
       flags.push("PAYMENT_STATUS_NOT_COMPLETED");
     }
     if (isBankAdaptiveProvider(provider)) {
@@ -2929,8 +2970,8 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
 
     // ── field extraction ────────────────────────────────────────────────────
     let providerParse: ProviderReceiptParse | null =
-      isDedicatedReceiptProvider(provider)
-        ? parseProviderReceipt(provider === "maribank" ? "maribank_direct" : provider, ocrText, {
+      isDedicatedReceiptProvider(receiptProvider)
+        ? parseProviderReceipt(receiptProvider === "maribank" ? "maribank_direct" : receiptProvider, ocrText, {
           typedReference: typedRef,
         })
         : null;
@@ -3415,7 +3456,7 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
 
       // This heuristic is not proof of fraud. OCR can miss labels on a real
       // screenshot, so flag it for an owner instead of auto-cancelling.
-      if (provider !== "gcash" && !looksLikeGcashReceipt(ocrText)) {
+      if (receiptProvider !== "gcash" && !looksLikeGcashReceipt(ocrText)) {
         flags.push("SUSPECTED_FAKE");
       }
     }
@@ -3432,7 +3473,7 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
 
     // Approval uses the provider's observed payment fields. Header/footer text
     // is not a substitute for confidence in a transaction ID or recipient.
-    const approval = provider === "gcash"
+    const approval = receiptProvider === "gcash"
       ? readingRecovery?.accepted && readingRecovery.selected
         ? readingRecovery.selected.approval
         : gcashApprovalConfidence(
@@ -3476,6 +3517,16 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
     const dedupeKeys: Array<
       { key: string; providerKey: string; duplicateFlag: string }
     > = providerVerification?.dedupeKeys.map((item) => ({ ...item })) || [];
+    // A MariBank booking settled with a GCash receipt also claims the
+    // reference under the booking's own method, which settlement requires
+    // as its canonical key; the GCash key above blocks reuse as GCash.
+    if (provider === "maribank" && receiptProvider === "gcash" && extractedRef) {
+      dedupeKeys.push({
+        key: `maribank:${extractedRef}`,
+        providerKey: "maribank",
+        duplicateFlag: "DUPLICATE_REF",
+      });
+    }
     if (!providerVerification && extractedRef) {
       dedupeKeys.push({
         key: `${provider}:${extractedRef}`,
@@ -3620,7 +3671,9 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
         ? "auto_approved"
         : "manual_review";
     let confidence = result === "auto_approved" ? approvalConfidence : 0.5;
-    const route = provider === "maribank" ? "maribank_direct" : provider === "securitybank"
+    const route = provider === "maribank" && receiptProvider === "gcash"
+      ? MARIBANK_PAID_TO_GCASH_ROUTE
+      : provider === "maribank" ? "maribank_direct" : provider === "securitybank"
       ? "gcash_to_securitybank"
       : provider === "gcash"
       ? "gcash"
@@ -3650,7 +3703,7 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
 
     const ocrMetrics = readingSession.metrics();
     const checkedAt = new Date().toISOString();
-    const feedbackStrategies = provider === "gcash" ? [
+    const feedbackStrategies = receiptProvider === "gcash" ? [
       {
         id: "gcash_original_v1",
         attempted: (originalOcr?.requestMetrics?.calls || ocrMetrics.calls) > 0,
@@ -3766,7 +3819,7 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
       parserVersion: providerParse?.parserVersion || "legacy",
       ...(isDedicatedReceiptProvider(provider)
         ? {
-          verifierRevision: provider === "gcash" ? GCASH_VERIFIER_REVISION : provider === "maribank" ? "maribank_direct_20261024_padded_v6" : BANK_VERIFIER_REVISION,
+          verifierRevision: receiptProvider === "gcash" ? GCASH_VERIFIER_REVISION : provider === "maribank" ? "maribank_direct_20261024_padded_v6" : BANK_VERIFIER_REVISION,
           originalOcrConfidence: originalOcr?.confidence ?? 0,
           originalOcrConfidenceSource: originalOcr?.confidenceSource ?? "none",
           readingRecovery: readingRecovery?.audit || (gotymeFieldRecovery?.audit.attempted
@@ -3787,12 +3840,12 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
             originalEvidence: gotymeNativeFusion.originalEvidence,
             conservationFlags: gotymeNativeFusion.conservationFlags,
           } } : {}),
-          ...(provider !== "gcash" && "fields" in approval ? { paymentFieldEvidence: approval.fields } : {}),
-          ...(provider !== "gcash" && "optionalFields" in approval ? { optionalPaymentFieldEvidence: approval.optionalFields } : {}),
+          ...(receiptProvider !== "gcash" && "fields" in approval ? { paymentFieldEvidence: approval.fields } : {}),
+          ...(receiptProvider !== "gcash" && "optionalFields" in approval ? { optionalPaymentFieldEvidence: approval.optionalFields } : {}),
           feedback: {
             version: "receipt_feedback_v1",
             layout: readingLayout,
-            parserRevision: provider === "gcash" ? GCASH_VERIFIER_REVISION : provider === "maribank" ? "maribank_direct_20261024_padded_v6" : BANK_VERIFIER_REVISION,
+            parserRevision: receiptProvider === "gcash" ? GCASH_VERIFIER_REVISION : provider === "maribank" ? "maribank_direct_20261024_padded_v6" : BANK_VERIFIER_REVISION,
             durationMs: ocrMetrics.durationMs,
             ocrCalls: ocrMetrics.calls,
             strategies: feedbackStrategies,

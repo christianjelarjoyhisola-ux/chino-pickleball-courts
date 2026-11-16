@@ -105,9 +105,9 @@ test('unknown layouts never use another layout\'s learned preference',async()=>{
 });
 
 test('bank approval keeps selected payment-field confidence distinct from original image score',()=>{
-  const from=edge.indexOf('    const approval = provider === "gcash"');
+  const from=edge.indexOf('    const approval = receiptProvider === "gcash"');
   const to=edge.indexOf('    const minimumOcrConfidence',from);
-  const context={provider:'maya',readingRecovery:null,gotymeFieldRecovery:null,gotymeNativeFusion:null,bankReadingRecovery:{accepted:true,selected:{approval:{confidence:.93,source:'bank_payment_fields'}}},ocrConfidence:.88,ocrConfidenceSource:'native'};
+  const context={provider:'maya',receiptProvider:'maya',readingRecovery:null,gotymeFieldRecovery:null,gotymeNativeFusion:null,bankReadingRecovery:{accepted:true,selected:{approval:{confidence:.93,source:'bank_payment_fields'}}},ocrConfidence:.88,ocrConfidenceSource:'native'};
   vm.runInNewContext(edge.slice(from,to)+'\nthis.observed = {approvalConfidence,approvalConfidenceSource};',context);
   assert.equal(context.observed.approvalConfidence,.93);
   assert.equal(context.observed.approvalConfidenceSource,'bank_payment_fields');
@@ -163,9 +163,10 @@ test('native field recovery updates readable evidence but retains global review 
   assert.equal(context.providerParse,improved);
   assert.deepEqual(context.flags,['DUPLICATE_REF']);
   assert.equal(context.ocrFallbackReason,null);
-  const approvalFrom=edge.indexOf('    const approval = provider === "gcash"');
+  const approvalFrom=edge.indexOf('    const approval = receiptProvider === "gcash"');
   const approvalTo=edge.indexOf('    const minimumOcrConfidence',approvalFrom);
   context.provider='gotyme';
+  context.receiptProvider='gotyme';
   vm.runInNewContext(edge.slice(approvalFrom,approvalTo)+'\nthis.observedConfidence=approvalConfidence;',context);
   assert.equal(context.observedConfidence,.5,'recovered amount cannot raise account confidence');
   context.recipientRefinement={accepted:true};
