@@ -305,10 +305,12 @@ export function parseMaribankDirectReceipt(
       const recipientLines = lines.slice(0, i).filter(s => s !== "To");
       const recipientBank = recipientLines.at(-1) || "";
       // The profile icon may be read as a bullet stuck to the name
-      // ("•Kristie Lou V."); separate it exactly as "• Kristie Lou V.".
+      // ("•Kristie Lou V.") or as one stray digit/symbol and a space
+      // ("2 Kristie Lou V."). Both are the icon, read exactly like
+      // "• Kristie Lou V."; the name after it must still match in full.
       const recipientName = (recipientLines.at(-2) || "").replace(
-        /^([•●◆])(?=[A-Za-z])/,
-        "$1 ",
+        /^(?:[•●◆] ?|[0-9@©®&#*] )(?=[A-Za-z])/,
+        "• ",
       );
       account = m![1];
       if (

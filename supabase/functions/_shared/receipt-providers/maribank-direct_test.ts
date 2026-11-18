@@ -713,3 +713,16 @@ Deno.test("MariBank profile bullet stuck to the recipient name is still the reci
   }
   assert(flags(native.replace("Kristie Lou V.", "•Gloria Maris P.")).length > 0, "other recipient accepted");
 });
+
+Deno.test("profile icon read as one stray digit or symbol before the name is still the icon", () => {
+  // Real 2026-11-17 reading: "2 Kristie Lou V.".
+  for (const name of ["2 Kristie Lou V.", "@ Kristie Lou V.", "# Kristie Lou V."]) {
+    const text = native.replace("Kristie Lou V.", name);
+    eq(parseMaribankDirectReceipt(text).paymentFields.recipientName, "Kristie Lou V.");
+    assert(flags(text).length === 0, `${name}: ${flags(text)}`);
+  }
+  // The name itself must still match; more than one stray character is not an icon.
+  for (const name of ["2 Gloria Maris P.", "22 Kristie Lou V.", "2Kristie Lou V.", "A Kristie Lou V."]) {
+    assert(flags(native.replace("Kristie Lou V.", name)).length > 0, `${name} accepted`);
+  }
+});

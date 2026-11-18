@@ -3315,13 +3315,22 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
     const bookingStartedAt = providerParse
       ? bookingStartedInstant
       : bookingStartedWallClock;
-    const receiptAgeMinutes = bookingStartedAt && receiptDateTime
-      ? (receiptDateTime.getTime() - bookingStartedAt.getTime()) / 60000
-      : null;
     const providerVerification: ProviderReceiptVerificationEvidence | null =
       providerParse
         ? verifyProviderReceipt(providerParse, providerContext)
         : null;
+    // A no-date MariBank screen proves its time with the phone clock; its
+    // accepted minutes-after-booking is the receipt age. Settlement requires
+    // this age, so without it every clock-verified receipt fell to review.
+    const clockAgeMinutes =
+      providerVerification?.provider === "maribank_direct" &&
+        providerVerification.timeBasis === "reference_order_and_screen_clock"
+        ? providerVerification.screenClockCheck?.clockMinutesAfterBooking ??
+          null
+        : null;
+    const receiptAgeMinutes = bookingStartedAt && receiptDateTime
+      ? (receiptDateTime.getTime() - bookingStartedAt.getTime()) / 60000
+      : clockAgeMinutes;
     const gcashRecipient: GcashRecipientComparison | null =
       providerVerification?.provider === "gcash"
         ? providerVerification.recipientComparison

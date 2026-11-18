@@ -39,3 +39,22 @@ test('new MariBank bookings record the direct destination and preserve explicit 
  assert.equal(c.receivedAccountForBooking({paymentMethod:'maribank'}),'maribank');
  assert.equal(c.receivedAccountForBooking({paymentMethod:'maribank',receivedAccount:'gcash'}),'gcash');
 });
+
+test('a clock-verified no-date MariBank receipt carries its clock age into settlement',()=>{
+ const edge=read('supabase/functions/verify-gcash-receipt/index.ts');
+ const from=edge.indexOf('    const clockAgeMinutes =');
+ const to=edge.indexOf('    const gcashRecipient',from);
+ assert.ok(from>0&&to>from,'receipt age block not found');
+ const run=(verification,receiptDateTime)=>{
+  const c={providerVerification:verification,bookingStartedAt:new Date('2026-11-17T09:18:13Z'),receiptDateTime};
+  vm.runInNewContext(edge.slice(from,to).replace(/const (clockAgeMinutes|receiptAgeMinutes)\b/g,'this.$1')+'',c);
+  return c.receiptAgeMinutes;
+ };
+ const clock={provider:'maribank_direct',timeBasis:'reference_order_and_screen_clock',screenClockCheck:{clockMinutesAfterBooking:4.8}};
+ // Real 2026-11-17 case: no printed date, clock 4.8 minutes after booking.
+ assert.equal(run(clock,null),4.8);
+ // A printed date still wins, and a rejected clock gives no age.
+ assert.equal(run(clock,new Date('2026-11-17T09:21:13Z')),3);
+ assert.equal(run({...clock,timeBasis:'receipt_timestamp'},null),null);
+ assert.equal(run({provider:'gcash'},null),null);
+});
