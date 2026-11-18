@@ -52,7 +52,7 @@ import { recoverBankReceipt } from "../_shared/bank-adaptive-ocr.ts";
 import { isMaribankBookingPaidToGcash, MARIBANK_PAID_TO_GCASH_ROUTE } from "../_shared/receipt-providers/maribank-paid-to-gcash.ts";
 import { recoverGotymeNativeFields } from "../_shared/gotyme-native-fusion.ts";
 import { recoverGotymeFields } from "../_shared/gotyme-field-recovery.ts";
-import { maribankDirectApprovalConfidence, bankApprovalConfidence, bankLayoutFamily, bankOcrText, isBankAdaptiveProvider } from "../_shared/bank-ocr-evidence.ts";
+import { maribankDirectApprovalConfidence, maribankOwnerPolicyApproval, bankApprovalConfidence, bankLayoutFamily, bankOcrText, isBankAdaptiveProvider } from "../_shared/bank-ocr-evidence.ts";
 import { readReceiptTransferStatus } from "../_shared/receipt-providers/transfer-status.ts";
 import { createReceiptReadingSession, gcashLayoutFamily } from "../_shared/receipt-reading-session.ts";
 import type { ReceiptVerificationContext } from "../_shared/receipt-providers/bank-to-gcash.ts";
@@ -3101,7 +3101,7 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
     if (providerParse?.provider === "maribank_direct" && originalOcr) {
       bankRead = {...originalOcr,text:originalOcr.originalText ?? originalOcr.text};
       providerParse = parseProviderReceipt("maribank_direct", bankOcrText(bankRead), {typedReference: providerContext.typedReference}) as typeof providerParse;
-      const firstApproval = maribankDirectApprovalConfidence(bankRead, providerParse);
+      const firstApproval = maribankOwnerPolicyApproval(maribankDirectApprovalConfidence(bankRead, providerParse));
       originalBankCheck = {clean: verifyProviderReceipt(providerParse, providerContext).flags.length === 0 && firstApproval.confidence >= .9, confidence: firstApproval.confidence};
       readingLayout = bankLayoutFamily("maribank_direct", bankRead.text);
       if (!originalBankCheck.clean && visionKey && !ocrError) {
@@ -3498,7 +3498,7 @@ Deno.serve(withAdminActivity("verify-gcash-receipt", async (req) => {
       : bankReadingRecovery?.accepted && bankReadingRecovery.selected
       ? bankReadingRecovery.selected.approval
       : bankRead && providerParse?.provider === "maribank_direct"
-      ? maribankDirectApprovalConfidence(bankRead, providerParse)
+      ? maribankOwnerPolicyApproval(maribankDirectApprovalConfidence(bankRead, providerParse))
       : bankRead && providerParse && providerParse.provider !== "gcash" && providerParse.provider !== "maribank_direct"
       ? bankApprovalConfidence(bankRead, providerParse, providerContext, recipientRefinement)
       : { confidence: ocrConfidence, source: ocrConfidenceSource };

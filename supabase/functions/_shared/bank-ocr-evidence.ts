@@ -61,7 +61,7 @@ export type BankApprovalConfidence = {
   optionalFields?: Record<
     string,
     BankPaymentFieldEvidence & {
-      optionalReason: "gotyme_recipient_policy" | "zero_fee_reconciled";
+      optionalReason: "gotyme_recipient_policy" | "zero_fee_reconciled" | "owner_identity_policy";
     }
   >;
   complete: boolean;
@@ -647,4 +647,34 @@ export function maribankDirectApprovalConfidence(read: GoogleVisionOcrResult, pa
  }
  const complete=Object.values(fields).every(f=>score(f.confidence));
  return {confidence:complete?Math.min(...Object.values(fields).map(f=>f.confidence!)):0,source:complete?"bank_payment_fields":"none",basis:complete?"native_payment_value_words":"missing_native_payment_evidence",fields,optionalFields,complete};
+}
+/** MariBank payment details that must be read at native confidence. */
+export const MARIBANK_STRONG_FIELDS = new Set(["reference", "amount", "dateTime", "time", "screenClock"]);
+/**
+ * Owner policy (2026-11-18) applied to a MariBank approval: only the
+ * reference, amount and payment time (date, time or phone clock) must be read
+ * at native confidence. Every other detail must still be present and match
+ * (the verifier checks the recipient name, any shown account, destination and
+ * status) and rereads must still agree on it, but its read quality no longer
+ * lowers the approval confidence. Observed scores are kept for audit.
+ */
+export function maribankOwnerPolicyApproval(approval: BankApprovalConfidence): BankApprovalConfidence {
+ const fields: Record<string, BankPaymentFieldEvidence> = {};
+ const optionalFields: NonNullable<BankApprovalConfidence['optionalFields']> = {...(approval.optionalFields || {})};
+ for (const [key, field] of Object.entries(approval.fields)) {
+   if (MARIBANK_STRONG_FIELDS.has(key)) fields[key] = field;
+   else optionalFields[key] = {...field, optionalReason: 'owner_identity_policy'};
+ }
+ const complete = ["reference", "amount"].every((key) => key in fields) &&
+   ("dateTime" in fields || "screenClock" in fields) &&
+   Object.values(fields).every((f) => score(f.confidence));
+ return {
+   ...approval,
+   confidence: complete ? Math.min(...Object.values(fields).map((f) => f.confidence!)) : 0,
+   source: complete ? "bank_payment_fields" : "none",
+   basis: complete ? "native_payment_value_words" : "missing_native_payment_evidence",
+   fields,
+   optionalFields,
+   complete,
+ };
 }

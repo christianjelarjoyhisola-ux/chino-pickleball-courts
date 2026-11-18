@@ -9,6 +9,7 @@ import {
   type BankApprovalConfidence,
   bankApprovalConfidence,
   maribankDirectApprovalConfidence,
+  maribankOwnerPolicyApproval,
   bankFieldIdentity,
   bankLayoutFamily,
   bankOcrText,
@@ -96,7 +97,7 @@ function conservedFields(approval: BankApprovalConfidence) {
 }
 
 function recoveryApproval(read: GoogleVisionOcrResult, parsed: BankRecoveryOriginal["parsed"], context: ReceiptVerificationContext) {
-  return parsed.provider === "maribank_direct" ? maribankDirectApprovalConfidence(read, parsed) : bankApprovalConfidence(read, parsed, context);
+  return parsed.provider === "maribank_direct" ? maribankOwnerPolicyApproval(maribankDirectApprovalConfidence(read, parsed)) : bankApprovalConfidence(read, parsed, context);
 }
 
 export function bankOriginalRecoveryVeto(

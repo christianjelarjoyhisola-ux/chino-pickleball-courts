@@ -600,8 +600,15 @@ Transaction Date & Time
   const parsed=parseProviderReceipt('maribank_direct',text);
   if(parsed.provider!=='maribank_direct') throw Error('parser');
   const context={expectedAmount:795,pricingAvailable:true,amountTolerance:.01,expectedRecipientName:'KRISTIE LOU VILLANUEVA',expectedRecipientNumber:'15521507144',bookingStartedAt:'2026-10-06T08:18:00Z',bookingStartedDate:'2026-10-06',paymentWindowMinutes:15,earlyToleranceMinutes:2};
+  // Owner policy (2026-11-18): a weak fee alone no longer blocks approval.
+  const weakFee=bankFixtureRead(text);
+  for(const line of weakFee.nativeLines!) for(const word of line.words) if(word.text==='FREE') word.confidence=.6;
+  let feeCalls=0;
+  const feeOnly=await recoverBankReceipt(await imageBytes(),{read:weakFee,parsed},context,'test',{ocr:async()=>{feeCalls++;return bankFixtureRead(text);}});
+  eq(feeCalls,0);eq(feeOnly.reason,'original_complete');
+  // A weak reference still needs two matching rereads.
   const read=bankFixtureRead(text);
-  for(const line of read.nativeLines!) for(const word of line.words) if(word.text==='FREE') word.confidence=.6;
+  for(const line of read.nativeLines!) for(const word of line.words) if(word.text==='BC550000000000000001'){word.confidence=.6;word.symbols.forEach(s=>s.confidence=.6);}
   let calls=0;
   const recovered=await recoverBankReceipt(await imageBytes(),{read,parsed},context,'test',{ocr:async()=>{calls++;return bankFixtureRead(text);}});
   eq(calls,3);eq(recovered.accepted,true,JSON.stringify(recovered.audit));

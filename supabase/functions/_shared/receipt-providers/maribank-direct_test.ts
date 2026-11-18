@@ -726,3 +726,40 @@ Deno.test("profile icon read as one stray digit or symbol before the name is sti
     assert(flags(native.replace("Kristie Lou V.", name)).length > 0, `${name} accepted`);
   }
 });
+
+Deno.test("owner policy: only reference, amount and payment time must read strongly", async () => {
+  const { maribankOwnerPolicyApproval } = await import("../bank-ocr-evidence.ts");
+  const p = parseProviderReceipt("maribank_direct", native);
+  if (p.provider !== "maribank_direct") throw Error("wrong parser");
+  const weaken = (match: (t: string) => boolean) => {
+    const read = bankFixtureRead(native);
+    for (const word of read.nativeLines!.flatMap((l) => l.words)) {
+      if (match(word.text)) { word.confidence = .5; word.symbols.forEach((s) => s.confidence = .5); }
+    }
+    return maribankOwnerPolicyApproval(maribankDirectApprovalConfidence(read, p));
+  };
+  // Name, account, bank, status and fee may read loosely.
+  for (const [label, test] of [
+    ["name", (t: string) => t === "Kristie" || t === "Lou"],
+    ["account", (t: string) => t === "15521507144"],
+    ["bank", (t: string) => t === "MariBank"],
+    ["status", (t: string) => t === "Successful!"],
+    ["fee", (t: string) => t === "FREE"],
+  ] as const) {
+    const a = weaken(test);
+    assert(a.complete && a.confidence >= .9, `${label} blocked: ${a.confidence}`);
+    assert(Object.values(a.optionalFields || {}).some((f) => f.optionalReason === "owner_identity_policy"), "loose fields not recorded");
+  }
+  // Reference, amount, date and time must still read strongly.
+  for (const [label, test] of [
+    ["reference", (t: string) => t === "BC550000000000000001"],
+    ["amount", (t: string) => t === "795.00"],
+    ["date", (t: string) => t === "Oct" || t === "2026,"],
+    ["time", (t: string) => t === "16:20"],
+  ] as const) {
+    assert(weaken(test).confidence < .9, `${label} weak but approved`);
+  }
+  // The recipient must still match even though its read quality is loose.
+  assert(flags(native.replace("Kristie Lou V.", "Gloria Maris P.")).length > 0, "wrong recipient accepted");
+  assert(flags(native.replace("Acct. No.: 15521507144", "Acct. No.: 15521507145")).length > 0, "wrong account accepted");
+});
